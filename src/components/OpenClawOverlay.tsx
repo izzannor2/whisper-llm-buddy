@@ -201,19 +201,49 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
   const transcribeRecording = async (audioBlob: Blob) => {
     setIsTranscribing(true);
     try {
-      if (!isWhisperLoaded()) {
-        const modelId = getSelectedWhisperModel();
-        toast.loading('Loading Whisper...', { id: 'whisper-load' });
-        await loadWhisperModel(modelId);
-        toast.dismiss('whisper-load');
+      // Check if model is downloaded
+      const downloadedModels = getDownloadedModels();
+      if (downloadedModels.length === 0) {
+        toast.error('No Whisper model downloaded. Go to Settings → Voice Models to download one.');
+        setIsTranscribing(false);
+        return;
       }
 
-      const text = await transcribeAudio(audioBlob);
+      if (!isWhisperLoaded()) {
+        const modelId = getSelectedWhisperModel();
+        toast.loading('Loading Whisper model...', { id: 'whisper-load' });
+        const loaded = await loadWhisperModel(modelId);
+        toast.dismiss('whisper-load');
+        if (!loaded) {
+          toast.error('Failed to load Whisper model');
+          setIsTranscribing(false);
+          return;
+        }
+      }
+
+      // Convert Blob to ArrayBuffer, then decode to audio samples
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      
+      // Create audio context for decoding
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      
+      // Get mono channel data as Float32Array
+      const audioData = audioBuffer.getChannelData(0);
+      
+      await audioContext.close();
+
+      const text = await transcribeAudio(audioData);
       if (text.trim()) {
         setInput(prev => prev + (prev ? ' ' : '') + text.trim());
+        toast.success('Transcribed!');
+      } else {
+        toast.info('No speech detected');
       }
     } catch (error) {
-      toast.error('Transcription failed');
+      console.error('Transcription error:', error);
+      const message = error instanceof Error ? error.message : 'Transcription failed';
+      toast.error(message);
     } finally {
       setIsTranscribing(false);
     }
