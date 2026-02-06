@@ -113,18 +113,34 @@ export function PreviewPane({
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
               />
             ) : (
-              <div className="flex flex-col items-center justify-center h-full bg-muted/20 text-muted-foreground">
-                <Terminal className="h-12 w-12 mb-4 opacity-50" />
-                <p className="text-lg font-medium">No preview available</p>
-                <p className="text-sm mt-1">Start the dev server to see your app</p>
-                <Button 
-                  variant="outline" 
-                  className="mt-4"
-                  onClick={onStartServer}
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  Start Dev Server
-                </Button>
+              <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-muted/40 to-muted/20 text-muted-foreground p-6">
+                <div className="text-center max-w-md">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary/10 flex items-center justify-center">
+                    <Terminal className="h-10 w-10 text-primary/60" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2 text-foreground">Preview Your App</h3>
+                  <p className="text-sm mb-6 leading-relaxed">
+                    Start the dev server to see a live preview of your application. The preview will automatically reload when you make changes.
+                  </p>
+                  <Button 
+                    variant="default" 
+                    size="lg"
+                    onClick={onStartServer}
+                    className="gap-2"
+                  >
+                    <Play className="h-4 w-4" />
+                    Start Dev Server
+                  </Button>
+                  <div className="mt-6 p-4 rounded-lg bg-muted/50 text-left">
+                    <p className="text-xs font-medium mb-2 text-foreground/80">💡 How it works:</p>
+                    <ul className="text-xs space-y-1 text-muted-foreground">
+                      <li>1. Download the LocalDev Agent script</li>
+                      <li>2. Run it in your project folder</li>
+                      <li>3. Click "Start Dev Server" above</li>
+                      <li>4. Your app appears here live!</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             )}
           </div>

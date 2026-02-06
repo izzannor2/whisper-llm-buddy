@@ -218,6 +218,18 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
             </Button>
           )}
 
+          {canApplyToFile && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs font-mono text-green-500 hover:text-green-400 hover:bg-green-500/10"
+              onClick={() => setShowApplyDialog(true)}
+            >
+              <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
+              Apply
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="sm"
