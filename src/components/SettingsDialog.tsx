@@ -44,7 +44,9 @@ export function SettingsDialog({
 }: SettingsDialogProps) {
   const [localSettings, setLocalSettings] = useState<ChatSettings>(settings);
   const [localModels, setLocalModels] = useState<string[]>([]);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+  const [isScanningOllama, setIsScanningOllama] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [customHFModel, setCustomHFModel] = useState('');
 
@@ -75,12 +77,46 @@ export function SettingsDialog({
         const data = await response.json();
         const models = data.data?.map((m: any) => m.id) || [];
         setLocalModels(models);
+        toast.success(`Found ${models.length} model(s) on Llama.cpp`);
+      } else {
+        toast.error('Could not connect to Llama.cpp server');
       }
     } catch (err) {
       console.error('Failed to scan models:', err);
+      toast.error('Llama.cpp server not reachable. Make sure llama-server is running.');
     }
     setIsScanning(false);
   };
+
+  const scanOllamaModels = async () => {
+    setIsScanningOllama(true);
+    try {
+      const response = await fetch(`${localSettings.ollamaUrl}/api/tags`);
+      if (response.ok) {
+        const data = await response.json();
+        const models = data.models?.map((m: any) => m.name) || [];
+        setOllamaModels(models);
+        toast.success(`Found ${models.length} model(s) on Ollama`);
+        // Auto-select first model if none selected
+        if (models.length > 0 && !localSettings.ollamaModel) {
+          setLocalSettings({ ...localSettings, ollamaModel: models[0] });
+        }
+      } else {
+        toast.error('Could not connect to Ollama');
+      }
+    } catch (err) {
+      console.error('Failed to scan Ollama models:', err);
+      toast.error('Ollama not reachable. Make sure Ollama is running.');
+    }
+    setIsScanningOllama(false);
+  };
+
+  // Auto-scan when switching to Ollama backend
+  useEffect(() => {
+    if (localSettings.backend === 'ollama' && ollamaModels.length === 0) {
+      scanOllamaModels();
+    }
+  }, [localSettings.backend]);
 
   const filteredModels = AVAILABLE_MODELS.filter(
     m => m.backend === localSettings.backend
@@ -287,31 +323,68 @@ export function SettingsDialog({
               <div className="space-y-3">
                 <div className="space-y-2">
                   <Label>Ollama URL</Label>
-                  <Input
-                    value={localSettings.ollamaUrl}
-                    onChange={(e) =>
-                      setLocalSettings({
-                        ...localSettings,
-                        ollamaUrl: e.target.value,
-                      })
-                    }
-                    placeholder="http://localhost:11434"
-                    className="bg-muted"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      value={localSettings.ollamaUrl}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          ollamaUrl: e.target.value,
+                        })
+                      }
+                      placeholder="http://localhost:11434"
+                      className="bg-muted"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={scanOllamaModels}
+                      disabled={isScanningOllama}
+                      title="Scan for available models"
+                    >
+                      <RefreshCw
+                        className={cn('w-4 h-4', isScanningOllama && 'animate-spin')}
+                      />
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Model Name</Label>
-                  <Input
-                    value={localSettings.ollamaModel}
-                    onChange={(e) =>
-                      setLocalSettings({
-                        ...localSettings,
-                        ollamaModel: e.target.value,
-                      })
-                    }
-                    placeholder="llama3.2"
-                    className="bg-muted"
-                  />
+                  <Label>Model</Label>
+                  {ollamaModels.length > 0 ? (
+                    <select
+                      value={localSettings.ollamaModel}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          ollamaModel: e.target.value,
+                        })
+                      }
+                      className="w-full p-2 rounded-lg bg-muted border border-border"
+                    >
+                      {ollamaModels.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input
+                      value={localSettings.ollamaModel}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          ollamaModel: e.target.value,
+                        })
+                      }
+                      placeholder="llama3.2"
+                      className="bg-muted"
+                    />
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {ollamaModels.length > 0 
+                      ? `${ollamaModels.length} model(s) available`
+                      : 'Click refresh to scan for models, or enter manually'}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     Pull models with: <code className="bg-muted px-1 rounded">ollama pull llama3.2</code>
                   </p>
