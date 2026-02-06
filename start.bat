@@ -103,8 +103,17 @@ if %LLAMA_SERVER_RUNNING%==0 (
         echo [!] Ollama not detected at localhost:11434
         if defined OLLAMA_CMD (
             echo     Starting Ollama in background...
-            start /B %OLLAMA_CMD% serve >nul 2>&1
-            timeout /t 2 /nobreak >nul
+            start "" /B "%OLLAMA_CMD%" serve
+            echo     Waiting for Ollama to initialize...
+            timeout /t 4 /nobreak >nul
+            :: Verify Ollama started
+            curl -s http://localhost:11434/api/tags >nul 2>&1
+            if errorlevel 1 (
+                echo     [!] Ollama failed to start. Check if another instance is running.
+                echo     [!] Try running manually: %OLLAMA_CMD% serve
+            ) else (
+                echo     [OK] Ollama started successfully!
+            )
         ) else (
             echo [!] Ollama not found - AI features will use Cloud backend
             echo     Place ollama.exe in bin\ollama\ or install from: https://ollama.ai
