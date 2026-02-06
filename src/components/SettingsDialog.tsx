@@ -91,28 +91,57 @@ export function SettingsDialog({
 
   const scanOllamaModels = async () => {
     setIsScanningOllama(true);
+    const ollamaUrl = localSettings.ollamaUrl || 'http://localhost:11434';
+    
     try {
-      const response = await fetch(`${localSettings.ollamaUrl}/api/tags`);
+      console.log('Scanning Ollama at:', ollamaUrl);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(`${ollamaUrl}/api/tags`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
         const data = await response.json();
         const models = data.models?.map((m: any) => m.name) || [];
         setOllamaModels(models);
-        toast.success(`Found ${models.length} model(s) on Ollama`);
-        // Auto-select first model if none selected
-        if (models.length > 0 && !localSettings.ollamaModel) {
-          setLocalSettings({ ...localSettings, ollamaModel: models[0] });
+        if (models.length > 0) {
+          toast.success(`Found ${models.length} model(s) on Ollama`);
+          // Auto-select first model if none selected
+          if (!localSettings.ollamaModel) {
+            setLocalSettings({ ...localSettings, ollamaModel: models[0] });
+          }
+        } else {
+          toast.info('Ollama is running but no models installed. Run: ollama pull llama3.2');
         }
       } else {
-        toast.error('Could not connect to Ollama');
+        toast.error(`Ollama responded with error: ${response.status}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to scan Ollama models:', err);
+      
       if (isCloudPreview()) {
         toast.error('Cannot reach localhost from cloud preview. Download and run this app locally to use Ollama.', {
           duration: 6000,
         });
+      } else if (err.name === 'AbortError') {
+        toast.error(`Ollama connection timed out. Check if Ollama is running on ${ollamaUrl}`, {
+          duration: 5000,
+        });
       } else {
-        toast.error('Ollama not reachable. Make sure Ollama is running on ' + localSettings.ollamaUrl);
+        toast.error(
+          <div className="space-y-1">
+            <p className="font-medium">Ollama not reachable at {ollamaUrl}</p>
+            <p className="text-xs opacity-80">
+              1. Make sure Ollama is installed and running<br/>
+              2. Run: <code className="bg-black/20 px-1 rounded">ollama serve</code><br/>
+              3. Or use start.bat to auto-launch
+            </p>
+          </div>,
+          { duration: 8000 }
+        );
       }
     }
     setIsScanningOllama(false);
