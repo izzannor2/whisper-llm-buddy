@@ -356,19 +356,26 @@ export default function Index() {
       )}
 
       {/* OpenClaw Floating Overlay */}
-      {openClawOpen && (
+      {settings.openClawEnabled && openClawOpen && (
         <OpenClawOverlay
           onClose={() => setOpenClawOpen(false)}
           onOpenSettings={() => setSettingsOpen(true)}
+          config={{
+            model: settings.openClawModel,
+            autoBackup: settings.openClawAutoBackup,
+            learningEnabled: settings.openClawLearning,
+            murmurUpdates: settings.openClawMurmur,
+          }}
         />
       )}
 
       {/* OpenClaw Toggle Button */}
-      {!openClawOpen && (
+      {settings.openClawEnabled && !openClawOpen && (
         <Button
           onClick={() => setOpenClawOpen(true)}
           className="fixed bottom-24 right-6 z-50 h-12 w-12 rounded-full shadow-lg bg-gradient-to-br from-primary to-primary/70 hover:scale-105 transition-transform"
           size="icon"
+          title="Open OpenClaw Agent"
         >
           <Zap className="h-5 w-5" />
         </Button>

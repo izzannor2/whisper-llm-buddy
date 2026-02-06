@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download } from 'lucide-react';
+import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -777,6 +777,143 @@ export function SettingsDialog({
                 </p>
               </div>
             )}
+
+            {/* OpenClaw Section */}
+            <div className="border-t border-border pt-4 mt-2">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-primary" />
+                OpenClaw Agent
+              </h3>
+
+              {/* OpenClaw Enable/Disable */}
+              <div className="p-4 rounded-xl border-2 border-border bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-2 rounded-lg",
+                      localSettings.openClawEnabled ? "bg-primary/20" : "bg-muted"
+                    )}>
+                      <Zap className={cn(
+                        "w-5 h-5",
+                        localSettings.openClawEnabled ? "text-primary" : "text-muted-foreground"
+                      )} />
+                    </div>
+                    <div>
+                      <p className="font-medium">OpenClaw Agent</p>
+                      <p className="text-xs text-muted-foreground">
+                        Sandboxed AI assistant for file ops & commands
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={localSettings.openClawEnabled ?? false}
+                    onCheckedChange={(checked) => {
+                      setLocalSettings({ ...localSettings, openClawEnabled: checked });
+                      if (checked) {
+                        toast.success('OpenClaw enabled! Click ⚡ to open overlay.');
+                      } else {
+                        toast.success('OpenClaw disabled.');
+                      }
+                    }}
+                  />
+                </div>
+                {localSettings.openClawEnabled && (
+                  <div className="mt-3 p-2 rounded-lg bg-primary/10 text-xs">
+                    <p className="font-medium text-primary">Agent Active</p>
+                    <p className="text-muted-foreground mt-1">
+                      Hotkey: <code className="bg-muted px-1 rounded">Ctrl+Shift+X</code> to kill
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* OpenClaw Settings (only shown when enabled) */}
+              {localSettings.openClawEnabled && (
+                <div className="space-y-3 mt-3">
+                  {/* Model Selection */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Brain className="w-4 h-4 text-purple-500" />
+                      OpenClaw Model
+                    </Label>
+                    <select
+                      value={localSettings.openClawModel ?? 'llama3.1:8b'}
+                      onChange={(e) =>
+                        setLocalSettings({ ...localSettings, openClawModel: e.target.value })
+                      }
+                      className="w-full p-2 rounded-lg bg-muted border border-border"
+                    >
+                      <option value="llama3.1:8b">Llama 3.1 8B (Default)</option>
+                      <option value="llama3.2:3b">Llama 3.2 3B (Faster)</option>
+                      <option value="qwen2.5:7b">Qwen 2.5 7B</option>
+                      <option value="codellama:13b">CodeLlama 13B</option>
+                      <option value="deepseek-coder:6.7b">DeepSeek Coder 6.7B</option>
+                      <option value="mistral:7b">Mistral 7B</option>
+                    </select>
+                    <p className="text-[10px] text-muted-foreground">
+                      Requires Ollama running with the selected model pulled
+                    </p>
+                  </div>
+
+                  {/* Auto-Backup Toggle */}
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                    <div className="flex items-center gap-2">
+                      <Save className="w-4 h-4 text-accent" />
+                      <div>
+                        <p className="text-sm font-medium">Auto-Backup</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Backup files before AI edits
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={localSettings.openClawAutoBackup ?? true}
+                      onCheckedChange={(checked) =>
+                        setLocalSettings({ ...localSettings, openClawAutoBackup: checked })
+                      }
+                    />
+                  </div>
+
+                  {/* Habit Learning Toggle */}
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                    <div className="flex items-center gap-2">
+                      <Brain className="w-4 h-4 text-purple-500" />
+                      <div>
+                        <p className="text-sm font-medium">Habit Learning</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Learn & suggest frequent commands
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={localSettings.openClawLearning ?? true}
+                      onCheckedChange={(checked) =>
+                        setLocalSettings({ ...localSettings, openClawLearning: checked })
+                      }
+                    />
+                  </div>
+
+                  {/* Murmur Updates Toggle */}
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Murmur Updates</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Soft status updates while idle
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={localSettings.openClawMurmur ?? true}
+                      onCheckedChange={(checked) =>
+                        setLocalSettings({ ...localSettings, openClawMurmur: checked })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
 
