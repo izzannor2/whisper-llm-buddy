@@ -53,20 +53,21 @@ interface ChatSidebarProps {
   onOpenCodeLibrary?: () => void;
   onOpenModels?: () => void;
   currentMode?: IDEMode;
-  onModeChange?: (mode: IDEMode) => void;
+  currentModeKey?: string;
+  onModeChange?: (mode: IDEMode, key: string) => void;
   onCollapse?: () => void;
 }
 
-const MODES_LIST: { id: IDEMode; name: string; icon: any; description: string }[] = [
-  { id: 'app-builder', name: 'Chat', icon: MessageSquare, description: 'General conversation' },
-  { id: 'app-builder', name: 'App Builder', icon: Layers, description: 'Full-stack web apps with preview' },
-  { id: 'embedded-iot', name: 'IoT / Embedded', icon: Cpu, description: 'ESP32, Arduino, Pi' },
-  { id: 'system-helper', name: 'System Helper', icon: Terminal, description: 'Computer tasks' },
-  { id: 'ai-improvement', name: 'AI Improvement', icon: Sparkles, description: 'Self-modification' },
-  { id: 'learning', name: 'Learning Mode', icon: GraduationCap, description: 'Learn your style' },
-  { id: 'sandbox', name: 'Sandbox', icon: FlaskConical, description: 'Safe experiments' },
-  { id: 'jailbreak', name: 'Uncensored', icon: AlertTriangle, description: 'Custom system prompts' },
-  { id: 'plugin', name: 'Plugin Mode', icon: Plug, description: 'Custom plugins & tools' },
+const MODES_LIST: { key: string; id: IDEMode; name: string; icon: any; description: string }[] = [
+  { key: 'chat', id: 'app-builder', name: 'Chat', icon: MessageSquare, description: 'General conversation' },
+  { key: 'app-builder', id: 'app-builder', name: 'App Builder', icon: Layers, description: 'Full-stack web apps with preview' },
+  { key: 'embedded-iot', id: 'embedded-iot', name: 'IoT / Embedded', icon: Cpu, description: 'ESP32, Arduino, Pi' },
+  { key: 'system-helper', id: 'system-helper', name: 'System Helper', icon: Terminal, description: 'Computer tasks' },
+  { key: 'ai-improvement', id: 'ai-improvement', name: 'AI Improvement', icon: Sparkles, description: 'Self-modification' },
+  { key: 'learning', id: 'learning', name: 'Learning Mode', icon: GraduationCap, description: 'Learn your style' },
+  { key: 'sandbox', id: 'sandbox', name: 'Sandbox', icon: FlaskConical, description: 'Safe experiments' },
+  { key: 'jailbreak', id: 'jailbreak', name: 'Uncensored', icon: AlertTriangle, description: 'Custom system prompts' },
+  { key: 'plugin', id: 'plugin', name: 'Plugin Mode', icon: Plug, description: 'Custom plugins & tools' },
 ];
 
 export function ChatSidebar({
@@ -77,6 +78,7 @@ export function ChatSidebar({
   onDelete,
   onOpenSettings,
   currentMode = 'app-builder',
+  currentModeKey,
   onModeChange,
   onCollapse,
 }: ChatSidebarProps) {
@@ -128,7 +130,7 @@ export function ChatSidebar({
     return date.toLocaleDateString();
   };
 
-  const currentModeData = MODES_LIST.find(m => m.id === currentMode) || MODES_LIST[0];
+  const currentModeData = MODES_LIST.find(m => m.key === currentModeKey) || MODES_LIST.find(m => m.id === currentMode) || MODES_LIST[0];
   const ModeIcon = currentModeData.icon;
 
   return (
@@ -169,17 +171,15 @@ export function ChatSidebar({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
-            {MODES_LIST.map((mode, index) => {
+            {MODES_LIST.map((mode) => {
               const Icon = mode.icon;
-              // Skip duplicate 'Chat' which shares app-builder id
-              if (index === 0) return null;
               return (
                 <DropdownMenuItem
-                  key={mode.name}
-                  onClick={() => onModeChange?.(mode.id as IDEMode)}
+                  key={mode.key}
+                  onClick={() => onModeChange?.(mode.id, mode.key)}
                   className={cn(
                     "flex items-start gap-3 py-2.5 cursor-pointer",
-                    currentMode === mode.id && "bg-accent/10"
+                    currentModeKey === mode.key && "bg-accent/10"
                   )}
                 >
                   <Icon className="w-4 h-4 mt-0.5 text-accent shrink-0" />
