@@ -103,9 +103,11 @@ if %LLAMA_SERVER_RUNNING%==0 (
         echo [!] Ollama not detected at localhost:11434
         if defined OLLAMA_CMD (
             echo     Starting Ollama in background...
-            start "" /B "%OLLAMA_CMD%" serve
+            :: Set correct host to avoid config issues
+            set "OLLAMA_HOST=127.0.0.1:11434"
+            start "" /B cmd /c "set OLLAMA_HOST=127.0.0.1:11434 && "%OLLAMA_CMD%" serve"
             echo     Waiting for Ollama to initialize...
-            timeout /t 4 /nobreak >nul
+            timeout /t 5 /nobreak >nul
             :: Verify Ollama started
             curl -s http://localhost:11434/api/tags >nul 2>&1
             if errorlevel 1 (
