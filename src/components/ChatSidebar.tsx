@@ -19,7 +19,9 @@ import {
   GraduationCap,
   FlaskConical,
   Zap,
-  ChevronRight
+  ChevronRight,
+  AlertTriangle,
+  Plug
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,14 +57,16 @@ interface ChatSidebarProps {
   onCollapse?: () => void;
 }
 
-const MODES_LIST: { id: IDEMode | 'chat'; name: string; icon: any; description: string }[] = [
+const MODES_LIST: { id: IDEMode; name: string; icon: any; description: string }[] = [
   { id: 'app-builder', name: 'Chat', icon: MessageSquare, description: 'General conversation' },
-  { id: 'app-builder', name: 'App Builder', icon: Layers, description: 'Full-stack web apps' },
+  { id: 'app-builder', name: 'App Builder', icon: Layers, description: 'Full-stack web apps with preview' },
   { id: 'embedded-iot', name: 'IoT / Embedded', icon: Cpu, description: 'ESP32, Arduino, Pi' },
   { id: 'system-helper', name: 'System Helper', icon: Terminal, description: 'Computer tasks' },
   { id: 'ai-improvement', name: 'AI Improvement', icon: Sparkles, description: 'Self-modification' },
   { id: 'learning', name: 'Learning Mode', icon: GraduationCap, description: 'Learn your style' },
   { id: 'sandbox', name: 'Sandbox', icon: FlaskConical, description: 'Safe experiments' },
+  { id: 'jailbreak', name: 'Uncensored', icon: AlertTriangle, description: 'Custom system prompts' },
+  { id: 'plugin', name: 'Plugin Mode', icon: Plug, description: 'Custom plugins & tools' },
 ];
 
 export function ChatSidebar({
@@ -164,7 +168,7 @@ export function ChatSidebar({
               <ChevronDown className="w-4 h-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
             {MODES_LIST.map((mode, index) => {
               const Icon = mode.icon;
               // Skip duplicate 'Chat' which shares app-builder id
@@ -174,14 +178,14 @@ export function ChatSidebar({
                   key={mode.name}
                   onClick={() => onModeChange?.(mode.id as IDEMode)}
                   className={cn(
-                    "flex items-start gap-3 py-2",
+                    "flex items-start gap-3 py-2.5 cursor-pointer",
                     currentMode === mode.id && "bg-accent/10"
                   )}
                 >
-                  <Icon className="w-4 h-4 mt-0.5 text-accent" />
-                  <div>
+                  <Icon className="w-4 h-4 mt-0.5 text-accent shrink-0" />
+                  <div className="min-w-0">
                     <p className="text-sm font-medium">{mode.name}</p>
-                    <p className="text-xs text-muted-foreground">{mode.description}</p>
+                    <p className="text-xs text-muted-foreground truncate">{mode.description}</p>
                   </div>
                 </DropdownMenuItem>
               );
