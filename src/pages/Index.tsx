@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, PanelLeftClose, PanelLeft, Settings } from 'lucide-react';
+import { Menu, X, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { ChatSidebar } from '@/components/ChatSidebar';
+import { ModesSidebar } from '@/components/ModesSidebar';
 import { ChatMessage } from '@/components/ChatMessage';
 import { ChatInput, ChatInputRef } from '@/components/ChatInput';
 import { SettingsDialog } from '@/components/SettingsDialog';
@@ -11,6 +11,8 @@ import { TypingIndicator } from '@/components/TypingIndicator';
 import { EmptyState } from '@/components/EmptyState';
 import { VoiceCallMode } from '@/components/VoiceCallMode';
 import { CodeLibrary } from '@/components/CodeLibrary';
+import { IDEMode } from '@/lib/ide-types';
+import { getIDESettings, saveIDESettings } from '@/lib/ide-store';
 import {
   Conversation,
   Message,
@@ -34,6 +36,7 @@ export default function Index() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [settings, setSettings] = useState<ChatSettings>(loadSettings());
+  const [currentMode, setCurrentMode] = useState<IDEMode>(() => getIDESettings().mode);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -70,6 +73,12 @@ export default function Index() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [currentConversation?.messages, streamingContent]);
+
+  const handleModeChange = (mode: IDEMode) => {
+    setCurrentMode(mode);
+    saveIDESettings({ mode });
+    toast({ title: `Switched to ${mode.replace('-', ' ')}` });
+  };
 
   const loadConversation = async (id: string) => {
     const conv = await getConversation(id);
@@ -240,50 +249,24 @@ export default function Index() {
     );
   };
 
-  const handleExport = () => {
-    const data = JSON.stringify(conversations, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `localdev-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: 'Chats exported' });
-  };
-
-  const handleImport = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      const text = await file.text();
-      try {
-        const imported = JSON.parse(text) as Conversation[];
-        for (const conv of imported) {
-          await saveConversation(conv);
-        }
-        const allConvs = await getAllConversations();
-        setConversations(allConvs);
-        toast({ title: `Imported ${imported.length} conversations` });
-      } catch {
-        toast({ variant: 'destructive', title: 'Invalid file format' });
-      }
-    };
-    input.click();
-  };
-
   const handleSettingsSave = (newSettings: ChatSettings) => {
     setSettings(newSettings);
     saveSettings(newSettings);
     toast({ title: 'Settings saved' });
   };
 
-  const handleOpenModels = () => {
-    setSettingsOpen(true);
+  const getModeTitle = () => {
+    const titles: Record<IDEMode, string> = {
+      'app-builder': 'App Builder Mode',
+      'embedded-iot': 'IoT / Embedded Mode',
+      'system-helper': 'System Helper Mode',
+      'ai-improvement': 'AI Improvement Mode',
+      'learning': 'Learning Mode',
+      'sandbox': 'Sandbox Mode',
+      'jailbreak': 'Override Mode',
+      'plugin': 'Plugin Mode',
+    };
+    return titles[currentMode];
   };
 
   return (
@@ -301,21 +284,15 @@ export default function Index() {
       {/* Sidebar */}
       <div
         className={cn(
-          'fixed lg:relative inset-y-0 left-0 z-40 w-64 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed lg:relative inset-y-0 left-0 z-40 w-72 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <ChatSidebar
-          conversations={conversations}
-          currentId={currentConversation?.id || null}
-          onSelect={loadConversation}
-          onNew={createNewConversation}
-          onDelete={handleDeleteConversation}
+        <ModesSidebar
+          currentMode={currentMode}
+          onModeChange={handleModeChange}
           onOpenSettings={() => setSettingsOpen(true)}
-          onExport={handleExport}
-          onImport={handleImport}
-          onOpenCodeLibrary={() => setCodeLibraryOpen(true)}
-          onOpenModels={handleOpenModels}
+          onCollapse={() => setSidebarOpen(false)}
         />
       </div>
 
@@ -329,52 +306,11 @@ export default function Index() {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-12 border-b border-border flex items-center justify-between px-4 shrink-0">
-          <div className="flex items-center gap-2">
-            {/* Sidebar toggle (desktop) */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden lg:flex h-8 w-8"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              {sidebarOpen ? (
-                <PanelLeftClose className="w-4 h-4" />
-              ) : (
-                <PanelLeft className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
-
-          <h2 className="font-mono text-sm">
-            {currentConversation?.title || 'New Chat'}
-          </h2>
-
-          <div className="flex items-center gap-2">
-            <VoiceCallMode
-              onSendMessage={handleVoiceCallMessage}
-              ttsVoice={settings.ttsVoice}
-              ttsRate={settings.ttsRate}
-              disabled={isLoading}
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-3 text-sm"
-              onClick={() => setSettingsOpen(true)}
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              Chat Settings
-            </Button>
-          </div>
-        </header>
-
         {/* Messages */}
         <ScrollArea className="flex-1" ref={scrollRef}>
           <div className="max-w-4xl mx-auto py-6 px-4 h-full">
             {!currentConversation || currentConversation.messages.length === 0 ? (
-              <EmptyState />
+              <EmptyState mode={currentMode} />
             ) : (
               <div className="space-y-6">
                 {currentConversation.messages.map((msg) => (
