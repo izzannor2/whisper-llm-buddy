@@ -47,12 +47,12 @@ export const DEFAULT_API_KEYS: APIKeys = {
 };
 
 export const DEFAULT_SETTINGS: ChatSettings = {
-  backend: 'local',
+  backend: 'cloud', // Default to cloud since it's always available
   localUrl: 'http://127.0.0.1:8081',
   ollamaUrl: 'http://localhost:11434',
-  ollamaModel: 'llama3.2',
-  model: 'default',
-  huggingfaceModel: 'mistralai/Mistral-7B-Instruct-v0.2',
+  ollamaModel: '', // Empty - will be populated when Ollama is scanned
+  model: 'gemini-flash', // Default cloud model
+  huggingfaceModel: '', // Empty - user must enter their own
   temperature: 0.7,
   topP: 0.9,
   maxTokens: 2048,
@@ -66,7 +66,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   offlineMode: false,
   // OpenClaw defaults
   openClawEnabled: false,
-  openClawModel: 'llama3.1:8b',
+  openClawModel: '', // Empty - will use first detected Ollama model
   openClawAutoBackup: true,
   openClawLearning: true,
   openClawMurmur: true,

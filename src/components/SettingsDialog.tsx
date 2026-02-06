@@ -949,22 +949,27 @@ export function SettingsDialog({
                       <Brain className="w-4 h-4 text-purple-500" />
                       OpenClaw Model
                     </Label>
-                    <select
-                      value={localSettings.openClawModel ?? 'llama3.1:8b'}
-                      onChange={(e) =>
-                        setLocalSettings({ ...localSettings, openClawModel: e.target.value })
-                      }
-                      className="w-full p-2 rounded-lg bg-muted border border-border"
-                    >
-                      <option value="llama3.1:8b">Llama 3.1 8B (Default)</option>
-                      <option value="llama3.2:3b">Llama 3.2 3B (Faster)</option>
-                      <option value="qwen2.5:7b">Qwen 2.5 7B</option>
-                      <option value="codellama:13b">CodeLlama 13B</option>
-                      <option value="deepseek-coder:6.7b">DeepSeek Coder 6.7B</option>
-                      <option value="mistral:7b">Mistral 7B</option>
-                    </select>
+                    {ollamaModels.length > 0 ? (
+                      <select
+                        value={localSettings.openClawModel ?? ollamaModels[0]}
+                        onChange={(e) =>
+                          setLocalSettings({ ...localSettings, openClawModel: e.target.value })
+                        }
+                        className="w-full p-2 rounded-lg bg-muted border border-border"
+                      >
+                        {ollamaModels.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/50 border border-border">
+                        No Ollama models detected. Connect to Ollama and scan for models in the Backend tab.
+                      </div>
+                    )}
                     <p className="text-[10px] text-muted-foreground">
-                      Requires Ollama running with the selected model pulled
+                      Requires Ollama running with the selected model
                     </p>
                   </div>
 
