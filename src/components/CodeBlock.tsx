@@ -7,9 +7,9 @@ import {
   Play,
   Save,
   Loader2,
-  Eye,
   X,
   FolderOpen,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
@@ -28,7 +39,8 @@ import {
   detectLanguage,
   type CodeSnippet,
 } from '@/lib/code-snippets-db';
-import { runPython, loadPyodide, isPyodideLoaded, isPyodideLoading } from '@/lib/python-runner';
+import { runPython, loadPyodide, isPyodideLoaded } from '@/lib/python-runner';
+import { executeCommand, getAgentStatus } from '@/lib/local-backend-agent';
 import {
   isFileSystemSupported,
   openDirectory,
@@ -49,13 +61,18 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
   const [showOutput, setShowOutput] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showApplyDialog, setShowApplyDialog] = useState(false);
+  const [showRunConfirm, setShowRunConfirm] = useState(false);
   const [snippetTitle, setSnippetTitle] = useState('');
   const [filePath, setFilePath] = useState('');
   const [isLoadingPyodide, setIsLoadingPyodide] = useState(false);
   const { toast } = useToast();
 
   const detectedLang = language || detectLanguage(code);
-  const isExecutable = ['python', 'py'].includes(detectedLang.toLowerCase());
+  
+  // Determine if code is executable
+  const isPython = ['python', 'py'].includes(detectedLang.toLowerCase());
+  const isShell = ['bash', 'sh', 'shell', 'zsh'].includes(detectedLang.toLowerCase());
+  const isExecutable = isPython || isShell;
   const canApplyToFile = isFileSystemSupported();
 
   const handleCopy = useCallback(async () => {
@@ -65,34 +82,56 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
     toast({ title: 'Copied to clipboard' });
   }, [code, toast]);
 
-  const handleRun = useCallback(async () => {
-    if (!isExecutable) return;
+  const handleRunClick = useCallback(() => {
+    // Show confirmation for shell scripts
+    if (isShell) {
+      setShowRunConfirm(true);
+    } else {
+      executeCode();
+    }
+  }, [isShell]);
 
+  const executeCode = useCallback(async () => {
+    setShowRunConfirm(false);
     setIsRunning(true);
     setOutput(null);
     setShowOutput(true);
 
     try {
-      if (!isPyodideLoaded()) {
-        setIsLoadingPyodide(true);
-        toast({ title: 'Loading Python runtime...' });
-        await loadPyodide();
-        setIsLoadingPyodide(false);
-        toast({ title: 'Python runtime ready!' });
-      }
+      if (isPython) {
+        if (!isPyodideLoaded()) {
+          setIsLoadingPyodide(true);
+          toast({ title: 'Loading Python runtime...' });
+          await loadPyodide();
+          setIsLoadingPyodide(false);
+          toast({ title: 'Python runtime ready!' });
+        }
 
-      const result = await runPython(code);
-      if (result.success) {
-        setOutput(result.output);
-      } else {
-        setOutput(`Error: ${result.error}\n\n${result.output}`);
+        const result = await runPython(code);
+        if (result.success) {
+          setOutput(result.output);
+        } else {
+          setOutput(`Error: ${result.error}\n\n${result.output}`);
+        }
+      } else if (isShell) {
+        const agentStatus = getAgentStatus();
+        if (!agentStatus.connected) {
+          setOutput('[Simulated] Agent not connected. Download and run the LocalDev Agent for real execution.\n\n' + code);
+        } else {
+          const result = await executeCommand(code);
+          if (result.success) {
+            setOutput(result.output);
+          } else {
+            setOutput(`Error: ${result.error}\n\n${result.output}`);
+          }
+        }
       }
     } catch (error: any) {
       setOutput(`Failed to run: ${error.message}`);
     } finally {
       setIsRunning(false);
     }
-  }, [code, isExecutable, toast]);
+  }, [code, isPython, isShell, toast]);
 
   const handleSaveToLibrary = useCallback(async () => {
     if (!snippetTitle.trim()) {
@@ -115,7 +154,6 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
     setSnippetTitle('');
     toast({ title: 'Saved to code library' });
     
-    // Dispatch event for sidebar to refresh
     window.dispatchEvent(new CustomEvent('snippet-saved'));
   }, [snippetTitle, detectedLang, code, toast]);
 
@@ -152,64 +190,58 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
   }, [toast]);
 
   return (
-    <div className={cn('relative group rounded-lg overflow-hidden', className)}>
-      {/* Language badge */}
-      <div className="absolute top-2 left-3 z-10">
-        <span className="text-xs px-2 py-0.5 rounded bg-muted/80 text-muted-foreground font-mono">
+    <div className={cn('relative rounded-lg overflow-hidden border border-border', className)}>
+      {/* Header bar with language and actions */}
+      <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border">
+        <span className="text-sm text-muted-foreground font-mono capitalize">
           {detectedLang}
         </span>
-      </div>
+        
+        <div className="flex items-center gap-1">
+          {isExecutable && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-7 px-2 text-xs font-mono",
+                showRunConfirm ? "text-amber-500 hover:text-amber-400" : "hover:bg-accent/10"
+              )}
+              onClick={handleRunClick}
+              disabled={isRunning || isLoadingPyodide}
+            >
+              {isRunning || isLoadingPyodide ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Play className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              Run
+            </Button>
+          )}
 
-      {/* Action buttons */}
-      <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="w-7 h-7 bg-muted/80 hover:bg-muted"
-          onClick={handleCopy}
-          title="Copy"
-        >
-          {copied ? <Check className="w-3.5 h-3.5 text-accent" /> : <Copy className="w-3.5 h-3.5" />}
-        </Button>
-
-        {isExecutable && (
           <Button
             variant="ghost"
-            size="icon"
-            className="w-7 h-7 bg-muted/80 hover:bg-muted"
-            onClick={handleRun}
-            disabled={isRunning || isLoadingPyodide}
-            title="Run Python"
+            size="sm"
+            className="h-7 px-2 text-xs font-mono"
+            onClick={() => setShowSaveDialog(true)}
           >
-            {isRunning || isLoadingPyodide ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <Save className="w-3.5 h-3.5 mr-1.5" />
+            Save
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs font-mono"
+            onClick={handleCopy}
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 mr-1.5 text-accent" />
             ) : (
-              <Play className="w-3.5 h-3.5 text-accent" />
+              <Copy className="w-3.5 h-3.5 mr-1.5" />
             )}
+            Copy
           </Button>
-        )}
-
-        <Button
-          variant="ghost"
-          size="icon"
-          className="w-7 h-7 bg-muted/80 hover:bg-muted"
-          onClick={() => setShowSaveDialog(true)}
-          title="Save to library"
-        >
-          <Save className="w-3.5 h-3.5" />
-        </Button>
-
-        {canApplyToFile && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="w-7 h-7 bg-muted/80 hover:bg-muted"
-            onClick={() => setShowApplyDialog(true)}
-            title="Apply to file"
-          >
-            <Eye className="w-3.5 h-3.5" />
-          </Button>
-        )}
+        </div>
       </div>
 
       {/* Code display */}
@@ -218,10 +250,10 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
         style={oneDark}
         customStyle={{
           margin: 0,
-          padding: '2.5rem 1rem 1rem',
+          padding: '1rem',
           background: 'hsl(var(--muted))',
           fontSize: '0.875rem',
-          borderRadius: '0.5rem',
+          borderRadius: 0,
         }}
         wrapLongLines
       >
@@ -232,7 +264,7 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
       {showOutput && (
         <div className="border-t border-border bg-card p-3">
           <div className="flex justify-between items-center mb-2">
-            <span className="text-xs font-medium text-muted-foreground">Output</span>
+            <span className="text-xs font-medium text-muted-foreground font-mono">Output</span>
             <Button
               variant="ghost"
               size="icon"
@@ -248,11 +280,40 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
         </div>
       )}
 
+      {/* Run confirmation dialog */}
+      <AlertDialog open={showRunConfirm} onOpenChange={setShowRunConfirm}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Are you sure?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You are about to execute a shell script on your machine. Make sure you trust this code before running it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="my-4 p-3 bg-muted rounded-lg">
+            <pre className="text-xs font-mono text-muted-foreground max-h-32 overflow-auto">
+              {code.slice(0, 500)}{code.length > 500 ? '...' : ''}
+            </pre>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={executeCode} className="bg-amber-600 hover:bg-amber-700">
+              Run Script
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Save to library dialog */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md bg-card border-border">
           <DialogHeader>
             <DialogTitle>Save to Code Library</DialogTitle>
+            <DialogDescription>
+              Save this snippet to your local code library for later use.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <Input
@@ -261,6 +322,7 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
               onChange={(e) => setSnippetTitle(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSaveToLibrary()}
               autoFocus
+              className="bg-muted border-border"
             />
           </div>
           <DialogFooter>
@@ -274,9 +336,12 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
 
       {/* Apply to file dialog */}
       <Dialog open={showApplyDialog} onOpenChange={setShowApplyDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md bg-card border-border">
           <DialogHeader>
             <DialogTitle>Apply to File</DialogTitle>
+            <DialogDescription>
+              Save this code to a file in your project.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="flex gap-2">
@@ -295,6 +360,7 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
               value={filePath}
               onChange={(e) => setFilePath(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleApplyToFile()}
+              className="bg-muted border-border"
             />
             <p className="text-xs text-muted-foreground">
               This will create or overwrite the file in your selected project folder.

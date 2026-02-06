@@ -7,9 +7,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
-// Lazy load heavy pages that use Monaco Editor
+// Lazy load heavy pages
 const IDE = lazy(() => import("./pages/IDE"));
 const IDESettings = lazy(() => import("./pages/IDESettings"));
+const Models = lazy(() => import("./pages/Models"));
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ const App = () => (
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/models" element={<Models />} />
             <Route path="/ide" element={<IDE />} />
             <Route path="/settings" element={<IDESettings />} />
             <Route path="*" element={<NotFound />} />

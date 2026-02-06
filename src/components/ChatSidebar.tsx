@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -8,6 +9,7 @@ import {
   FolderOpen,
   Cpu,
   WifiOff,
+  Wifi,
   Lock,
   Power
 } from 'lucide-react';
@@ -120,10 +122,12 @@ export function ChatSidebar({
         <Button
           variant="ghost"
           className="w-full justify-start h-9 px-3 text-sm font-normal"
-          onClick={onOpenModels}
+          asChild
         >
-          <Cpu className="w-4 h-4 mr-3" />
-          Models
+          <Link to="/models">
+            <Cpu className="w-4 h-4 mr-3" />
+            Models
+          </Link>
         </Button>
 
         {isFileSystemSupported() && (
@@ -139,14 +143,17 @@ export function ChatSidebar({
 
         {/* Status Row */}
         <div className="flex items-center gap-2 px-3 py-2">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <WifiOff className="w-4 h-4" />
-            <span>{isOnline ? 'Online' : 'Offline'}</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground ml-4">
-            <Lock className="w-4 h-4" />
-            <span>Lock</span>
-          </div>
+          <Button variant="ghost" size="sm" className={cn(
+            "h-7 px-2 text-xs font-normal",
+            isOnline ? "text-accent" : "text-muted-foreground"
+          )}>
+            {isOnline ? <Wifi className="w-3.5 h-3.5 mr-1.5" /> : <WifiOff className="w-3.5 h-3.5 mr-1.5" />}
+            {isOnline ? 'Online' : 'Offline'}
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-normal text-muted-foreground">
+            <Lock className="w-3.5 h-3.5 mr-1.5" />
+            Lock
+          </Button>
         </div>
       </div>
 
