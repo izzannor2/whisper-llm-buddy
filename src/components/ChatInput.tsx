@@ -1,10 +1,15 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Send, Mic, MicOff, Square, Loader2 } from 'lucide-react';
+import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { useNetworkStatus } from '@/hooks/use-network-status';
 import { 
   isWhisperLoaded, 
   loadWhisperModel, 
@@ -18,6 +23,9 @@ interface ChatInputProps {
   isLoading: boolean;
   onStop?: () => void;
   autoSendOnVoice?: boolean;
+  selectedModel?: string;
+  onModelChange?: (model: string) => void;
+  modelLoaded?: boolean;
 }
 
 export interface ChatInputRef {
@@ -26,16 +34,21 @@ export interface ChatInputRef {
   isListening: boolean;
 }
 
-// Type for browser Speech Recognition
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
+// Popular local models
+const LOCAL_MODELS = [
+  { id: 'llama-3.2-1b', name: 'Llama-3.2 1B' },
+  { id: 'llama-3.2-3b', name: 'Llama-3.2 3B' },
+  { id: 'mistral-7b', name: 'Mistral 7B' },
+  { id: 'deepseek-coder', name: 'DeepSeek Coder' },
+  { id: 'qwen-2.5-coder', name: 'Qwen 2.5 Coder' },
+];
 
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-  message?: string;
-}
+const PRESETS = [
+  { id: 'default', name: 'Default' },
+  { id: 'creative', name: 'Creative' },
+  { id: 'precise', name: 'Precise' },
+  { id: 'coding', name: 'Coding' },
+];
 
 declare global {
   interface Window {
@@ -51,44 +64,45 @@ interface SpeechRecognition extends EventTarget {
   start: () => void;
   stop: () => void;
   abort: () => void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onresult: ((event: any) => void) | null;
+  onerror: ((event: any) => void) | null;
   onend: (() => void) | null;
   onstart: (() => void) | null;
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
-  function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice }, ref) {
+  function ChatInput({ 
+    onSend, 
+    isLoading, 
+    onStop, 
+    autoSendOnVoice,
+    selectedModel = 'llama-3.2-1b',
+    onModelChange,
+    modelLoaded = false
+  }, ref) {
     const [message, setMessage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
+    const [currentModel, setCurrentModel] = useState(selectedModel);
+    const [currentPreset, setCurrentPreset] = useState('default');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
-    const pendingMessageRef = useRef('');
-    const { isOnline } = useNetworkStatus();
 
-    // Check if local Whisper is available (same check as phone button)
     const [whisperAvailable, setWhisperAvailable] = useState(() => {
       return isWhisperLoaded() || getDownloadedModels().length > 0;
     });
     
     useEffect(() => {
-      // Update whisper availability when models change
       const checkWhisper = () => {
         setWhisperAvailable(isWhisperLoaded() || getDownloadedModels().length > 0);
       };
       checkWhisper();
-      // Listen for model changes
       window.addEventListener('whisper-model-changed', checkWhisper);
       return () => window.removeEventListener('whisper-model-changed', checkWhisper);
     }, []);
 
-    // Voice input is always shown - uses local Whisper only (like phone button)
-    const isVoiceSupported = true;
-
-    // Expose methods via ref
     useImperativeHandle(ref, () => ({
       startListening: () => {
         if (!isRecording && !isTranscribing) {
@@ -110,10 +124,11 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       }
     }, [message]);
 
-    // Local Whisper is the only voice input method (like phone button)
-    // Browser speech recognition removed for consistency
+    const handleModelSelect = (modelId: string) => {
+      setCurrentModel(modelId);
+      onModelChange?.(modelId);
+    };
 
-    // Start recording with local Whisper (for offline use)
     const startLocalRecording = useCallback(async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -129,15 +144,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         mediaRecorder.onstop = async () => {
           stream.getTracks().forEach(track => track.stop());
           
-          if (audioChunksRef.current.length === 0) {
-            return;
-          }
+          if (audioChunksRef.current.length === 0) return;
 
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           setIsTranscribing(true);
           
           try {
-            // Ensure model is loaded
             if (!isWhisperLoaded()) {
               toast.error('Loading Whisper model...');
               const success = await loadWhisperModel(getSelectedWhisperModel(), (progress) => {
@@ -146,13 +158,10 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                 }
               });
               toast.dismiss('whisper-loading');
-              if (!success) {
-                throw new Error('Failed to load model');
-              }
+              if (!success) throw new Error('Failed to load model');
               setWhisperAvailable(true);
             }
 
-            // Convert blob to audio data for Whisper
             const arrayBuffer = await audioBlob.arrayBuffer();
             const audioContext = new AudioContext({ sampleRate: 16000 });
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -199,7 +208,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       if (message.trim() && !isLoading) {
         onSend(message.trim());
         setMessage('');
-        pendingMessageRef.current = '';
       }
     };
 
@@ -216,10 +224,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         return;
       }
 
-      // Check if Whisper model is available (same as phone button)
       if (!whisperAvailable) {
         toast.info('Download a voice model first', {
-          description: 'Go to Settings → Voice Models to download Whisper for offline speech recognition.',
+          description: 'Go to Settings → Voice Models to download Whisper.',
           action: {
             label: 'Open Settings',
             onClick: () => {
@@ -231,70 +238,124 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         return;
       }
 
-      // Use local Whisper for transcription
       startLocalRecording();
     }, [isRecording, whisperAvailable, startLocalRecording, stopRecording]);
 
+    const currentModelName = LOCAL_MODELS.find(m => m.id === currentModel)?.name || currentModel;
+    const currentPresetName = PRESETS.find(p => p.id === currentPreset)?.name || 'Select Preset';
+
     return (
-      <div className="p-4 border-t border-border bg-card/50">
+      <div className="p-4 border-t border-border bg-background">
         <div className="max-w-4xl mx-auto">
-          <div className="relative glass-panel rounded-2xl input-glow transition-shadow">
-            <Textarea
-              ref={textareaRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={isRecording ? "Listening..." : "Send a message..."}
-              className="min-h-[52px] max-h-[200px] resize-none border-0 bg-transparent pr-24 py-4 focus-visible:ring-0 scrollbar-thin"
-              disabled={isLoading}
-              rows={1}
-            />
+          {/* Input Container */}
+          <div className="bg-card/50 border border-border rounded-xl p-3">
+            {/* Placeholder text when empty */}
+            {!message && (
+              <p className="text-muted-foreground text-sm mb-2 px-1">
+                Select and load a model to chat
+              </p>
+            )}
             
-            <div className="absolute right-2 bottom-2 flex items-center gap-1">
+            {/* Model and Preset Row */}
+            <div className="flex items-center gap-2 mb-2">
+              {/* Model Selector */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 px-3 text-accent hover:text-accent/80 hover:bg-accent/10 font-mono"
+                  >
+                    {currentModelName}
+                    <ChevronDown className="w-3 h-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="bg-popover border-border z-50">
+                  {LOCAL_MODELS.map((model) => (
+                    <DropdownMenuItem
+                      key={model.id}
+                      onClick={() => handleModelSelect(model.id)}
+                      className={cn(
+                        "font-mono text-sm",
+                        currentModel === model.id && "text-accent"
+                      )}
+                    >
+                      {model.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Preset Selector */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 px-3 bg-muted/50 hover:bg-muted font-mono text-sm"
+                  >
+                    <X className="w-3 h-3 mr-1.5 text-muted-foreground" />
+                    {currentPresetName}
+                    <ChevronDown className="w-3 h-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="bg-popover border-border z-50">
+                  {PRESETS.map((preset) => (
+                    <DropdownMenuItem
+                      key={preset.id}
+                      onClick={() => setCurrentPreset(preset.id)}
+                      className={cn(
+                        "font-mono text-sm",
+                        currentPreset === preset.id && "text-primary"
+                      )}
+                    >
+                      {preset.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Spacer */}
+              <div className="flex-1" />
+
               {/* Voice button */}
-              {isVoiceSupported && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'rounded-full transition-all',
-                    isRecording && 'bg-destructive text-destructive-foreground animate-pulse-glow',
-                    isTranscribing && 'bg-primary/20',
-                    !isRecording && !isTranscribing && whisperAvailable && 'text-green-500 hover:text-green-400 hover:bg-green-500/10',
-                    !isRecording && !isTranscribing && !whisperAvailable && 'text-muted-foreground hover:text-foreground'
-                  )}
-                  onClick={toggleRecording}
-                  disabled={isLoading || isTranscribing}
-                  title={
-                    isTranscribing ? "Transcribing..." :
-                    isRecording ? "Stop listening" : 
-                    whisperAvailable ? "Voice input (offline)" : "Setup required - click to learn more"
-                  }
-                >
-                  {isTranscribing ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : isRecording ? (
-                    <MicOff className="w-5 h-5" />
-                  ) : (
-                    <Mic className="w-5 h-5" />
-                  )}
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'h-8 w-8 rounded-full transition-all',
+                  isRecording && 'bg-destructive text-destructive-foreground animate-pulse-glow',
+                  isTranscribing && 'bg-primary/20',
+                  !isRecording && !isTranscribing && whisperAvailable && 'text-accent hover:text-accent/80 hover:bg-accent/10',
+                  !isRecording && !isTranscribing && !whisperAvailable && 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={toggleRecording}
+                disabled={isLoading || isTranscribing}
+              >
+                {isTranscribing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : isRecording ? (
+                  <MicOff className="w-4 h-4" />
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
+              </Button>
 
               {/* Send/Stop button */}
               {isLoading ? (
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-full"
+                  className="h-8 w-8 rounded-full"
                   onClick={onStop}
                 >
-                  <Square className="w-5 h-5" />
+                  <Square className="w-4 h-4" />
                 </Button>
               ) : (
                 <Button
                   size="icon"
-                  className="rounded-full bg-primary hover:bg-primary/90"
+                  variant="ghost"
+                  className="h-8 w-8 rounded-full hover:bg-muted"
                   onClick={handleSend}
                   disabled={!message.trim()}
                 >
@@ -302,10 +363,23 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                 </Button>
               )}
             </div>
+
+            {/* Text Input */}
+            <Textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={isRecording ? "Listening..." : "Type a message..."}
+              className="min-h-[44px] max-h-[200px] resize-none border-0 bg-transparent p-2 focus-visible:ring-0 scrollbar-thin text-sm"
+              disabled={isLoading}
+              rows={1}
+            />
           </div>
           
-          <p className="text-center text-xs text-muted-foreground mt-2">
-            AraChat can make mistakes. Consider checking important information.
+          {/* Status Text */}
+          <p className="text-center text-xs text-muted-foreground mt-2 font-mono">
+            {modelLoaded ? 'Model loaded and ready.' : 'Model not loaded. Click send to load and chat.'}
           </p>
         </div>
       </div>
