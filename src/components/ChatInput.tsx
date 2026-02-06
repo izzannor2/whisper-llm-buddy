@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X } from 'lucide-react';
+import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -7,6 +7,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -38,16 +40,22 @@ export interface ChatInputRef {
 const LOCAL_MODELS = [
   { id: 'llama-3.2-1b', name: 'Llama-3.2 1B' },
   { id: 'llama-3.2-3b', name: 'Llama-3.2 3B' },
+  { id: 'gemma-3n-2b', name: 'Gemma 3n 2B' },
+  { id: 'qwen-2.5-7b-coder', name: 'Qwen2.5 7B Coder' },
   { id: 'mistral-7b', name: 'Mistral 7B' },
   { id: 'deepseek-coder', name: 'DeepSeek Coder' },
-  { id: 'qwen-2.5-coder', name: 'Qwen 2.5 Coder' },
 ];
 
+// Presets with icons matching Docket
 const PRESETS = [
-  { id: 'default', name: 'Default' },
-  { id: 'creative', name: 'Creative' },
-  { id: 'precise', name: 'Precise' },
-  { id: 'coding', name: 'Coding' },
+  { id: 'coder', name: 'Coder', icon: Code, color: 'text-purple-400' },
+  { id: 'creative', name: 'Creative', icon: Sparkles, color: 'text-pink-400' },
+  { id: 'docket', name: 'LocalDev', icon: FileText, color: 'text-blue-400' },
+  { id: 'minimal', name: 'Minimal', icon: Minus, color: 'text-muted-foreground' },
+  { id: 'planner', name: 'Planner', icon: ListTodo, color: 'text-amber-400' },
+  { id: 'research', name: 'Research', icon: Search, color: 'text-cyan-400' },
+  { id: 'survival', name: 'Survival', icon: Shield, color: 'text-orange-400' },
+  { id: 'writer', name: 'Writer', icon: Pencil, color: 'text-green-400' },
 ];
 
 declare global {
@@ -84,7 +92,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [currentModel, setCurrentModel] = useState(selectedModel);
-    const [currentPreset, setCurrentPreset] = useState('default');
+    const [currentPreset, setCurrentPreset] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -127,6 +135,11 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const handleModelSelect = (modelId: string) => {
       setCurrentModel(modelId);
       onModelChange?.(modelId);
+    };
+
+    const handlePresetSelect = (presetId: string) => {
+      setCurrentPreset(presetId);
+      toast.success(`Preset: ${PRESETS.find(p => p.id === presetId)?.name}`);
     };
 
     const startLocalRecording = useCallback(async () => {
@@ -242,31 +255,38 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     }, [isRecording, whisperAvailable, startLocalRecording, stopRecording]);
 
     const currentModelName = LOCAL_MODELS.find(m => m.id === currentModel)?.name || currentModel;
-    const currentPresetName = PRESETS.find(p => p.id === currentPreset)?.name || 'Select Preset';
+    const currentPresetData = currentPreset ? PRESETS.find(p => p.id === currentPreset) : null;
+    const PresetIcon = currentPresetData?.icon;
 
     return (
       <div className="p-4 border-t border-border bg-background">
         <div className="max-w-4xl mx-auto">
           {/* Input Container */}
           <div className="bg-card/50 border border-border rounded-xl p-3">
-            {/* Placeholder text when empty */}
-            {!message && (
-              <p className="text-muted-foreground text-sm mb-2 px-1">
-                Select and load a model to chat
-              </p>
-            )}
+            {/* Text Input */}
+            <Textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={isRecording ? "Listening..." : "Ask anything"}
+              className="min-h-[44px] max-h-[200px] resize-none border-0 bg-transparent p-2 focus-visible:ring-0 scrollbar-thin text-sm"
+              disabled={isLoading}
+              rows={1}
+            />
             
-            {/* Model and Preset Row */}
-            <div className="flex items-center gap-2 mb-2">
+            {/* Bottom Row: Model + Preset + Actions */}
+            <div className="flex items-center gap-2 mt-2">
               {/* Model Selector */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-8 px-3 text-accent hover:text-accent/80 hover:bg-accent/10 font-mono"
+                    className="h-8 px-3 text-accent hover:text-accent/80 hover:bg-accent/10 font-mono text-sm"
                   >
                     {currentModelName}
+                    <span className="w-2 h-2 rounded-full bg-accent ml-2" />
                     <ChevronDown className="w-3 h-3 ml-1" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -294,24 +314,43 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                     size="sm" 
                     className="h-8 px-3 bg-muted/50 hover:bg-muted font-mono text-sm"
                   >
-                    <X className="w-3 h-3 mr-1.5 text-muted-foreground" />
-                    {currentPresetName}
+                    {PresetIcon ? (
+                      <PresetIcon className={cn("w-3.5 h-3.5 mr-1.5", currentPresetData?.color)} />
+                    ) : (
+                      <X className="w-3 h-3 mr-1.5 text-muted-foreground" />
+                    )}
+                    {currentPresetData?.name || 'Select Preset'}
                     <ChevronDown className="w-3 h-3 ml-1" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="bg-popover border-border z-50">
-                  {PRESETS.map((preset) => (
-                    <DropdownMenuItem
-                      key={preset.id}
-                      onClick={() => setCurrentPreset(preset.id)}
-                      className={cn(
-                        "font-mono text-sm",
-                        currentPreset === preset.id && "text-primary"
-                      )}
-                    >
-                      {preset.name}
-                    </DropdownMenuItem>
-                  ))}
+                <DropdownMenuContent align="start" className="bg-popover border-border z-50 w-48">
+                  <DropdownMenuItem
+                    onClick={() => setCurrentPreset(null)}
+                    className="font-mono text-sm"
+                  >
+                    <X className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                    Select Preset
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-mono">
+                    BUILT-IN
+                  </DropdownMenuLabel>
+                  {PRESETS.map((preset) => {
+                    const Icon = preset.icon;
+                    return (
+                      <DropdownMenuItem
+                        key={preset.id}
+                        onClick={() => handlePresetSelect(preset.id)}
+                        className={cn(
+                          "font-mono text-sm",
+                          currentPreset === preset.id && "bg-accent/10"
+                        )}
+                      >
+                        <Icon className={cn("w-3.5 h-3.5 mr-2", preset.color)} />
+                        {preset.name}
+                      </DropdownMenuItem>
+                    );
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -363,18 +402,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                 </Button>
               )}
             </div>
-
-            {/* Text Input */}
-            <Textarea
-              ref={textareaRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={isRecording ? "Listening..." : "Type a message..."}
-              className="min-h-[44px] max-h-[200px] resize-none border-0 bg-transparent p-2 focus-visible:ring-0 scrollbar-thin text-sm"
-              disabled={isLoading}
-              rows={1}
-            />
           </div>
           
           {/* Status Text */}
