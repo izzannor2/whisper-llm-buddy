@@ -270,16 +270,22 @@ export default function IDE() {
       {/* Header */}
       <header className="h-12 flex items-center justify-between px-4 border-b border-border bg-card">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')} title="Back to Chat">
             <Home className="h-5 w-5" />
           </Button>
           <h1 className="text-lg font-bold gradient-text">LocalDev AI</h1>
+          
+          {/* Mode Badge */}
+          <div className="flex items-center gap-2 px-3 py-1 bg-accent/10 rounded-full">
+            <span className="text-xs font-medium text-accent">App Builder</span>
+          </div>
+          
           <span className="text-sm text-muted-foreground">{project?.name || 'No Project'}</span>
           
           {/* Agent status */}
           <div className="flex items-center gap-1.5 text-xs">
             <Bot className="h-3.5 w-3.5" />
-            <span className={agentStatus.connected ? 'text-green-500' : 'text-muted-foreground'}>
+            <span className={agentStatus.connected ? 'text-accent' : 'text-muted-foreground'}>
               {agentStatus.connected ? 'Agent Connected' : 'Agent Offline'}
             </span>
           </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Menu, X, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -33,6 +34,7 @@ import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { cn } from '@/lib/utils';
 
 export default function Index() {
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [settings, setSettings] = useState<ChatSettings>(loadSettings());
@@ -83,6 +85,13 @@ export default function Index() {
     setCurrentMode(mode);
     setCurrentModeKey(key);
     saveIDESettings({ mode, modeKey: key } as any);
+    
+    // Navigate to IDE for App Builder mode
+    if (key === 'app-builder') {
+      navigate('/ide');
+      return;
+    }
+    
     toast({ title: `Switched to ${key === 'chat' ? 'Chat' : mode.replace('-', ' ')}` });
   };
 
