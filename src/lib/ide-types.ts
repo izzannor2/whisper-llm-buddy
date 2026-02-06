@@ -12,14 +12,25 @@ export type IDEMode =
 
 export type ConnectionMode = 'offline' | 'online-research' | 'updating';
 
+export type LLMBackend = 'ollama' | 'llama-cpp';
+
 export interface IDESettings {
   mode: IDEMode;
   connectionMode: ConnectionMode;
   theme: 'dark' | 'light';
   accentColor: string;
   fontSize: number;
+  // LLM Backend selection
+  llmBackend: LLMBackend;
+  // Ollama settings
   ollamaUrl: string;
   selectedModel: string;
+  // Llama.cpp settings
+  llamaCppUrl: string;
+  llamaCppModel: string;
+  llamaCppContextSize: number;
+  llamaCppThreads: number;
+  llamaCppGpuLayers: number;
   autoSave: boolean;
   voiceEnabled: boolean;
   pushToTalkKey: string;
@@ -101,8 +112,14 @@ export const DEFAULT_SETTINGS: IDESettings = {
   theme: 'dark',
   accentColor: 'purple',
   fontSize: 14,
+  llmBackend: 'ollama',
   ollamaUrl: 'http://localhost:11434',
   selectedModel: 'llama3.2',
+  llamaCppUrl: 'http://127.0.0.1:8081',
+  llamaCppModel: '',
+  llamaCppContextSize: 4096,
+  llamaCppThreads: 4,
+  llamaCppGpuLayers: 0,
   autoSave: true,
   voiceEnabled: true,
   pushToTalkKey: 'Space',
