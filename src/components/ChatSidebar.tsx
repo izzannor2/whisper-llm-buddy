@@ -11,17 +11,33 @@ import {
   WifiOff,
   Wifi,
   Lock,
-  Power
+  Power,
+  ChevronDown,
+  Layers,
+  Terminal,
+  Sparkles,
+  GraduationCap,
+  FlaskConical,
+  Zap,
+  ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { Conversation } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import { isFileSystemSupported, openDirectory, getCurrentDirectory } from '@/lib/file-system';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { useToast } from '@/hooks/use-toast';
+import { IDEMode } from '@/lib/ide-types';
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -30,11 +46,24 @@ interface ChatSidebarProps {
   onNew: () => void;
   onDelete: (id: string) => void;
   onOpenSettings: () => void;
-  onExport: () => void;
-  onImport: () => void;
+  onExport?: () => void;
+  onImport?: () => void;
   onOpenCodeLibrary?: () => void;
   onOpenModels?: () => void;
+  currentMode?: IDEMode;
+  onModeChange?: (mode: IDEMode) => void;
+  onCollapse?: () => void;
 }
+
+const MODES_LIST: { id: IDEMode | 'chat'; name: string; icon: any; description: string }[] = [
+  { id: 'app-builder', name: 'Chat', icon: MessageSquare, description: 'General conversation' },
+  { id: 'app-builder', name: 'App Builder', icon: Layers, description: 'Full-stack web apps' },
+  { id: 'embedded-iot', name: 'IoT / Embedded', icon: Cpu, description: 'ESP32, Arduino, Pi' },
+  { id: 'system-helper', name: 'System Helper', icon: Terminal, description: 'Computer tasks' },
+  { id: 'ai-improvement', name: 'AI Improvement', icon: Sparkles, description: 'Self-modification' },
+  { id: 'learning', name: 'Learning Mode', icon: GraduationCap, description: 'Learn your style' },
+  { id: 'sandbox', name: 'Sandbox', icon: FlaskConical, description: 'Safe experiments' },
+];
 
 export function ChatSidebar({
   conversations,
@@ -43,7 +72,9 @@ export function ChatSidebar({
   onNew,
   onDelete,
   onOpenSettings,
-  onOpenModels,
+  currentMode = 'app-builder',
+  onModeChange,
+  onCollapse,
 }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [projectFolder, setProjectFolder] = useState<string | null>(null);
@@ -93,14 +124,78 @@ export function ChatSidebar({
     return date.toLocaleDateString();
   };
 
+  const currentModeData = MODES_LIST.find(m => m.id === currentMode) || MODES_LIST[0];
+  const ModeIcon = currentModeData.icon;
+
   return (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
+      {/* Header with branding */}
+      <div className="p-3 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
+          <Zap className="w-5 h-5 text-accent" />
+        </div>
+        <span className="font-semibold text-lg text-accent">LocalDev AI</span>
+        {onCollapse && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-auto h-8 w-8"
+            onClick={onCollapse}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+
+      <Separator className="bg-sidebar-border" />
+
+      {/* Mode Selector Dropdown */}
+      <div className="p-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="w-full justify-between h-10 px-3 bg-sidebar-accent/50 hover:bg-sidebar-accent"
+            >
+              <div className="flex items-center gap-2">
+                <ModeIcon className="w-4 h-4 text-accent" />
+                <span className="text-sm font-medium">{currentModeData.name}</span>
+              </div>
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {MODES_LIST.map((mode, index) => {
+              const Icon = mode.icon;
+              // Skip duplicate 'Chat' which shares app-builder id
+              if (index === 0) return null;
+              return (
+                <DropdownMenuItem
+                  key={mode.name}
+                  onClick={() => onModeChange?.(mode.id as IDEMode)}
+                  className={cn(
+                    "flex items-start gap-3 py-2",
+                    currentMode === mode.id && "bg-accent/10"
+                  )}
+                >
+                  <Icon className="w-4 h-4 mt-0.5 text-accent" />
+                  <div>
+                    <p className="text-sm font-medium">{mode.name}</p>
+                    <p className="text-xs text-muted-foreground">{mode.description}</p>
+                  </div>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       {/* Search */}
-      <div className="p-3">
+      <div className="px-3 pb-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search"
+            placeholder="Search chats..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 bg-sidebar-accent/50 border-sidebar-border h-9 text-sm"
@@ -108,7 +203,7 @@ export function ChatSidebar({
         </div>
       </div>
 
-      {/* Menu Items */}
+      {/* Quick Actions */}
       <div className="px-2 space-y-0.5">
         <Button
           variant="ghost"

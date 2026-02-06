@@ -1,15 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { ModesSidebar } from '@/components/ModesSidebar';
+import { ChatSidebar } from '@/components/ChatSidebar';
 import { ChatMessage } from '@/components/ChatMessage';
 import { ChatInput, ChatInputRef } from '@/components/ChatInput';
 import { SettingsDialog } from '@/components/SettingsDialog';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { EmptyState } from '@/components/EmptyState';
-import { VoiceCallMode } from '@/components/VoiceCallMode';
 import { CodeLibrary } from '@/components/CodeLibrary';
 import { IDEMode } from '@/lib/ide-types';
 import { getIDESettings, saveIDESettings } from '@/lib/ide-store';
@@ -255,20 +254,6 @@ export default function Index() {
     toast({ title: 'Settings saved' });
   };
 
-  const getModeTitle = () => {
-    const titles: Record<IDEMode, string> = {
-      'app-builder': 'App Builder Mode',
-      'embedded-iot': 'IoT / Embedded Mode',
-      'system-helper': 'System Helper Mode',
-      'ai-improvement': 'AI Improvement Mode',
-      'learning': 'Learning Mode',
-      'sandbox': 'Sandbox Mode',
-      'jailbreak': 'Override Mode',
-      'plugin': 'Plugin Mode',
-    };
-    return titles[currentMode];
-  };
-
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Mobile sidebar toggle */}
@@ -288,10 +273,15 @@ export default function Index() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <ModesSidebar
+        <ChatSidebar
+          conversations={conversations}
+          currentId={currentConversation?.id || null}
+          onSelect={loadConversation}
+          onNew={createNewConversation}
+          onDelete={handleDeleteConversation}
+          onOpenSettings={() => setSettingsOpen(true)}
           currentMode={currentMode}
           onModeChange={handleModeChange}
-          onOpenSettings={() => setSettingsOpen(true)}
           onCollapse={() => setSidebarOpen(false)}
         />
       </div>
