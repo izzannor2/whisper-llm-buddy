@@ -13,7 +13,7 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { ChatSettings, DEFAULT_SETTINGS, AVAILABLE_MODELS, DEFAULT_API_KEYS } from '@/lib/chat-api';
+import { ChatSettings, DEFAULT_SETTINGS, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, DEFAULT_API_KEYS } from '@/lib/chat-api';
 import { getAvailableVoices, speak, isTTSSupported } from '@/lib/tts';
 import { ModelManager } from '@/components/ModelManager';
 import { VoiceModelManager } from '@/components/VoiceModelManager';
@@ -27,14 +27,7 @@ interface SettingsDialogProps {
   onSave: (settings: ChatSettings) => void;
 }
 
-const HUGGINGFACE_MODELS = [
-  'mistralai/Mistral-7B-Instruct-v0.2',
-  'meta-llama/Meta-Llama-3-8B-Instruct',
-  'microsoft/Phi-3-mini-4k-instruct',
-  'google/gemma-7b-it',
-  'Qwen/Qwen2-7B-Instruct',
-  'tiiuae/falcon-7b-instruct',
-];
+// No placeholder models - only show what's actually available
 
 export function SettingsDialog({
   open,
@@ -48,7 +41,7 @@ export function SettingsDialog({
   const [isScanning, setIsScanning] = useState(false);
   const [isScanningOllama, setIsScanningOllama] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [customHFModel, setCustomHFModel] = useState('');
+  
 
   // Load available voices
   useEffect(() => {
@@ -118,9 +111,27 @@ export function SettingsDialog({
     }
   }, [localSettings.backend]);
 
-  const filteredModels = AVAILABLE_MODELS.filter(
-    m => m.backend === localSettings.backend
-  );
+  // Get available models based on backend and whether API keys are configured
+  const getAvailableModels = () => {
+    switch (localSettings.backend) {
+      case 'cloud':
+        return CLOUD_MODELS;
+      case 'openai':
+        return localSettings.apiKeys.openai ? OPENAI_MODELS : [];
+      case 'anthropic':
+        return localSettings.apiKeys.anthropic ? ANTHROPIC_MODELS : [];
+      case 'google':
+        return localSettings.apiKeys.google ? GOOGLE_MODELS : [];
+      case 'local':
+        return localModels.map(m => ({ id: m, name: m, backend: 'local' }));
+      case 'ollama':
+        return ollamaModels.map(m => ({ id: m, name: m, backend: 'ollama' }));
+      default:
+        return [];
+    }
+  };
+
+  const availableModels = getAvailableModels();
 
   const updateApiKey = (provider: keyof typeof DEFAULT_API_KEYS, value: string) => {
     setLocalSettings({
@@ -415,66 +426,95 @@ export function SettingsDialog({
             {localSettings.backend === 'huggingface' ? (
               <div className="space-y-2">
                 <Label>Hugging Face Model</Label>
-                <select
-                  value={localSettings.huggingfaceModel}
-                  onChange={(e) =>
-                    setLocalSettings({ ...localSettings, huggingfaceModel: e.target.value })
-                  }
-                  className="w-full p-2 rounded-lg bg-muted border border-border"
-                >
-                  {HUGGINGFACE_MODELS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                  {customHFModel && !HUGGINGFACE_MODELS.includes(customHFModel) && (
-                    <option value={customHFModel}>{customHFModel}</option>
-                  )}
-                </select>
-                <div className="flex gap-2 mt-2">
+                <div className="space-y-2">
                   <Input
-                    value={customHFModel}
-                    onChange={(e) => setCustomHFModel(e.target.value)}
-                    placeholder="org/model-name (custom)"
-                    className="bg-muted text-sm"
+                    value={localSettings.huggingfaceModel}
+                    onChange={(e) =>
+                      setLocalSettings({ ...localSettings, huggingfaceModel: e.target.value })
+                    }
+                    placeholder="org/model-name"
+                    className="bg-muted"
                   />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (customHFModel) {
-                        setLocalSettings({ ...localSettings, huggingfaceModel: customHFModel });
-                      }
-                    }}
-                  >
-                    Add
-                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Enter any model ID from huggingface.co/models (must support chat completions API)
+                  </p>
+                  {!localSettings.apiKeys.huggingface && (
+                    <p className="text-xs text-destructive">
+                      ⚠️ Add your Hugging Face API key in the API Keys tab to use this backend
+                    </p>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Enter any model ID from huggingface.co/models (must support chat completions API)
-                </p>
+              </div>
+            ) : localSettings.backend === 'ollama' ? (
+              <div className="space-y-2">
+                <Label>Model</Label>
+                {ollamaModels.length > 0 ? (
+                  <select
+                    value={localSettings.ollamaModel}
+                    onChange={(e) =>
+                      setLocalSettings({ ...localSettings, ollamaModel: e.target.value })
+                    }
+                    className="w-full p-2 rounded-lg bg-muted border border-border"
+                  >
+                    {ollamaModels.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/50 border border-border">
+                    No models detected. Connect to Ollama and click refresh in the Backend tab.
+                  </div>
+                )}
+              </div>
+            ) : localSettings.backend === 'local' ? (
+              <div className="space-y-2">
+                <Label>Model</Label>
+                {localModels.length > 0 ? (
+                  <select
+                    value={localSettings.model}
+                    onChange={(e) =>
+                      setLocalSettings({ ...localSettings, model: e.target.value })
+                    }
+                    className="w-full p-2 rounded-lg bg-muted border border-border"
+                  >
+                    {localModels.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/50 border border-border">
+                    No models detected. Start llama-server and click refresh in the Backend tab.
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
                 <Label>Model</Label>
-                <select
-                  value={localSettings.model}
-                  onChange={(e) =>
-                    setLocalSettings({ ...localSettings, model: e.target.value })
-                  }
-                  className="w-full p-2 rounded-lg bg-muted border border-border"
-                >
-                  {filteredModels.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                  {localModels.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                {availableModels.length > 0 ? (
+                  <select
+                    value={localSettings.model}
+                    onChange={(e) =>
+                      setLocalSettings({ ...localSettings, model: e.target.value })
+                    }
+                    className="w-full p-2 rounded-lg bg-muted border border-border"
+                  >
+                    {availableModels.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/50 border border-border">
+                    {['openai', 'anthropic', 'google'].includes(localSettings.backend) 
+                      ? `Add your ${getBackendLabel(localSettings.backend)} API key in the API Keys tab to see available models.`
+                      : 'No models available for this backend.'}
+                  </div>
+                )}
               </div>
             )}
 
