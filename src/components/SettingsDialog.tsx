@@ -98,7 +98,8 @@ export function SettingsDialog({
 
   const getBackendLabel = (backend: string) => {
     switch (backend) {
-      case 'local': return 'Local';
+      case 'local': return 'Llama.cpp';
+      case 'ollama': return 'Ollama';
       case 'cloud': return 'Cloud';
       case 'openai': return 'OpenAI';
       case 'anthropic': return 'Anthropic';
@@ -131,7 +132,7 @@ export function SettingsDialog({
           </TabsList>
 
           <TabsContent value="backend" className="space-y-4 mt-4">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <button
                 className={cn(
                   'p-3 rounded-xl border-2 transition-all text-left',
@@ -144,8 +145,24 @@ export function SettingsDialog({
                 }
               >
                 <Server className="w-5 h-5 mb-1 text-accent" />
-                <p className="font-medium text-sm">Local</p>
-                <p className="text-[10px] text-muted-foreground">llama.cpp</p>
+                <p className="font-medium text-sm">Llama.cpp</p>
+                <p className="text-[10px] text-muted-foreground">GGUF models</p>
+              </button>
+
+              <button
+                className={cn(
+                  'p-3 rounded-xl border-2 transition-all text-left',
+                  localSettings.backend === 'ollama'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border hover:border-muted-foreground'
+                )}
+                onClick={() =>
+                  setLocalSettings({ ...localSettings, backend: 'ollama', ollamaModel: 'llama3.2' })
+                }
+              >
+                <HardDrive className="w-5 h-5 mb-1 text-purple-500" />
+                <p className="font-medium text-sm">Ollama</p>
+                <p className="text-[10px] text-muted-foreground">Easy models</p>
               </button>
 
               <button
@@ -231,7 +248,7 @@ export function SettingsDialog({
 
             {localSettings.backend === 'local' && (
               <div className="space-y-2">
-                <Label>Local Server URL</Label>
+                <Label>Llama.cpp Server URL</Label>
                 <div className="flex gap-2">
                   <Input
                     value={localSettings.localUrl}
@@ -260,6 +277,45 @@ export function SettingsDialog({
                     Found models: {localModels.join(', ')}
                   </p>
                 )}
+                <p className="text-xs text-muted-foreground">
+                  Run: <code className="bg-muted px-1 rounded">llama-server -m model.gguf --port 8081</code>
+                </p>
+              </div>
+            )}
+
+            {localSettings.backend === 'ollama' && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label>Ollama URL</Label>
+                  <Input
+                    value={localSettings.ollamaUrl}
+                    onChange={(e) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        ollamaUrl: e.target.value,
+                      })
+                    }
+                    placeholder="http://localhost:11434"
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Model Name</Label>
+                  <Input
+                    value={localSettings.ollamaModel}
+                    onChange={(e) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        ollamaModel: e.target.value,
+                      })
+                    }
+                    placeholder="llama3.2"
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Pull models with: <code className="bg-muted px-1 rounded">ollama pull llama3.2</code>
+                  </p>
+                </div>
               </div>
             )}
 
