@@ -317,6 +317,7 @@ export default function Index() {
                     message={msg}
                     onEdit={msg.role === 'user' ? handleEditMessage : undefined}
                     onDelete={handleDeleteMessage}
+                    onAddToInput={(text) => chatInputRef.current?.appendMessage(text)}
                   />
                 ))}
                 {streamingContent && (
@@ -327,6 +328,7 @@ export default function Index() {
                       content: streamingContent,
                       timestamp: Date.now(),
                     }}
+                    onAddToInput={(text) => chatInputRef.current?.appendMessage(text)}
                   />
                 )}
                 {isLoading && !streamingContent && <TypingIndicator />}

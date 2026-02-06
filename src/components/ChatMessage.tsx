@@ -12,9 +12,10 @@ interface ChatMessageProps {
   message: Message;
   onEdit?: (id: string, content: string) => void;
   onDelete?: (id: string) => void;
+  onAddToInput?: (text: string) => void;
 }
 
-export function ChatMessage({ message, onEdit, onDelete }: ChatMessageProps) {
+export function ChatMessage({ message, onEdit, onDelete, onAddToInput }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
@@ -128,6 +129,7 @@ export function ChatMessage({ message, onEdit, onDelete }: ChatMessageProps) {
                             code={codeString}
                             language={match?.[1]}
                             className="my-3"
+                            onAddToInput={onAddToInput}
                           />
                         );
                       }
