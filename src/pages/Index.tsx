@@ -37,6 +37,10 @@ export default function Index() {
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [settings, setSettings] = useState<ChatSettings>(loadSettings());
   const [currentMode, setCurrentMode] = useState<IDEMode>(() => getIDESettings().mode);
+  const [currentModeKey, setCurrentModeKey] = useState<string>(() => {
+    const settings = getIDESettings();
+    return (settings as any).modeKey || settings.mode;
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -75,10 +79,11 @@ export default function Index() {
     }
   }, [currentConversation?.messages, streamingContent]);
 
-  const handleModeChange = (mode: IDEMode) => {
+  const handleModeChange = (mode: IDEMode, key: string) => {
     setCurrentMode(mode);
-    saveIDESettings({ mode });
-    toast({ title: `Switched to ${mode.replace('-', ' ')}` });
+    setCurrentModeKey(key);
+    saveIDESettings({ mode, modeKey: key } as any);
+    toast({ title: `Switched to ${key === 'chat' ? 'Chat' : mode.replace('-', ' ')}` });
   };
 
   const loadConversation = async (id: string) => {
@@ -283,6 +288,7 @@ export default function Index() {
           onDelete={handleDeleteConversation}
           onOpenSettings={() => setSettingsOpen(true)}
           currentMode={currentMode}
+          currentModeKey={currentModeKey}
           onModeChange={handleModeChange}
           onCollapse={() => setSidebarOpen(false)}
         />
