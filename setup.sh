@@ -24,7 +24,7 @@ echo ""
 # ========================================
 # Step 1: Check Node.js
 # ========================================
-echo -e "[1/5] Checking Node.js..."
+echo -e "[1/6] Checking Node.js..."
 if ! command -v node &> /dev/null; then
     echo -e "      ${RED}[ERROR] Node.js is not installed!${NC}"
     echo ""
@@ -40,7 +40,7 @@ echo -e "      ${GREEN}[OK] Node.js $(node --version) found${NC}"
 # ========================================
 # Step 2: Check npm
 # ========================================
-echo -e "[2/5] Checking npm..."
+echo -e "[2/6] Checking npm..."
 if ! command -v npm &> /dev/null; then
     echo -e "      ${RED}[ERROR] npm is not installed!${NC}"
     exit 1
@@ -50,7 +50,7 @@ echo -e "      ${GREEN}[OK] npm $(npm --version) found${NC}"
 # ========================================
 # Step 3: Install dependencies
 # ========================================
-echo -e "[3/5] Installing dependencies..."
+echo -e "[3/6] Installing dependencies..."
 if [ -d "node_modules" ]; then
     echo -e "      ${GREEN}[OK] Dependencies already installed${NC}"
     echo -e "      [*] Checking for updates..."
@@ -66,9 +66,29 @@ else
 fi
 
 # ========================================
-# Step 4: Check Ollama (optional)
+# Step 4: Create models directory
 # ========================================
-echo -e "[4/5] Checking Ollama (Local LLM)..."
+echo -e "[4/6] Setting up models directory..."
+if [ ! -d "models/gguf" ]; then
+    mkdir -p "models/gguf"
+    echo -e "      ${GREEN}[OK] Created models/gguf/ folder${NC}"
+else
+    echo -e "      ${GREEN}[OK] models/gguf/ folder exists${NC}"
+fi
+
+# Check for existing GGUF models
+GGUF_COUNT=$(find models/gguf -name "*.gguf" -type f 2>/dev/null | wc -l)
+if [ "$GGUF_COUNT" -gt 0 ]; then
+    echo -e "      ${GREEN}[OK] Found $GGUF_COUNT GGUF model(s) ready to use${NC}"
+else
+    echo -e "      ${YELLOW}[!] No GGUF models found${NC}"
+    echo "          Add .gguf files to models/gguf/ for auto-loading"
+fi
+
+# ========================================
+# Step 5: Check Ollama (optional)
+# ========================================
+echo -e "[5/6] Checking Ollama (Local LLM)..."
 if command -v ollama &> /dev/null; then
     echo -e "      ${GREEN}[OK] Ollama found${NC}"
     
@@ -94,17 +114,20 @@ else
 fi
 
 # ========================================
-# Step 5: Check llama.cpp (optional)
+# Step 6: Check llama.cpp (optional)
 # ========================================
-echo -e "[5/5] Checking llama.cpp (GGUF models)..."
+echo -e "[6/6] Checking llama.cpp (GGUF models)..."
 if command -v llama-server &> /dev/null; then
     echo -e "      ${GREEN}[OK] llama-server found${NC}"
+    if [ "$GGUF_COUNT" -gt 0 ]; then
+        echo -e "      ${GREEN}[OK] Will auto-launch with models from models/gguf/${NC}"
+    fi
 elif command -v llama-cli &> /dev/null; then
     echo -e "      ${GREEN}[OK] llama-cli found${NC}"
 else
     echo -e "      ${YELLOW}[!] llama.cpp not found (optional)${NC}"
     echo "          Build from: https://github.com/ggerganov/llama.cpp"
-    echo "          Required for custom GGUF models"
+    echo "          Required for GGUF models in models/gguf/"
 fi
 
 # ========================================
@@ -120,10 +143,15 @@ echo "   - Run: ./start.sh (or npm run dev)"
 echo ""
 echo " The app will open at: http://localhost:8080"
 echo ""
+echo " Model Setup:"
+echo "   - GGUF models: Place in models/gguf/"
+echo "   - Ollama: Run \"ollama pull llama3.2\""
+echo "   - Scripts auto-detect and launch models!"
+echo ""
 echo " Quick Tips:"
-echo "   - Use Ollama for local AI (ollama pull llama3.2)"
+echo "   - Drop any .gguf file in models/gguf/ folder"
+echo "   - ./start.sh will auto-launch llama-server"
 echo "   - Enable GPU acceleration in Settings"
-echo "   - Try App Builder mode for full IDE experience"
 echo ""
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 echo ""
