@@ -19,6 +19,7 @@ import {
   getSelectedWhisperModel,
   getDownloadedModels
 } from '@/lib/local-stt';
+import { loadSettings, CLOUD_MODELS } from '@/lib/chat-api';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -35,16 +36,6 @@ export interface ChatInputRef {
   stopListening: () => void;
   isListening: boolean;
 }
-
-// Popular local models
-const LOCAL_MODELS = [
-  { id: 'llama-3.2-1b', name: 'Llama-3.2 1B' },
-  { id: 'llama-3.2-3b', name: 'Llama-3.2 3B' },
-  { id: 'gemma-3n-2b', name: 'Gemma 3n 2B' },
-  { id: 'qwen-2.5-7b-coder', name: 'Qwen2.5 7B Coder' },
-  { id: 'mistral-7b', name: 'Mistral 7B' },
-  { id: 'deepseek-coder', name: 'DeepSeek Coder' },
-];
 
 // Presets with icons matching Docket
 const PRESETS = [
@@ -88,10 +79,10 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     onModelChange,
     modelLoaded = false
   }, ref) {
+    const settings = loadSettings();
     const [message, setMessage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
-    const [currentModel, setCurrentModel] = useState(selectedModel);
     const [currentPreset, setCurrentPreset] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -102,6 +93,20 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       return isWhisperLoaded() || getDownloadedModels().length > 0;
     });
     
+    // Get current backend and model info
+    const getBackendDisplayName = () => {
+      switch (settings.backend) {
+        case 'cloud': return 'Cloud';
+        case 'ollama': return settings.ollamaModel || 'Ollama';
+        case 'local': return 'Llama.cpp';
+        case 'openai': return settings.model || 'OpenAI';
+        case 'anthropic': return settings.model || 'Anthropic';
+        case 'google': return settings.model || 'Google';
+        case 'huggingface': return settings.huggingfaceModel?.split('/').pop() || 'HuggingFace';
+        default: return settings.backend;
+      }
+    };
+
     useEffect(() => {
       const checkWhisper = () => {
         setWhisperAvailable(isWhisperLoaded() || getDownloadedModels().length > 0);
@@ -131,11 +136,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
       }
     }, [message]);
-
-    const handleModelSelect = (modelId: string) => {
-      setCurrentModel(modelId);
-      onModelChange?.(modelId);
-    };
 
     const handlePresetSelect = (presetId: string) => {
       setCurrentPreset(presetId);
@@ -254,9 +254,13 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       startLocalRecording();
     }, [isRecording, whisperAvailable, startLocalRecording, stopRecording]);
 
-    const currentModelName = LOCAL_MODELS.find(m => m.id === currentModel)?.name || currentModel;
+    const currentModelName = getBackendDisplayName();
     const currentPresetData = currentPreset ? PRESETS.find(p => p.id === currentPreset) : null;
     const PresetIcon = currentPresetData?.icon;
+
+    const openSettings = () => {
+      window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'backend' } }));
+    };
 
     return (
       <div className="p-4 border-t border-border bg-background">
@@ -277,34 +281,18 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             
             {/* Bottom Row: Model + Preset + Actions */}
             <div className="flex items-center gap-2 mt-2">
-              {/* Model Selector */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 px-3 text-accent hover:text-accent/80 hover:bg-accent/10 font-mono text-sm"
-                  >
-                    {currentModelName}
-                    <span className="w-2 h-2 rounded-full bg-accent ml-2" />
-                    <ChevronDown className="w-3 h-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="bg-popover border-border z-50">
-                  {LOCAL_MODELS.map((model) => (
-                    <DropdownMenuItem
-                      key={model.id}
-                      onClick={() => handleModelSelect(model.id)}
-                      className={cn(
-                        "font-mono text-sm",
-                        currentModel === model.id && "text-accent"
-                      )}
-                    >
-                      {model.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Backend/Model Display - Click to open settings */}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 px-3 text-accent hover:text-accent/80 hover:bg-accent/10 font-mono text-sm"
+                onClick={openSettings}
+                title="Click to change backend/model in settings"
+              >
+                {currentModelName}
+                <span className="w-2 h-2 rounded-full bg-accent ml-2" />
+                <Settings className="w-3 h-3 ml-1" />
+              </Button>
 
               {/* Preset Selector */}
               <DropdownMenu>
