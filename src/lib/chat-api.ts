@@ -26,6 +26,12 @@ export interface ChatSettings {
   // Hardware settings
   useWebGPU: boolean;
   offlineMode: boolean;
+  // OpenClaw settings
+  openClawEnabled: boolean;
+  openClawModel: string;
+  openClawAutoBackup: boolean;
+  openClawLearning: boolean;
+  openClawMurmur: boolean;
 }
 
 export interface ChatMessage {
@@ -58,6 +64,12 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   apiKeys: DEFAULT_API_KEYS,
   useWebGPU: false,
   offlineMode: false,
+  // OpenClaw defaults
+  openClawEnabled: false,
+  openClawModel: 'llama3.1:8b',
+  openClawAutoBackup: true,
+  openClawLearning: true,
+  openClawMurmur: true,
 };
 
 export const AVAILABLE_MODELS = [

@@ -26,12 +26,20 @@ import { speak, stopSpeaking, isTTSSupported } from '@/lib/tts';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 
+interface OpenClawConfig {
+  model?: string;
+  autoBackup?: boolean;
+  learningEnabled?: boolean;
+  murmurUpdates?: boolean;
+}
+
 interface OpenClawOverlayProps {
   onClose: () => void;
   onOpenSettings: () => void;
+  config?: OpenClawConfig;
 }
 
-export function OpenClawOverlay({ onClose, onOpenSettings }: OpenClawOverlayProps) {
+export function OpenClawOverlay({ onClose, onOpenSettings, config }: OpenClawOverlayProps) {
   const {
     state,
     logs,
@@ -68,7 +76,13 @@ export function OpenClawOverlay({ onClose, onOpenSettings }: OpenClawOverlayProp
 
   // Initialize on mount
   useEffect(() => {
-    init({ model: 'llama3.1:8b' });
+    init({ 
+      model: config?.model || 'llama3.1:8b',
+      autoBackup: config?.autoBackup ?? true,
+      learningEnabled: config?.learningEnabled ?? true,
+      murmurUpdates: config?.murmurUpdates ?? true,
+      sandboxedPath: null,
+    });
     
     // Check Whisper
     const checkWhisper = () => {
@@ -81,7 +95,7 @@ export function OpenClawOverlay({ onClose, onOpenSettings }: OpenClawOverlayProp
     return () => {
       shutdown();
     };
-  }, []);
+  }, [config?.model, config?.autoBackup, config?.learningEnabled, config?.murmurUpdates]);
 
   // Auto-scroll
   useEffect(() => {
