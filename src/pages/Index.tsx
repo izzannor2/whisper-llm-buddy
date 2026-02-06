@@ -366,6 +366,10 @@ export default function Index() {
             learningEnabled: settings.openClawLearning,
             murmurUpdates: settings.openClawMurmur,
           }}
+          ttsSettings={{
+            voice: settings.ttsVoice,
+            rate: settings.ttsRate,
+          }}
         />
       )}
 

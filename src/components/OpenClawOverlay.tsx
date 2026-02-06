@@ -33,13 +33,19 @@ interface OpenClawConfig {
   murmurUpdates?: boolean;
 }
 
+interface TTSSettings {
+  voice?: string;
+  rate?: number;
+}
+
 interface OpenClawOverlayProps {
   onClose: () => void;
   onOpenSettings: () => void;
   config?: OpenClawConfig;
+  ttsSettings?: TTSSettings;
 }
 
-export function OpenClawOverlay({ onClose, onOpenSettings, config }: OpenClawOverlayProps) {
+export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }: OpenClawOverlayProps) {
   const {
     state,
     logs,
@@ -247,11 +253,14 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config }: OpenClawOve
     
     await chat(message);
 
-    // TTS response
+    // TTS response using app's voice settings
     if (speakerEnabled && isTTSSupported() && history.length > 0) {
       const lastAssistant = history.filter(m => m.role === 'assistant').pop();
       if (lastAssistant) {
-        speak(lastAssistant.content);
+        speak(lastAssistant.content, {
+          voice: ttsSettings?.voice,
+          rate: ttsSettings?.rate ?? 1.0,
+        });
       }
     }
   };
