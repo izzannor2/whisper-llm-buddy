@@ -72,31 +72,32 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   openClawMurmur: true,
 };
 
-export const AVAILABLE_MODELS = [
-  { id: 'default', name: 'Default Model', backend: 'local' },
-  // Ollama models
-  { id: 'llama3.2', name: 'Llama 3.2', backend: 'ollama' },
-  { id: 'llama3.1', name: 'Llama 3.1', backend: 'ollama' },
-  { id: 'mistral', name: 'Mistral 7B', backend: 'ollama' },
-  { id: 'codellama', name: 'Code Llama', backend: 'ollama' },
-  { id: 'deepseek-coder', name: 'DeepSeek Coder', backend: 'ollama' },
-  { id: 'qwen2.5', name: 'Qwen 2.5', backend: 'ollama' },
-  { id: 'phi3', name: 'Phi-3', backend: 'ollama' },
-  // Cloud models
+// Only cloud models are always available - other backends show dynamically detected models
+export const CLOUD_MODELS = [
   { id: 'gemini-flash', name: 'Gemini 2.5 Flash', backend: 'cloud' },
   { id: 'gemini-pro', name: 'Gemini 2.5 Pro', backend: 'cloud' },
-  // OpenAI models
+];
+
+// These are shown only when API keys are configured
+export const OPENAI_MODELS = [
   { id: 'gpt-4o', name: 'GPT-4o', backend: 'openai' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', backend: 'openai' },
   { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', backend: 'openai' },
-  // Anthropic models
+];
+
+export const ANTHROPIC_MODELS = [
   { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', backend: 'anthropic' },
   { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', backend: 'anthropic' },
   { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', backend: 'anthropic' },
-  // Google models
+];
+
+export const GOOGLE_MODELS = [
   { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', backend: 'google' },
   { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', backend: 'google' },
 ];
+
+// Legacy export for backwards compatibility - will be removed
+export const AVAILABLE_MODELS = [...CLOUD_MODELS];
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
