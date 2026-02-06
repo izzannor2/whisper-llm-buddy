@@ -10,8 +10,11 @@ import {
   FlaskConical,
   Settings,
   WifiOff,
+  Wifi,
   ChevronRight,
-  Zap
+  Zap,
+  AlertTriangle,
+  Plug
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -37,18 +40,20 @@ const MODE_ICONS: Record<IDEMode | 'chat', React.ReactNode> = {
   'ai-improvement': <Sparkles className="w-5 h-5" />,
   'learning': <GraduationCap className="w-5 h-5" />,
   'sandbox': <FlaskConical className="w-5 h-5" />,
-  'jailbreak': <Zap className="w-5 h-5" />,
-  'plugin': <Layers className="w-5 h-5" />,
+  'jailbreak': <AlertTriangle className="w-5 h-5" />,
+  'plugin': <Plug className="w-5 h-5" />,
 };
 
 const MODES_LIST: { id: IDEMode | 'chat'; name: string; description: string }[] = [
   { id: 'chat', name: 'Chat', description: 'General conversation and Q&A' },
-  { id: 'app-builder', name: 'App Builder', description: 'Full-stack web apps, dashboards' },
+  { id: 'app-builder', name: 'App Builder', description: 'Full-stack web apps with live preview' },
   { id: 'embedded-iot', name: 'IoT / Embedded', description: 'ESP32, Arduino, Raspberry Pi code' },
   { id: 'system-helper', name: 'System Helper', description: 'Computer tasks, cleanup, and more' },
-  { id: 'ai-improvement', name: 'AI Improvement', description: 'Full Lovable-like capabilities - modify this app' },
+  { id: 'ai-improvement', name: 'AI Improvement', description: 'Modify this app itself (self-improve)' },
   { id: 'learning', name: 'Learning Mode', description: 'Learn your coding style and preferences' },
   { id: 'sandbox', name: 'Sandbox', description: 'Safe experimental environment' },
+  { id: 'jailbreak', name: 'Uncensored', description: 'Custom system prompts (advanced)' },
+  { id: 'plugin', name: 'Plugin Mode', description: 'Manage and use custom plugins' },
 ];
 
 export function ModesSidebar({
@@ -146,7 +151,11 @@ export function ModesSidebar({
           className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-muted-foreground hover:bg-sidebar-accent/50 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <WifiOff className="w-5 h-5" />
+            {isOnline ? (
+              <Wifi className="w-5 h-5 text-accent" />
+            ) : (
+              <WifiOff className="w-5 h-5" />
+            )}
             <div className="text-left">
               <p className="text-sm font-medium">
                 {isOnline ? 'Online' : 'Offline'}
