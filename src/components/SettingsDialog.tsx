@@ -81,6 +81,14 @@ export function SettingsDialog({
     setIsScanning(false);
   };
 
+  // Detect if running in cloud preview (cannot reach localhost)
+  const isCloudPreview = () => {
+    const hostname = window.location.hostname;
+    return hostname.includes('lovable.app') || 
+           hostname.includes('lovableproject.com') || 
+           hostname.includes('lovable.dev');
+  };
+
   const scanOllamaModels = async () => {
     setIsScanningOllama(true);
     try {
@@ -99,7 +107,13 @@ export function SettingsDialog({
       }
     } catch (err) {
       console.error('Failed to scan Ollama models:', err);
-      toast.error('Ollama not reachable. Make sure Ollama is running.');
+      if (isCloudPreview()) {
+        toast.error('Cannot reach localhost from cloud preview. Download and run this app locally to use Ollama.', {
+          duration: 6000,
+        });
+      } else {
+        toast.error('Ollama not reachable. Make sure Ollama is running on ' + localSettings.ollamaUrl);
+      }
     }
     setIsScanningOllama(false);
   };
