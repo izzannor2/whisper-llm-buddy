@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save } from 'lucide-react';
+import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,7 @@ import { ChatSettings, DEFAULT_SETTINGS, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_
 import { getAvailableVoices, speak, isTTSSupported } from '@/lib/tts';
 import { ModelManager } from '@/components/ModelManager';
 import { VoiceModelManager } from '@/components/VoiceModelManager';
+import { DebugPanel } from '@/components/DebugPanel';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -201,13 +202,13 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg glass-panel border-border max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl glass-panel border-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl">Settings</DialogTitle>
         </DialogHeader>
 
         <Tabs defaultValue="backend" className="mt-4">
-          <TabsList className="grid w-full grid-cols-8 bg-muted">
+          <TabsList className="grid w-full grid-cols-9 bg-muted">
             <TabsTrigger value="backend" className="text-xs">Backend</TabsTrigger>
             <TabsTrigger value="models" className="text-xs">Models</TabsTrigger>
             <TabsTrigger value="voicemodels" className="text-xs flex items-center gap-1">
@@ -219,6 +220,10 @@ export function SettingsDialog({
             <TabsTrigger value="apikeys" className="text-xs">API Keys</TabsTrigger>
             <TabsTrigger value="voice" className="text-xs">TTS</TabsTrigger>
             <TabsTrigger value="prompt" className="text-xs">Prompt</TabsTrigger>
+            <TabsTrigger value="debug" className="text-xs flex items-center gap-1">
+              <Bug className="w-3 h-3" />
+              <span className="hidden sm:inline">Debug</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="backend" className="space-y-4 mt-4">
@@ -1075,6 +1080,10 @@ export function SettingsDialog({
                 </div>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="debug" className="mt-4">
+            <DebugPanel />
           </TabsContent>
         </Tabs>
 
