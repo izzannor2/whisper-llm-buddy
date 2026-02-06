@@ -99,7 +99,15 @@ if [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
         if [ -n "$OLLAMA_CMD" ]; then
             echo "    Starting Ollama in background..."
             $OLLAMA_CMD serve &> /dev/null &
-            sleep 2
+            echo "    Waiting for Ollama to initialize..."
+            sleep 4
+            # Verify Ollama started
+            if curl -s http://localhost:11434/api/tags &> /dev/null; then
+                echo -e "${GREEN}    [OK] Ollama started successfully!${NC}"
+            else
+                echo "    [!] Ollama failed to start. Check if another instance is running."
+                echo "    [!] Try running manually: $OLLAMA_CMD serve"
+            fi
         else
             echo "    Ollama not found - AI features will use Cloud backend"
             echo "    Place ollama in bin/ollama/ or install from: https://ollama.ai"
