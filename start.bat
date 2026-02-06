@@ -26,6 +26,34 @@ if not exist "node_modules" (
 )
 
 :: ========================================
+:: Detect local binaries in bin/ folder
+:: ========================================
+set LLAMA_SERVER_CMD=
+set OLLAMA_CMD=
+
+:: Check for local llama-server first
+if exist "bin\llama\llama-server.exe" (
+    set "LLAMA_SERVER_CMD=bin\llama\llama-server.exe"
+    echo [OK] Found local llama-server in bin\llama\
+) else (
+    where llama-server >nul 2>&1
+    if not errorlevel 1 (
+        set "LLAMA_SERVER_CMD=llama-server"
+    )
+)
+
+:: Check for local Ollama first
+if exist "bin\ollama\ollama.exe" (
+    set "OLLAMA_CMD=bin\ollama\ollama.exe"
+    echo [OK] Found local Ollama in bin\ollama\
+) else (
+    where ollama >nul 2>&1
+    if not errorlevel 1 (
+        set "OLLAMA_CMD=ollama"
+    )
+)
+
+:: ========================================
 :: Check for GGUF models in models/gguf/
 :: ========================================
 set GGUF_MODEL=
@@ -42,14 +70,12 @@ if exist "models\gguf" (
 if defined GGUF_MODEL (
     echo [*] Found GGUF model: %GGUF_MODEL%
     
-    :: Check if llama-server is available
-    where llama-server >nul 2>&1
-    if not errorlevel 1 (
+    if defined LLAMA_SERVER_CMD (
         :: Check if llama-server is already running
         curl -s http://localhost:8081/health >nul 2>&1
         if errorlevel 1 (
             echo [*] Starting llama-server with detected model...
-            start /B "LlamaServer" llama-server -m "%GGUF_MODEL%" --port 8081 --host 0.0.0.0 -ngl 99 >nul 2>&1
+            start /B "LlamaServer" %LLAMA_SERVER_CMD% -m "%GGUF_MODEL%" --port 8081 --host 0.0.0.0 -ngl 99 >nul 2>&1
             set LLAMA_SERVER_RUNNING=1
             timeout /t 3 /nobreak >nul
             echo [OK] llama-server started on port 8081
@@ -58,9 +84,9 @@ if defined GGUF_MODEL (
             set LLAMA_SERVER_RUNNING=1
         )
     ) else (
-        echo [!] llama-server not found in PATH
-        echo     Install from: https://github.com/ggerganov/llama.cpp
-        echo     The model will be available when llama-server is installed
+        echo [!] llama-server not found
+        echo     Place llama-server.exe in bin\llama\ or install to PATH
+        echo     Build from: https://github.com/ggerganov/llama.cpp
     )
 ) else (
     echo [*] No GGUF models found in models\gguf\
@@ -75,14 +101,13 @@ if %LLAMA_SERVER_RUNNING%==0 (
     curl -s http://localhost:11434/api/tags >nul 2>&1
     if errorlevel 1 (
         echo [!] Ollama not detected at localhost:11434
-        where ollama >nul 2>&1
-        if not errorlevel 1 (
+        if defined OLLAMA_CMD (
             echo     Starting Ollama in background...
-            start /B ollama serve >nul 2>&1
+            start /B %OLLAMA_CMD% serve >nul 2>&1
             timeout /t 2 /nobreak >nul
         ) else (
-            echo [!] Ollama not installed - AI features will use Cloud backend
-            echo     Install from: https://ollama.ai
+            echo [!] Ollama not found - AI features will use Cloud backend
+            echo     Place ollama.exe in bin\ollama\ or install from: https://ollama.ai
         )
     ) else (
         echo [OK] Ollama is running
