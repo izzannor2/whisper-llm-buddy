@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { Terminal as TerminalIcon, X, Maximize2, Minimize2, Trash2, Copy } from 'lucide-react';
+import { Terminal as TerminalIcon, X, Maximize2, Minimize2, Trash2, Copy, Mic, MicOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { executeCommand, getAgentStatus, onOutput, AgentStatus } from '@/lib/local-backend-agent';
 import { toast } from 'sonner';
+import { isWhisperLoaded, transcribeAudio, loadWhisperModel, getSelectedWhisperModel, getDownloadedModels } from '@/lib/local-stt';
+import { recordHabit, getHabitSuggestions } from '@/lib/openclaw-store';
 
 interface TerminalLine {
   id: string;
@@ -17,9 +19,10 @@ interface TerminalProps {
   className?: string;
   initialCommands?: string[];
   cwd?: string;
+  enableVoice?: boolean;
 }
 
-export function Terminal({ className, initialCommands = [], cwd }: TerminalProps) {
+export function Terminal({ className, initialCommands = [], cwd, enableVoice = true }: TerminalProps) {
   const [lines, setLines] = useState<TerminalLine[]>([
     {
       id: '0',
@@ -30,7 +33,7 @@ export function Terminal({ className, initialCommands = [], cwd }: TerminalProps
     {
       id: '1',
       type: 'system',
-      content: 'Type "help" for available commands. Agent: checking...',
+      content: 'Type "help" for available commands. Hold SPACE to speak. Agent: checking...',
       timestamp: Date.now(),
     },
   ]);
@@ -39,10 +42,16 @@ export function Terminal({ className, initialCommands = [], cwd }: TerminalProps
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isMaximized, setIsMaximized] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus>({ connected: false });
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [whisperReady, setWhisperReady] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lineIdRef = useRef(2);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Check agent status
   useEffect(() => {
@@ -55,7 +64,7 @@ export function Terminal({ className, initialCommands = [], cwd }: TerminalProps
         if (line.content.includes('Agent: checking...')) {
           return {
             ...line,
-            content: `Type "help" for available commands. Agent: ${status.connected ? '✓ connected' : '✗ not running'}`,
+            content: `Type "help" for commands. Hold SPACE to speak. Agent: ${status.connected ? '✓ connected' : '✗ not running'}`,
           };
         }
         return line;
@@ -89,6 +98,31 @@ export function Terminal({ className, initialCommands = [], cwd }: TerminalProps
     });
   }, []);
 
+  // Check Whisper availability
+  useEffect(() => {
+    if (!enableVoice) return;
+    const checkWhisper = () => {
+      const loaded = isWhisperLoaded();
+      const downloaded = getDownloadedModels().length > 0;
+      setWhisperReady(loaded || downloaded);
+    };
+    checkWhisper();
+    const handleModelChange = () => checkWhisper();
+    window.addEventListener('whisper-model-changed', handleModelChange);
+    return () => window.removeEventListener('whisper-model-changed', handleModelChange);
+  }, [enableVoice]);
+
+  // Habit-based suggestions
+  useEffect(() => {
+    if (input.length >= 2) {
+      getHabitSuggestions(input, 3).then(habits => {
+        setSuggestions(habits.map(h => h.pattern));
+      });
+    } else {
+      setSuggestions([]);
+    }
+  }, [input]);
+
   const addLine = useCallback((type: TerminalLine['type'], content: string) => {
     setLines(prev => [
       ...prev,
@@ -105,9 +139,10 @@ export function Terminal({ className, initialCommands = [], cwd }: TerminalProps
     const trimmed = cmd.trim();
     if (!trimmed) return;
 
-    // Add to history
+    // Add to history and record habit
     setHistory(prev => [...prev.filter(h => h !== trimmed), trimmed]);
     setHistoryIndex(-1);
+    recordHabit(trimmed);
 
     // Add input line
     addLine('input', `$ ${trimmed}`);
@@ -123,8 +158,8 @@ export function Terminal({ className, initialCommands = [], cwd }: TerminalProps
   npm <args>    Run npm command (requires agent)
   node <file>   Run Node.js file (requires agent)
   
-Note: Commands marked (requires agent) need the LocalDev Agent running.
-Download it from the Settings menu.`);
+Voice: Hold SPACE to speak commands
+Note: Commands marked (requires agent) need the LocalDev Agent running.`);
       return;
     }
 
@@ -160,6 +195,89 @@ Download it from the Settings menu.`);
       addLine('error', `Command failed: ${error}`);
     }
   };
+
+  // Voice recording
+  const startRecording = useCallback(async () => {
+    if (!enableVoice || !whisperReady) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await transcribeRecording(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      addLine('system', '🎤 Recording...');
+    } catch (error) {
+      toast.error('Failed to access microphone');
+    }
+  }, [enableVoice, whisperReady, addLine]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  }, [isRecording]);
+
+  const transcribeRecording = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    addLine('system', '⏳ Transcribing...');
+    try {
+      if (!isWhisperLoaded()) {
+        const modelId = getSelectedWhisperModel();
+        await loadWhisperModel(modelId);
+      }
+
+      const text = await transcribeAudio(audioBlob);
+      if (text.trim()) {
+        setInput(prev => prev + (prev ? ' ' : '') + text.trim());
+        addLine('system', `✓ Transcribed: "${text.trim()}"`);
+      }
+    } catch (error) {
+      addLine('error', 'Transcription failed');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  // Push-to-talk with spacebar
+  useEffect(() => {
+    if (!enableVoice) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && document.activeElement !== inputRef.current && !e.repeat && whisperReady) {
+        e.preventDefault();
+        startRecording();
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && isRecording) {
+        e.preventDefault();
+        stopRecording();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [enableVoice, isRecording, startRecording, stopRecording, whisperReady]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -252,6 +370,22 @@ Download it from the Settings menu.`);
         </div>
       </div>
 
+      {/* Recording indicator */}
+      {isRecording && (
+        <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+          <span className="text-xs text-destructive">Recording... Release SPACE to stop</span>
+        </div>
+      )}
+
+      {/* Transcribing indicator */}
+      {isTranscribing && (
+        <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
+          <Loader2 className="w-3 h-3 animate-spin text-primary" />
+          <span className="text-xs text-primary">Transcribing...</span>
+        </div>
+      )}
+
       {/* Content */}
       <ScrollArea className="flex-1 p-3" ref={scrollRef}>
         <div className="space-y-1">
@@ -262,14 +396,29 @@ Download it from the Settings menu.`);
                 'whitespace-pre-wrap break-all',
                 line.type === 'input' && 'text-cyan-400',
                 line.type === 'output' && 'text-green-400',
-                line.type === 'error' && 'text-red-400',
-                line.type === 'system' && 'text-zinc-500'
+                line.type === 'error' && 'text-destructive',
+                line.type === 'system' && 'text-muted-foreground'
               )}
             >
               {line.content}
             </div>
           ))}
         </div>
+
+        {/* Suggestions */}
+        {suggestions.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2 mb-1">
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => { setInput(s); inputRef.current?.focus(); }}
+                className="px-2 py-0.5 text-xs bg-secondary/50 rounded hover:bg-secondary text-muted-foreground"
+              >
+                {s.length > 25 ? s.slice(0, 25) + '...' : s}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Input line */}
         <form onSubmit={handleSubmit} className="flex items-center mt-1">
@@ -285,6 +434,16 @@ Download it from the Settings menu.`);
             spellCheck={false}
             autoComplete="off"
           />
+          {enableVoice && whisperReady && !isRecording && (
+            <span title="Hold SPACE to speak">
+              <Mic className="w-3 h-3 text-muted-foreground ml-2" />
+            </span>
+          )}
+          {enableVoice && !whisperReady && (
+            <span title="Download Whisper model to enable voice">
+              <MicOff className="w-3 h-3 text-muted-foreground/50 ml-2" />
+            </span>
+          )}
         </form>
       </ScrollArea>
     </div>

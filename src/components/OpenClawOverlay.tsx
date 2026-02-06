@@ -1,0 +1,551 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { cn } from '@/lib/utils';
+import { 
+  MessageSquare, 
+  X, 
+  Minimize2, 
+  Maximize2, 
+  Mic, 
+  MicOff, 
+  Volume2, 
+  VolumeX,
+  Send,
+  Loader2,
+  Terminal,
+  FileText,
+  Zap,
+  Settings,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { useOpenClaw } from '@/hooks/use-openclaw';
+import { isWhisperLoaded, transcribeAudio, loadWhisperModel, getSelectedWhisperModel, getDownloadedModels } from '@/lib/local-stt';
+import { speak, stopSpeaking, isTTSSupported } from '@/lib/tts';
+import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
+
+interface OpenClawOverlayProps {
+  onClose: () => void;
+  onOpenSettings: () => void;
+}
+
+export function OpenClawOverlay({ onClose, onOpenSettings }: OpenClawOverlayProps) {
+  const {
+    state,
+    logs,
+    murmur,
+    history,
+    streamingContent,
+    suggestions,
+    init,
+    shutdown,
+    chat,
+    execute,
+    updateSuggestions,
+    clearHistory,
+  } = useOpenClaw();
+
+  const [input, setInput] = useState('');
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [position, setPosition] = useState({ x: window.innerWidth - 420, y: 80 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [micEnabled, setMicEnabled] = useState(true);
+  const [speakerEnabled, setSpeakerEnabled] = useState(true);
+  const [showLogs, setShowLogs] = useState(false);
+  const [whisperReady, setWhisperReady] = useState(false);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  // Initialize on mount
+  useEffect(() => {
+    init({ model: 'llama3.1:8b' });
+    
+    // Check Whisper
+    const checkWhisper = () => {
+      const loaded = isWhisperLoaded();
+      const downloaded = getDownloadedModels().length > 0;
+      setWhisperReady(loaded || downloaded);
+    };
+    checkWhisper();
+
+    return () => {
+      shutdown();
+    };
+  }, []);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [history, streamingContent]);
+
+  // Hotkey: Ctrl+Shift+X to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'X') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  // Update suggestions on input change
+  useEffect(() => {
+    updateSuggestions(input);
+  }, [input, updateSuggestions]);
+
+  // Dragging handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.no-drag')) return;
+    setIsDragging(true);
+    setDragOffset({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+    });
+  }, [position]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      setPosition({
+        x: Math.max(0, Math.min(window.innerWidth - 400, e.clientX - dragOffset.x)),
+        y: Math.max(0, Math.min(window.innerHeight - 100, e.clientY - dragOffset.y)),
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
+  // Voice recording
+  const startRecording = useCallback(async () => {
+    if (!micEnabled) return;
+    if (!whisperReady) {
+      toast.info('Download a Whisper model in Settings first');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await transcribeRecording(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      toast.error('Failed to access microphone');
+    }
+  }, [micEnabled, whisperReady]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  }, [isRecording]);
+
+  const transcribeRecording = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    try {
+      if (!isWhisperLoaded()) {
+        const modelId = getSelectedWhisperModel();
+        toast.loading('Loading Whisper...', { id: 'whisper-load' });
+        await loadWhisperModel(modelId);
+        toast.dismiss('whisper-load');
+      }
+
+      const text = await transcribeAudio(audioBlob);
+      if (text.trim()) {
+        setInput(prev => prev + (prev ? ' ' : '') + text.trim());
+      }
+    } catch (error) {
+      toast.error('Transcription failed');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  // Push-to-talk with spacebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && document.activeElement !== textareaRef.current && !e.repeat) {
+        e.preventDefault();
+        startRecording();
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && isRecording) {
+        e.preventDefault();
+        stopRecording();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isRecording, startRecording, stopRecording]);
+
+  // Handle submit
+  const handleSubmit = async () => {
+    if (!input.trim() || state.isProcessing) return;
+
+    const message = input.trim();
+    setInput('');
+    
+    await chat(message);
+
+    // TTS response
+    if (speakerEnabled && isTTSSupported() && history.length > 0) {
+      const lastAssistant = history.filter(m => m.role === 'assistant').pop();
+      if (lastAssistant) {
+        speak(lastAssistant.content);
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  // Select suggestion
+  const selectSuggestion = (suggestion: string) => {
+    setInput(suggestion);
+    textareaRef.current?.focus();
+  };
+
+  if (isMinimized) {
+    return (
+      <div
+        ref={overlayRef}
+        className="fixed z-[9999] cursor-pointer"
+        style={{ left: position.x, top: position.y }}
+        onClick={() => setIsMinimized(false)}
+      >
+        <div className="relative">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-lg flex items-center justify-center hover:scale-105 transition-transform">
+            <Zap className="w-6 h-6 text-primary-foreground" />
+          </div>
+          {state.isProcessing && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full animate-pulse" />
+          )}
+          {murmur && (
+            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-secondary/90 text-xs px-2 py-1 rounded">
+              {murmur}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={overlayRef}
+      className={cn(
+        "fixed z-[9999] bg-sidebar/95 backdrop-blur-lg border border-sidebar-border rounded-xl shadow-2xl overflow-hidden",
+        isExpanded ? "w-[600px] h-[80vh]" : "w-[380px] h-[500px]",
+        isDragging && "cursor-grabbing"
+      )}
+      style={{ left: position.x, top: position.y }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-4 py-3 bg-sidebar-accent border-b border-sidebar-border cursor-grab"
+        onMouseDown={handleMouseDown}
+      >
+        <div className="flex items-center gap-2">
+          <Zap className="w-5 h-5 text-primary" />
+          <span className="font-semibold text-sm">OpenClaw</span>
+          {state.isActive && (
+            <Badge variant="outline" className="text-xs text-green-500 border-green-500/50">
+              Active
+            </Badge>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 no-drag">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setShowLogs(!showLogs)}
+          >
+            <FileText className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setIsMinimized(true)}
+          >
+            <MessageSquare className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onClose}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Privacy toggles */}
+      <div className="flex items-center justify-between px-4 py-2 bg-sidebar-accent/50 border-b border-sidebar-border">
+        <div className="flex items-center gap-2">
+          <Button
+            variant={micEnabled ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 gap-1"
+            onClick={() => setMicEnabled(!micEnabled)}
+          >
+            {micEnabled ? <Mic className="w-3 h-3" /> : <MicOff className="w-3 h-3" />}
+            <span className="text-xs">{micEnabled ? 'Mic On' : 'Muted'}</span>
+          </Button>
+          <Button
+            variant={speakerEnabled ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 gap-1"
+            onClick={() => {
+              setSpeakerEnabled(!speakerEnabled);
+              if (speakerEnabled) stopSpeaking();
+            }}
+          >
+            {speakerEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
+            <span className="text-xs">{speakerEnabled ? 'Audio On' : 'Silent'}</span>
+          </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          <kbd className="px-1 py-0.5 bg-muted rounded">Ctrl+Shift+X</kbd> to kill
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="flex flex-1 h-[calc(100%-120px)]">
+        {/* Chat area */}
+        <ScrollArea className={cn("flex-1 p-4", showLogs && "w-1/2")} ref={scrollRef}>
+          {history.length === 0 && !streamingContent && (
+            <div className="text-center py-8 text-muted-foreground">
+              <Zap className="w-10 h-10 mx-auto mb-3 text-primary/50" />
+              <p className="text-sm">OpenClaw is ready</p>
+              <p className="text-xs mt-1">
+                Hold <Badge variant="outline" className="mx-1 text-xs">Space</Badge> to talk
+              </p>
+              <p className="text-xs mt-2 text-muted-foreground/70">
+                Using {state.config.model}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {history.map((msg, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "flex",
+                  msg.role === 'user' ? 'justify-end' : 'justify-start'
+                )}
+              >
+                <div
+                  className={cn(
+                    "max-w-[85%] rounded-xl px-3 py-2 text-sm",
+                    msg.role === 'user'
+                      ? 'bg-primary text-primary-foreground rounded-br-sm'
+                      : 'bg-secondary text-secondary-foreground rounded-bl-sm'
+                  )}
+                >
+                  {msg.role === 'assistant' ? (
+                    <div className="prose prose-sm prose-invert max-w-none">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {streamingContent && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-xl rounded-bl-sm px-3 py-2 bg-secondary text-sm">
+                  <div className="prose prose-sm prose-invert max-w-none">
+                    <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {state.isProcessing && !streamingContent && (
+              <div className="flex justify-start">
+                <div className="bg-secondary rounded-xl rounded-bl-sm px-3 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                </div>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        {/* Logs panel */}
+        {showLogs && (
+          <div className="w-1/2 border-l border-sidebar-border">
+            <div className="p-2 bg-sidebar-accent border-b border-sidebar-border">
+              <span className="text-xs font-medium">Action Logs</span>
+            </div>
+            <ScrollArea className="h-full p-2">
+              <div className="space-y-1">
+                {logs.slice(0, 30).map((log) => (
+                  <div
+                    key={log.id}
+                    className={cn(
+                      "text-xs p-1.5 rounded",
+                      log.success ? 'bg-secondary/50' : 'bg-destructive/20'
+                    )}
+                  >
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className="text-[10px] px-1">
+                        {log.type}
+                      </Badge>
+                      <span className="truncate">{log.action}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+      </div>
+
+      {/* Recording indicator */}
+      {isRecording && (
+        <div className="px-4 py-2 bg-red-500/10 border-t border-red-500/20">
+          <div className="flex items-center justify-center gap-2 text-red-500">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-xs font-medium">Recording... Release Space to stop</span>
+          </div>
+        </div>
+      )}
+
+      {/* Transcribing indicator */}
+      {isTranscribing && (
+        <div className="px-4 py-2 bg-primary/10 border-t border-primary/20">
+          <div className="flex items-center justify-center gap-2 text-primary">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            <span className="text-xs font-medium">Transcribing...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Suggestions */}
+      {suggestions.length > 0 && (
+        <div className="px-4 py-2 border-t border-sidebar-border bg-sidebar-accent/50">
+          <div className="flex flex-wrap gap-1">
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => selectSuggestion(s)}
+                className="px-2 py-1 text-xs bg-secondary rounded hover:bg-secondary/80"
+              >
+                {s.length > 30 ? s.slice(0, 30) + '...' : s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Murmur */}
+      {murmur && (
+        <div className="px-4 py-1 text-center text-xs text-muted-foreground bg-secondary/30">
+          {murmur}
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="p-3 border-t border-sidebar-border bg-sidebar">
+        <div className="relative">
+          <Textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask OpenClaw..."
+            className="min-h-[60px] max-h-[100px] pr-20 resize-none text-sm no-drag"
+            disabled={state.isProcessing}
+          />
+          <div className="absolute bottom-2 right-2 flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-7 w-7 rounded-full",
+                isRecording && "bg-red-500/20 text-red-500 animate-pulse"
+              )}
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={!micEnabled || isTranscribing}
+            >
+              {isRecording ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+            </Button>
+            <Button
+              size="icon"
+              className="h-7 w-7 rounded-full"
+              onClick={handleSubmit}
+              disabled={!input.trim() || state.isProcessing}
+            >
+              <Send className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
