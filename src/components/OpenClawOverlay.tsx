@@ -321,9 +321,13 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
         <div className="flex items-center gap-2">
           <Zap className="w-5 h-5 text-primary" />
           <span className="font-semibold text-sm">OpenClaw</span>
-          {state.isActive && (
+          {state.isActive ? (
             <Badge variant="outline" className="text-xs text-green-500 border-green-500/50">
               Active
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs text-yellow-500 border-yellow-500/50">
+              Offline
             </Badge>
           )}
         </div>
@@ -401,13 +405,38 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
           {history.length === 0 && !streamingContent && (
             <div className="text-center py-8 text-muted-foreground">
               <Zap className="w-10 h-10 mx-auto mb-3 text-primary/50" />
-              <p className="text-sm">OpenClaw is ready</p>
-              <p className="text-xs mt-1">
+              <p className="text-sm font-medium">OpenClaw</p>
+              
+              {/* Status indicators */}
+              <div className="mt-4 space-y-2 text-xs">
+                <div className="flex items-center justify-center gap-2">
+                  <span className={cn(
+                    "w-2 h-2 rounded-full",
+                    state.isActive ? "bg-green-500" : "bg-yellow-500"
+                  )} />
+                  <span>Agent: {state.isActive ? 'Ready' : 'Initializing...'}</span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <span className={cn(
+                    "w-2 h-2 rounded-full",
+                    whisperReady ? "bg-green-500" : "bg-muted"
+                  )} />
+                  <span>Voice: {whisperReady ? 'Ready' : 'No model'}</span>
+                </div>
+              </div>
+
+              <p className="text-xs mt-4">
                 Hold <Badge variant="outline" className="mx-1 text-xs">Space</Badge> to talk
               </p>
               <p className="text-xs mt-2 text-muted-foreground/70">
-                Using {state.config.model}
+                Model: {state.config.model}
               </p>
+              
+              {!state.isActive && (
+                <p className="text-xs mt-3 text-yellow-500">
+                  Ollama not detected at localhost:11434
+                </p>
+              )}
             </div>
           )}
 

@@ -65,10 +65,19 @@ export async function initOpenClaw(config?: Partial<OpenClawConfig>): Promise<bo
     // Merge config
     state.config = { ...defaultConfig, ...config };
     
-    // Check Ollama
-    const ollamaReady = await isOllamaRunning();
+    // Check Ollama with retry
+    let ollamaReady = await isOllamaRunning();
     if (!ollamaReady) {
-      console.warn('OpenClaw: Ollama not running, will use fallback responses');
+      console.warn('OpenClaw: Ollama not detected, retrying in 2s...');
+      await new Promise(r => setTimeout(r, 2000));
+      ollamaReady = await isOllamaRunning();
+    }
+    
+    if (!ollamaReady) {
+      console.warn('OpenClaw: Ollama not running - chat will be unavailable');
+      state.isActive = false;
+      notifyListeners();
+      return false;
     }
     
     // Check local agent
@@ -88,7 +97,7 @@ export async function initOpenClaw(config?: Partial<OpenClawConfig>): Promise<bo
       timestamp: Date.now(),
       type: 'command',
       action: 'OpenClaw initialized',
-      details: `Model: ${state.config.model}, Sandbox: ${state.config.sandboxedPath || 'none'}`,
+      details: `Model: ${state.config.model}, Ollama: connected, Sandbox: ${state.config.sandboxedPath || 'none'}`,
       success: true,
     });
     
@@ -100,6 +109,8 @@ export async function initOpenClaw(config?: Partial<OpenClawConfig>): Promise<bo
     return true;
   } catch (error) {
     console.error('Failed to initialize OpenClaw:', error);
+    state.isActive = false;
+    notifyListeners();
     return false;
   }
 }
@@ -153,9 +164,16 @@ export async function* chatWithOpenClaw(
   message: string,
   history: ChatMessage[] = []
 ): AsyncGenerator<string, void, unknown> {
+  // Re-check connection if inactive
   if (!state.isActive) {
-    yield "OpenClaw is not active. Initialize first.";
-    return;
+    const ollamaOk = await isOllamaRunning();
+    if (ollamaOk) {
+      state.isActive = true;
+      notifyListeners();
+    } else {
+      yield "⚠️ **Ollama not connected**\n\nMake sure Ollama is running at `localhost:11434`.\n\nRun `start.bat` or manually start with:\n```shell\nollama serve\n```";
+      return;
+    }
   }
   
   state.isProcessing = true;
