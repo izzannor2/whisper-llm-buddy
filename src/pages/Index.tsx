@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
@@ -10,6 +10,7 @@ import { SettingsDialog } from '@/components/SettingsDialog';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { EmptyState } from '@/components/EmptyState';
 import { CodeLibrary } from '@/components/CodeLibrary';
+import { OpenClawOverlay } from '@/components/OpenClawOverlay';
 import { IDEMode } from '@/lib/ide-types';
 import { getIDESettings, saveIDESettings } from '@/lib/ide-store';
 import {
@@ -42,6 +43,7 @@ export default function Index() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [openClawOpen, setOpenClawOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const chatInputRef = useRef<ChatInputRef>(null);
@@ -351,6 +353,25 @@ export default function Index() {
         <div className="fixed inset-y-0 right-0 w-80 z-50 shadow-xl">
           <CodeLibrary onClose={() => setCodeLibraryOpen(false)} />
         </div>
+      )}
+
+      {/* OpenClaw Floating Overlay */}
+      {openClawOpen && (
+        <OpenClawOverlay
+          onClose={() => setOpenClawOpen(false)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      )}
+
+      {/* OpenClaw Toggle Button */}
+      {!openClawOpen && (
+        <Button
+          onClick={() => setOpenClawOpen(true)}
+          className="fixed bottom-24 right-6 z-50 h-12 w-12 rounded-full shadow-lg bg-gradient-to-br from-primary to-primary/70 hover:scale-105 transition-transform"
+          size="icon"
+        >
+          <Zap className="h-5 w-5" />
+        </Button>
       )}
     </div>
   );
