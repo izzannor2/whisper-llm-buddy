@@ -35,6 +35,8 @@ export interface ChatInputRef {
   startListening: () => void;
   stopListening: () => void;
   isListening: boolean;
+  setMessage: (text: string) => void;
+  appendMessage: (text: string) => void;
 }
 
 // Presets with icons matching Docket
@@ -128,6 +130,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         }
       },
       isListening: isRecording,
+      setMessage: (text: string) => {
+        setMessage(text);
+      },
+      appendMessage: (text: string) => {
+        setMessage(prev => prev + (prev ? '\n\n' : '') + text);
+      },
     }), [isRecording, isTranscribing]);
 
     useEffect(() => {
