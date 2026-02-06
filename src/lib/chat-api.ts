@@ -8,8 +8,10 @@ export interface APIKeys {
 }
 
 export interface ChatSettings {
-  backend: 'cloud' | 'local' | 'openai' | 'anthropic' | 'google' | 'huggingface';
+  backend: 'cloud' | 'local' | 'ollama' | 'openai' | 'anthropic' | 'google' | 'huggingface';
   localUrl: string;
+  ollamaUrl: string;
+  ollamaModel: string;
   model: string;
   huggingfaceModel: string;
   temperature: number;
@@ -41,6 +43,8 @@ export const DEFAULT_API_KEYS: APIKeys = {
 export const DEFAULT_SETTINGS: ChatSettings = {
   backend: 'local',
   localUrl: 'http://127.0.0.1:8081',
+  ollamaUrl: 'http://localhost:11434',
+  ollamaModel: 'llama3.2',
   model: 'default',
   huggingfaceModel: 'mistralai/Mistral-7B-Instruct-v0.2',
   temperature: 0.7,
@@ -58,6 +62,15 @@ export const DEFAULT_SETTINGS: ChatSettings = {
 
 export const AVAILABLE_MODELS = [
   { id: 'default', name: 'Default Model', backend: 'local' },
+  // Ollama models
+  { id: 'llama3.2', name: 'Llama 3.2', backend: 'ollama' },
+  { id: 'llama3.1', name: 'Llama 3.1', backend: 'ollama' },
+  { id: 'mistral', name: 'Mistral 7B', backend: 'ollama' },
+  { id: 'codellama', name: 'Code Llama', backend: 'ollama' },
+  { id: 'deepseek-coder', name: 'DeepSeek Coder', backend: 'ollama' },
+  { id: 'qwen2.5', name: 'Qwen 2.5', backend: 'ollama' },
+  { id: 'phi3', name: 'Phi-3', backend: 'ollama' },
+  // Cloud models
   { id: 'gemini-flash', name: 'Gemini 2.5 Flash', backend: 'cloud' },
   { id: 'gemini-pro', name: 'Gemini 2.5 Pro', backend: 'cloud' },
   // OpenAI models
@@ -93,6 +106,8 @@ export async function sendChatMessage(
   switch (settings.backend) {
     case 'local':
       return sendLocalMessage(allMessages, settings, onChunk);
+    case 'ollama':
+      return sendOllamaMessage(allMessages, settings, onChunk);
     case 'openai':
       return sendOpenAIMessage(allMessages, settings, onChunk);
     case 'anthropic':
@@ -134,6 +149,74 @@ async function sendLocalMessage(
 
   const data = await response.json();
   return data.choices?.[0]?.message?.content || '';
+}
+
+// Ollama API
+async function sendOllamaMessage(
+  messages: ChatMessage[],
+  settings: ChatSettings,
+  onChunk?: (chunk: string) => void
+): Promise<string> {
+  const response = await fetch(`${settings.ollamaUrl}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: settings.ollamaModel || 'llama3.2',
+      messages,
+      options: {
+        temperature: settings.temperature,
+        top_p: settings.topP,
+        num_predict: settings.maxTokens,
+      },
+      stream: !!onChunk,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ollama API error: ${response.status}`);
+  }
+
+  if (onChunk && response.body) {
+    return streamOllamaResponse(response, onChunk);
+  }
+
+  const data = await response.json();
+  return data.message?.content || '';
+}
+
+async function streamOllamaResponse(
+  response: Response,
+  onChunk: (chunk: string) => void
+): Promise<string> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line);
+        const content = parsed.message?.content;
+        if (content) {
+          fullContent += content;
+          onChunk(content);
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }
+
+  return fullContent;
 }
 
 async function sendCloudMessage(
