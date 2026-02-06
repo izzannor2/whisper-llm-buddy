@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus } from 'lucide-react';
+import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -354,6 +354,24 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* Attachment button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+              >
+                <Paperclip className="w-4 h-4" />
+              </Button>
+
+              {/* TTS toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full text-accent hover:text-accent/80"
+              >
+                <Volume2 className="w-4 h-4" />
+              </Button>
+
               {/* Spacer */}
               <div className="flex-1" />
 
@@ -404,10 +422,24 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             </div>
           </div>
           
-          {/* Status Text */}
-          <p className="text-center text-xs text-muted-foreground mt-2 font-mono">
-            {modelLoaded ? 'Model loaded and ready.' : 'Model not loaded. Click send to load and chat.'}
-          </p>
+          {/* Keyboard Hints */}
+          <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground font-mono">
+            <span>Hold</span>
+            <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] border border-border">Space</kbd>
+            <span>to talk</span>
+            <span className="mx-1">•</span>
+            <span>Press</span>
+            <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] border border-border">Enter</kbd>
+            <span>to send</span>
+            <span className="mx-1">•</span>
+            <button 
+              className="flex items-center gap-1 hover:text-accent transition-colors"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } }))}
+            >
+              <Settings className="w-3 h-3" />
+              Get offline voice
+            </button>
+          </div>
         </div>
       </div>
     );
