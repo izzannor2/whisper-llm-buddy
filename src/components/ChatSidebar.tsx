@@ -40,6 +40,7 @@ import { isFileSystemSupported, openDirectory, getCurrentDirectory } from '@/lib
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { useToast } from '@/hooks/use-toast';
 import { IDEMode } from '@/lib/ide-types';
+import { getModeTheme } from '@/lib/mode-themes';
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -173,6 +174,7 @@ export function ChatSidebar({
           <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
             {MODES_LIST.map((mode) => {
               const Icon = mode.icon;
+              const theme = getModeTheme(mode.key);
               return (
                 <DropdownMenuItem
                   key={mode.key}
@@ -182,11 +184,14 @@ export function ChatSidebar({
                     currentModeKey === mode.key && "bg-accent/10"
                   )}
                 >
-                  <Icon className="w-4 h-4 mt-0.5 text-accent shrink-0" />
+                  <Icon className={cn("w-4 h-4 mt-0.5 shrink-0", theme.iconColorClass)} />
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{mode.name}</p>
                     <p className="text-xs text-muted-foreground truncate">{mode.description}</p>
                   </div>
+                  {currentModeKey === mode.key && (
+                    <div className="w-2 h-2 rounded-full ml-auto mt-1.5 shrink-0" style={{ background: `hsl(${theme.accent})` }} />
+                  )}
                 </DropdownMenuItem>
               );
             })}
