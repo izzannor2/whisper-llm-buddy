@@ -20,6 +20,7 @@ import {
   getDownloadedModels
 } from '@/lib/local-stt';
 import { loadSettings, CLOUD_MODELS } from '@/lib/chat-api';
+import { getModeTheme } from '@/lib/mode-themes';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -29,6 +30,7 @@ interface ChatInputProps {
   selectedModel?: string;
   onModelChange?: (model: string) => void;
   modelLoaded?: boolean;
+  modeKey?: string;
 }
 
 export interface ChatInputRef {
@@ -79,7 +81,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     autoSendOnVoice,
     selectedModel = 'llama-3.2-1b',
     onModelChange,
-    modelLoaded = false
+    modelLoaded = false,
+    modeKey = 'chat',
   }, ref) {
     const settings = loadSettings();
     const [message, setMessage] = useState('');
@@ -273,6 +276,26 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     return (
       <div className="p-4 border-t border-border bg-background">
         <div className="max-w-4xl mx-auto">
+          {/* Mode indicator */}
+          {modeKey !== 'chat' && (
+            <div className="flex items-center gap-2 mb-2">
+              <span
+                className="text-xs font-medium px-2.5 py-1 rounded-full"
+                style={{
+                  background: `hsl(${getModeTheme(modeKey).accent} / 0.15)`,
+                  color: `hsl(${getModeTheme(modeKey).accent})`,
+                }}
+              >
+                {MODE_DISPLAY_NAMES[modeKey] || modeKey}
+              </span>
+              {modeKey === 'jailbreak' && (
+                <span className="text-xs text-muted-foreground">⚠ Custom prompt active</span>
+              )}
+              {modeKey === 'system-helper' && (
+                <span className="text-xs text-muted-foreground">Commands require approval</span>
+              )}
+            </div>
+          )}
           {/* Input Container */}
           <div className="bg-card/50 border border-border rounded-xl p-3">
             {/* Text Input */}
@@ -441,3 +464,15 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     );
   }
 );
+
+const MODE_DISPLAY_NAMES: Record<string, string> = {
+  chat: 'Chat',
+  'app-builder': 'App Builder',
+  'embedded-iot': 'IoT / Embedded',
+  'system-helper': 'System Helper',
+  'ai-improvement': 'AI Improvement',
+  learning: 'Learning',
+  sandbox: 'Sandbox',
+  jailbreak: 'Uncensored',
+  plugin: 'Plugin',
+};

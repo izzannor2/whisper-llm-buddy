@@ -14,6 +14,7 @@ import { CodeLibrary } from '@/components/CodeLibrary';
 import { OpenClawOverlay } from '@/components/OpenClawOverlay';
 import { IDEMode } from '@/lib/ide-types';
 import { getIDESettings, saveIDESettings } from '@/lib/ide-store';
+import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
 import {
   Conversation,
   Message,
@@ -55,6 +56,11 @@ export default function Index() {
   const chatInputRef = useRef<ChatInputRef>(null);
   const { toast } = useToast();
 
+  // Apply theme on mount and when modeKey changes
+  useEffect(() => {
+    applyModeTheme(currentModeKey);
+  }, [currentModeKey]);
+
   // Initialize DB and load conversations
   useEffect(() => {
     const init = async () => {
@@ -67,9 +73,7 @@ export default function Index() {
 
   // Listen for open-settings event
   useEffect(() => {
-    const handleOpenSettings = () => {
-      setSettingsOpen(true);
-    };
+    const handleOpenSettings = () => setSettingsOpen(true);
     window.addEventListener('open-settings', handleOpenSettings);
     return () => window.removeEventListener('open-settings', handleOpenSettings);
   }, []);
@@ -85,6 +89,7 @@ export default function Index() {
     setCurrentMode(mode);
     setCurrentModeKey(key);
     saveIDESettings({ mode, modeKey: key } as any);
+    applyModeTheme(key);
     
     // Navigate to IDE for App Builder mode
     if (key === 'app-builder') {
@@ -92,14 +97,12 @@ export default function Index() {
       return;
     }
     
-    toast({ title: `Switched to ${key === 'chat' ? 'Chat' : mode.replace('-', ' ')}` });
+    toast({ title: `Switched to ${MODES_LIST_NAMES[key] || key}` });
   };
 
   const loadConversation = async (id: string) => {
     const conv = await getConversation(id);
-    if (conv) {
-      setCurrentConversation(conv);
-    }
+    if (conv) setCurrentConversation(conv);
   };
 
   const createNewConversation = () => {
@@ -110,9 +113,7 @@ export default function Index() {
   const handleDeleteConversation = async (id: string) => {
     await deleteConversation(id);
     setConversations(prev => prev.filter(c => c.id !== id));
-    if (currentConversation?.id === id) {
-      setCurrentConversation(null);
-    }
+    if (currentConversation?.id === id) setCurrentConversation(null);
     toast({ title: 'Chat deleted' });
   };
 
@@ -153,9 +154,7 @@ export default function Index() {
     await saveConversation(conv);
     setConversations(prev => {
       const existing = prev.find(c => c.id === conv!.id);
-      if (existing) {
-        return prev.map(c => (c.id === conv!.id ? conv! : c));
-      }
+      if (existing) return prev.map(c => (c.id === conv!.id ? conv! : c));
       return [conv!, ...prev];
     });
 
@@ -172,9 +171,17 @@ export default function Index() {
         content: m.content,
       }));
 
+      // Build effective settings with mode-specific system prompt
+      const modePrompt = getModeSystemPrompt(currentModeKey, (settings as any).jailbreakPrompt);
+      const effectiveSettings = { ...settings };
+      if (modePrompt) {
+        // Combine mode prompt with user's custom system prompt
+        effectiveSettings.systemPrompt = modePrompt + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
+      }
+
       await sendChatMessage(
         chatMessages,
-        settings,
+        effectiveSettings,
         (chunk) => {
           fullResponse += chunk;
           setStreamingContent(fullResponse);
@@ -227,41 +234,25 @@ export default function Index() {
 
   const handleEditMessage = async (id: string, content: string) => {
     if (!currentConversation) return;
-
     const messageIndex = currentConversation.messages.findIndex(m => m.id === id);
     if (messageIndex === -1) return;
 
     const updatedMessages = currentConversation.messages.slice(0, messageIndex);
-    updatedMessages.push({
-      ...currentConversation.messages[messageIndex],
-      content,
-    });
+    updatedMessages.push({ ...currentConversation.messages[messageIndex], content });
 
-    const updatedConv = {
-      ...currentConversation,
-      messages: updatedMessages,
-      updatedAt: Date.now(),
-    };
+    const updatedConv = { ...currentConversation, messages: updatedMessages, updatedAt: Date.now() };
     setCurrentConversation(updatedConv);
     await saveConversation(updatedConv);
-
     handleSendMessage(content);
   };
 
   const handleDeleteMessage = async (id: string) => {
     if (!currentConversation) return;
-
     const updatedMessages = currentConversation.messages.filter(m => m.id !== id);
-    const updatedConv = {
-      ...currentConversation,
-      messages: updatedMessages,
-      updatedAt: Date.now(),
-    };
+    const updatedConv = { ...currentConversation, messages: updatedMessages, updatedAt: Date.now() };
     setCurrentConversation(updatedConv);
     await saveConversation(updatedConv);
-    setConversations(prev =>
-      prev.map(c => (c.id === updatedConv.id ? updatedConv : c))
-    );
+    setConversations(prev => prev.map(c => (c.id === updatedConv.id ? updatedConv : c)));
   };
 
   const handleSettingsSave = (newSettings: ChatSettings) => {
@@ -317,7 +308,7 @@ export default function Index() {
         <ScrollArea className="flex-1" ref={scrollRef}>
           <div className="max-w-4xl mx-auto py-6 px-4 h-full">
             {!currentConversation || currentConversation.messages.length === 0 ? (
-              <EmptyState mode={currentMode} />
+              <EmptyState mode={currentMode} modeKey={currentModeKey} />
             ) : (
               <div className="space-y-6">
                 {currentConversation.messages.map((msg) => (
@@ -354,6 +345,7 @@ export default function Index() {
           onStop={() => abortRef.current?.abort()}
           autoSendOnVoice={settings.voiceConversation}
           modelLoaded={modelLoaded}
+          modeKey={currentModeKey}
         />
       </div>
 
@@ -404,3 +396,16 @@ export default function Index() {
     </div>
   );
 }
+
+// Display names for toast messages
+const MODES_LIST_NAMES: Record<string, string> = {
+  chat: 'Chat',
+  'app-builder': 'App Builder',
+  'embedded-iot': 'IoT / Embedded',
+  'system-helper': 'System Helper',
+  'ai-improvement': 'AI Improvement',
+  learning: 'Learning Mode',
+  sandbox: 'Sandbox',
+  jailbreak: 'Uncensored',
+  plugin: 'Plugin Mode',
+};
