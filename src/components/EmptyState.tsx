@@ -1,7 +1,9 @@
+import { useNavigate } from 'react-router-dom';
 import { 
   MessageSquare, Layers, Cpu, Terminal, Sparkles, 
-  GraduationCap, FlaskConical, AlertTriangle, Plug, Volume2, Shield 
+  GraduationCap, FlaskConical, AlertTriangle, Plug, Volume2, Shield, ArrowRight 
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { IDEMode } from '@/lib/ide-types';
 import { getModeTheme } from '@/lib/mode-themes';
 import { cn } from '@/lib/utils';
@@ -118,10 +120,21 @@ const MODE_CONTENT: Record<string, {
 };
 
 export function EmptyState({ mode = 'app-builder', modeKey }: EmptyStateProps) {
+  const navigate = useNavigate();
   const key = modeKey || (mode === 'app-builder' ? 'chat' : mode);
   const content = MODE_CONTENT[key] || MODE_CONTENT.chat;
   const theme = getModeTheme(key);
   const Icon = MODE_ICONS[key] || MessageSquare;
+
+  // Modes that navigate to dedicated workspaces
+  const WORKSPACE_ROUTES: Record<string, { route: string; label: string }> = {
+    'app-builder': { route: '/ide', label: 'Open App Builder' },
+    'embedded-iot': { route: '/iot', label: 'Open IoT Workspace' },
+    'sandbox': { route: '/sandbox', label: 'Open Sandbox' },
+    'ai-improvement': { route: '/improve', label: 'Open Improvement Workspace' },
+  };
+
+  const workspace = WORKSPACE_ROUTES[key];
 
   return (
     <div className="flex flex-col h-full p-6">
@@ -163,6 +176,22 @@ export function EmptyState({ mode = 'app-builder', modeKey }: EmptyStateProps) {
         <p className="text-sm text-foreground mb-4">
           {content.description}
         </p>
+        
+        {/* Workspace launch button */}
+        {workspace && (
+          <Button
+            onClick={() => navigate(workspace.route)}
+            className="w-full mb-4 gap-2"
+            style={{
+              background: `linear-gradient(135deg, hsl(${theme.accent}), hsl(${theme.accent} / 0.8))`,
+              color: 'white',
+            }}
+          >
+            <Icon className="w-4 h-4" />
+            {workspace.label}
+            <ArrowRight className="w-4 h-4 ml-auto" />
+          </Button>
+        )}
         
         <p className="text-sm text-muted-foreground mb-3">Try saying:</p>
         

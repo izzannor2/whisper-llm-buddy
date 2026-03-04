@@ -38,14 +38,19 @@ fi
 echo -e "      ${GREEN}[OK] Node.js $(node --version) found${NC}"
 
 # ========================================
-# Step 2: Check npm
+# Step 2: Check npm / bun
 # ========================================
-echo -e "[2/6] Checking npm..."
-if ! command -v npm &> /dev/null; then
-    echo -e "      ${RED}[ERROR] npm is not installed!${NC}"
+echo -e "[2/6] Checking package manager..."
+PKG_CMD="npm"
+if command -v bun &> /dev/null; then
+    echo -e "      ${GREEN}[OK] Bun $(bun --version) found (preferred)${NC}"
+    PKG_CMD="bun"
+elif command -v npm &> /dev/null; then
+    echo -e "      ${GREEN}[OK] npm $(npm --version) found${NC}"
+else
+    echo -e "      ${RED}[ERROR] No package manager found!${NC}"
     exit 1
 fi
-echo -e "      ${GREEN}[OK] npm $(npm --version) found${NC}"
 
 # ========================================
 # Step 3: Install dependencies
@@ -54,10 +59,10 @@ echo -e "[3/6] Installing dependencies..."
 if [ -d "node_modules" ]; then
     echo -e "      ${GREEN}[OK] Dependencies already installed${NC}"
     echo -e "      [*] Checking for updates..."
-    npm install --silent
+    $PKG_CMD install --silent 2>/dev/null || $PKG_CMD install
 else
-    echo "      [*] Running npm install (this may take a minute)..."
-    npm install
+    echo "      [*] Running $PKG_CMD install (this may take a minute)..."
+    $PKG_CMD install
     if [ $? -ne 0 ]; then
         echo -e "      ${RED}[ERROR] Failed to install dependencies!${NC}"
         exit 1
@@ -139,7 +144,7 @@ echo -e "${BOLD} Setup Complete!${NC}"
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 echo ""
 echo " To start the app:"
-echo "   - Run: ./start.sh (or npm run dev)"
+echo "   - Run: ./start.sh (or $PKG_CMD run dev)"
 echo ""
 echo " The app will open at: http://localhost:8080"
 echo ""
@@ -162,5 +167,5 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
     echo "Starting LocalDev AI..."
-    npm run dev
+    $PKG_CMD run dev
 fi

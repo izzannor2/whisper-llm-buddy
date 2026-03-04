@@ -28,16 +28,23 @@ if errorlevel 1 (
 for /f "tokens=*" %%i in ('node --version') do echo       [OK] Node.js %%i found
 
 :: ========================================
-:: Step 2: Check npm
+:: Step 2: Check npm / bun
 :: ========================================
-echo [2/6] Checking npm...
-npm --version >nul 2>&1
-if errorlevel 1 (
-    echo       [ERROR] npm is not installed!
-    pause
-    exit /b 1
+echo [2/6] Checking package manager...
+set PKG_CMD=npm
+where bun >nul 2>&1
+if not errorlevel 1 (
+    for /f "tokens=*" %%i in ('bun --version') do echo       [OK] Bun %%i found (preferred)
+    set PKG_CMD=bun
+) else (
+    npm --version >nul 2>&1
+    if errorlevel 1 (
+        echo       [ERROR] npm is not installed!
+        pause
+        exit /b 1
+    )
+    for /f "tokens=*" %%i in ('npm --version') do echo       [OK] npm %%i found
 )
-for /f "tokens=*" %%i in ('npm --version') do echo       [OK] npm %%i found
 
 :: ========================================
 :: Step 3: Install dependencies
@@ -46,10 +53,10 @@ echo [3/6] Installing dependencies...
 if exist "node_modules" (
     echo       [OK] Dependencies already installed
     echo       [*] Checking for updates...
-    npm install --silent
+    %PKG_CMD% install --silent 2>nul || %PKG_CMD% install
 ) else (
-    echo       [*] Running npm install (this may take a minute)...
-    npm install
+    echo       [*] Running %PKG_CMD% install (this may take a minute)...
+    %PKG_CMD% install
     if errorlevel 1 (
         echo.
         echo  [ERROR] Failed to install dependencies!
@@ -144,7 +151,7 @@ echo  ════════════════════════�
 echo.
 echo   To start the app:
 echo     - Double-click start.bat
-echo     - Or run: npm run dev
+echo     - Or run: %PKG_CMD% run dev
 echo.
 echo   The app will open at: http://localhost:8080
 echo.

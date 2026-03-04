@@ -11,6 +11,9 @@ import NotFound from "./pages/NotFound";
 const IDE = lazy(() => import("./pages/IDE"));
 const IDESettings = lazy(() => import("./pages/IDESettings"));
 const Models = lazy(() => import("./pages/Models"));
+const IoTWorkspace = lazy(() => import("./pages/IoTWorkspace"));
+const SandboxWorkspace = lazy(() => import("./pages/SandboxWorkspace"));
+const ImproveWorkspace = lazy(() => import("./pages/ImproveWorkspace"));
 
 const queryClient = new QueryClient();
 
@@ -35,6 +38,9 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/models" element={<Models />} />
             <Route path="/ide" element={<IDE />} />
+            <Route path="/iot" element={<IoTWorkspace />} />
+            <Route path="/sandbox" element={<SandboxWorkspace />} />
+            <Route path="/improve" element={<ImproveWorkspace />} />
             <Route path="/settings" element={<IDESettings />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

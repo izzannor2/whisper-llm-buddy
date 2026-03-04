@@ -12,7 +12,13 @@ echo.
 if not exist "node_modules" (
     echo [!] Dependencies not installed. Running setup first...
     echo.
-    call npm install
+    :: Try bun first, fall back to npm
+    where bun >nul 2>&1
+    if not errorlevel 1 (
+        bun install
+    ) else (
+        call npm install
+    )
     if errorlevel 1 (
         echo.
         echo [ERROR] Failed to install dependencies!
@@ -125,6 +131,17 @@ if %LLAMA_SERVER_RUNNING%==0 (
     )
 )
 
+:: ========================================
+:: Check port 8080 availability
+:: ========================================
+netstat -an 2>nul | findstr ":8080 " | findstr "LISTENING" >nul 2>&1
+if not errorlevel 1 (
+    echo.
+    echo [!] Port 8080 is already in use.
+    echo     The dev server will try to use the next available port.
+    echo.
+)
+
 echo.
 echo ══════════════════════════════════════════
 echo  Starting development server...
@@ -140,5 +157,10 @@ echo.
 :: Open browser after a short delay
 start /B cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:8080"
 
-:: Start the dev server
-npm run dev
+:: Start the dev server (try bun first)
+where bun >nul 2>&1
+if not errorlevel 1 (
+    bun run dev
+) else (
+    npm run dev
+)

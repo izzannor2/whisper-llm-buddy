@@ -2,6 +2,7 @@
 # LocalDev AI - Quick Start Script for Linux/macOS
 
 # Colors
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
@@ -14,11 +15,18 @@ echo -e "${CYAN}║       ${BOLD}LocalDev AI - Quick Start${NC}${CYAN}          
 echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
+# Detect package manager
+PKG_CMD="npm"
+if command -v bun &> /dev/null; then
+    PKG_CMD="bun"
+    echo -e "${GREEN}[OK] Using Bun as package manager${NC}"
+fi
+
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}[!] Dependencies not installed. Running setup first...${NC}"
     echo ""
-    npm install
+    $PKG_CMD install
     if [ $? -ne 0 ]; then
         echo ""
         echo -e "${RED}[ERROR] Failed to install dependencies!${NC}"
@@ -98,7 +106,7 @@ if [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
         echo -e "${YELLOW}[!] Ollama not detected at localhost:11434${NC}"
         if [ -n "$OLLAMA_CMD" ]; then
             echo "    Starting Ollama in background..."
-            $OLLAMA_CMD serve &> /dev/null &
+            OLLAMA_HOST=127.0.0.1:11434 $OLLAMA_CMD serve &> /dev/null &
             echo "    Waiting for Ollama to initialize..."
             sleep 4
             # Verify Ollama started
@@ -112,6 +120,25 @@ if [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
             echo "    Ollama not found - AI features will use Cloud backend"
             echo "    Place ollama in bin/ollama/ or install from: https://ollama.ai"
         fi
+    fi
+fi
+
+# ========================================
+# Check port 8080 availability
+# ========================================
+if command -v lsof &> /dev/null; then
+    if lsof -i :8080 &> /dev/null; then
+        echo ""
+        echo -e "${YELLOW}[!] Port 8080 is already in use.${NC}"
+        echo "    The dev server will try to use the next available port."
+        echo ""
+    fi
+elif command -v ss &> /dev/null; then
+    if ss -tlnp | grep -q ':8080 '; then
+        echo ""
+        echo -e "${YELLOW}[!] Port 8080 is already in use.${NC}"
+        echo "    The dev server will try to use the next available port."
+        echo ""
     fi
 fi
 
@@ -131,4 +158,4 @@ echo ""
 (sleep 3 && (xdg-open http://localhost:8080 2>/dev/null || open http://localhost:8080 2>/dev/null || echo "Open http://localhost:8080 in your browser")) &
 
 # Start the dev server
-npm run dev
+$PKG_CMD run dev
