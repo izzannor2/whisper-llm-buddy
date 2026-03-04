@@ -1,0 +1,255 @@
+import { useState, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
+import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
+import { sendChatMessage, loadSettings } from '@/lib/chat-api';
+import { generateId } from '@/lib/ide-store';
+import { cn } from '@/lib/utils';
+
+interface FileNode {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  children?: FileNode[];
+}
+
+interface ChatMsg {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+// Simulated project structure (the app's own source)
+const PROJECT_TREE: FileNode[] = [
+  { name: 'src', path: 'src', type: 'directory', children: [
+    { name: 'pages', path: 'src/pages', type: 'directory', children: [
+      { name: 'Index.tsx', path: 'src/pages/Index.tsx', type: 'file' },
+      { name: 'IDE.tsx', path: 'src/pages/IDE.tsx', type: 'file' },
+      { name: 'IoTWorkspace.tsx', path: 'src/pages/IoTWorkspace.tsx', type: 'file' },
+      { name: 'SandboxWorkspace.tsx', path: 'src/pages/SandboxWorkspace.tsx', type: 'file' },
+      { name: 'ImproveWorkspace.tsx', path: 'src/pages/ImproveWorkspace.tsx', type: 'file' },
+    ]},
+    { name: 'components', path: 'src/components', type: 'directory', children: [
+      { name: 'ChatInput.tsx', path: 'src/components/ChatInput.tsx', type: 'file' },
+      { name: 'ChatMessage.tsx', path: 'src/components/ChatMessage.tsx', type: 'file' },
+      { name: 'ChatSidebar.tsx', path: 'src/components/ChatSidebar.tsx', type: 'file' },
+      { name: 'EmptyState.tsx', path: 'src/components/EmptyState.tsx', type: 'file' },
+      { name: 'PlanningView.tsx', path: 'src/components/PlanningView.tsx', type: 'file' },
+    ]},
+    { name: 'lib', path: 'src/lib', type: 'directory', children: [
+      { name: 'chat-api.ts', path: 'src/lib/chat-api.ts', type: 'file' },
+      { name: 'mode-themes.ts', path: 'src/lib/mode-themes.ts', type: 'file' },
+      { name: 'ide-store.ts', path: 'src/lib/ide-store.ts', type: 'file' },
+      { name: 'python-runner.ts', path: 'src/lib/python-runner.ts', type: 'file' },
+    ]},
+    { name: 'App.tsx', path: 'src/App.tsx', type: 'file' },
+  ]},
+];
+
+function FileTreeNode({ node, depth = 0, selectedPath, onSelect }: {
+  node: FileNode; depth?: number; selectedPath: string | null; onSelect: (path: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(depth < 2);
+
+  if (node.type === 'directory') {
+    return (
+      <div>
+        <button
+          className="flex items-center gap-1 w-full px-2 py-1 hover:bg-pink-500/10 text-xs text-pink-200/80"
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? <ChevronDown className="w-3 h-3 text-pink-400" /> : <ChevronRight className="w-3 h-3 text-pink-400" />}
+          <FolderOpen className="w-3 h-3 text-pink-400/70" />
+          <span>{node.name}</span>
+        </button>
+        {expanded && node.children?.map(child => (
+          <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      className={cn(
+        "flex items-center gap-1 w-full px-2 py-1 text-xs hover:bg-pink-500/10",
+        selectedPath === node.path ? 'bg-pink-500/15 text-pink-200' : 'text-pink-200/60'
+      )}
+      style={{ paddingLeft: `${depth * 12 + 8}px` }}
+      onClick={() => onSelect(node.path)}
+    >
+      <FileText className="w-3 h-3 text-pink-400/50" />
+      <span>{node.name}</span>
+    </button>
+  );
+}
+
+export default function ImproveWorkspace() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const planContext = (location.state as any)?.plan as ChatMsg[] | undefined;
+  
+  const [messages, setMessages] = useState<ChatMsg[]>(planContext || []);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [streamingContent, setStreamingContent] = useState('');
+
+  useState(() => { applyModeTheme('ai-improvement'); });
+
+  const handleSend = useCallback(async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMsg: ChatMsg = { id: generateId(), role: 'user', content: input.trim() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInput('');
+    setIsLoading(true);
+    setStreamingContent('');
+
+    try {
+      const settings = loadSettings();
+      const systemPrompt = getModeSystemPrompt('ai-improvement') + 
+        (selectedFile ? `\n\nThe user is currently viewing: ${selectedFile}` : '');
+
+      const chatMsgs = [
+        { role: 'system' as const, content: systemPrompt },
+        ...newMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ];
+
+      let fullResponse = '';
+      await sendChatMessage(
+        chatMsgs,
+        { ...settings, systemPrompt: '' },
+        (chunk) => { fullResponse += chunk; setStreamingContent(prev => prev + chunk); }
+      );
+
+      setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse }]);
+    } catch (err: any) {
+      setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: `Error: ${err.message}` }]);
+    } finally {
+      setIsLoading(false);
+      setStreamingContent('');
+    }
+  }, [input, messages, isLoading, selectedFile]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  return (
+    <div className="h-screen flex flex-col" style={{ background: 'hsl(330, 20%, 6%)' }}>
+      {/* Header */}
+      <header className="h-12 flex items-center justify-between px-3 border-b" style={{
+        background: 'linear-gradient(180deg, hsl(330, 40%, 14%) 0%, hsl(330, 40%, 9%) 100%)',
+        borderColor: 'hsl(330, 30%, 22%)',
+      }}>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="h-8 w-8 text-pink-300 hover:text-pink-100">
+            <Home className="h-4 w-4" />
+          </Button>
+          <Sparkles className="w-5 h-5 text-pink-400" />
+          <span className="font-bold text-pink-300 text-sm">AI Improvement</span>
+          <span className="text-[10px] text-pink-500/60 ml-2">Self-modification workspace</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="h-8 text-xs text-pink-400 hover:text-pink-200">
+            <RefreshCw className="w-3 h-3 mr-1" />
+            Rescan Files
+          </Button>
+        </div>
+      </header>
+
+      {/* Main */}
+      <ResizablePanelGroup direction="horizontal" className="flex-1">
+        {/* Chat */}
+        <ResizablePanel defaultSize={50} minSize={30}>
+          <div className="h-full flex flex-col">
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-3">
+                {messages.length === 0 && (
+                  <div className="text-center py-12 text-pink-400/40">
+                    <Sparkles className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">Describe what to improve about LocalDev AI</p>
+                    <p className="text-xs mt-1">Select files from the tree to give context</p>
+                  </div>
+                )}
+                {messages.map(msg => (
+                  <div key={msg.id} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                    <div className={cn(
+                      'max-w-[85%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap',
+                      msg.role === 'user'
+                        ? 'bg-pink-600/80 text-white rounded-br-md'
+                        : 'bg-pink-950/50 border border-pink-800/30 text-pink-100 rounded-bl-md'
+                    )}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {streamingContent && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[85%] rounded-2xl rounded-bl-md px-4 py-3 text-sm whitespace-pre-wrap bg-pink-950/50 border border-pink-800/30 text-pink-100">
+                      {streamingContent}
+                    </div>
+                  </div>
+                )}
+                {isLoading && !streamingContent && (
+                  <div className="flex justify-start">
+                    <div className="bg-pink-950/50 border border-pink-800/30 rounded-2xl rounded-bl-md px-4 py-3">
+                      <Loader2 className="w-4 h-4 animate-spin text-pink-400" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+            <div className="p-3 border-t" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
+              <div className="flex gap-2">
+                <Textarea
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Suggest an improvement..."
+                  className="min-h-[40px] max-h-[100px] resize-none flex-1 bg-pink-950/30 border-pink-800/30 text-pink-100 placeholder:text-pink-500/40"
+                  rows={1}
+                />
+                <Button onClick={handleSend} disabled={!input.trim() || isLoading} size="icon" className="bg-pink-600 hover:bg-pink-500">
+                  <Sparkles className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        {/* File Browser */}
+        <ResizablePanel defaultSize={50} minSize={20}>
+          <div className="h-full flex flex-col" style={{ background: 'hsl(330, 20%, 5%)' }}>
+            <div className="h-8 flex items-center px-3 border-b" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
+              <FolderOpen className="w-3.5 h-3.5 text-pink-400 mr-2" />
+              <span className="text-xs font-mono text-pink-300">Project Source</span>
+              {selectedFile && (
+                <span className="ml-auto text-[10px] text-pink-500 font-mono">{selectedFile}</span>
+              )}
+            </div>
+            <ScrollArea className="flex-1 py-1">
+              {PROJECT_TREE.map(node => (
+                <FileTreeNode
+                  key={node.path}
+                  node={node}
+                  selectedPath={selectedFile}
+                  onSelect={setSelectedFile}
+                />
+              ))}
+            </ScrollArea>
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
+  );
+}

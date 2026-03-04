@@ -91,9 +91,16 @@ export default function Index() {
     saveIDESettings({ mode, modeKey: key } as any);
     applyModeTheme(key);
     
-    // Navigate to IDE for App Builder mode
-    if (key === 'app-builder') {
-      navigate('/ide');
+    // Navigate to dedicated workspaces
+    const ROUTE_MAP: Record<string, string> = {
+      'app-builder': '/ide',
+      'embedded-iot': '/iot',
+      'sandbox': '/sandbox',
+      'ai-improvement': '/improve',
+    };
+    
+    if (ROUTE_MAP[key]) {
+      navigate(ROUTE_MAP[key]);
       return;
     }
     
