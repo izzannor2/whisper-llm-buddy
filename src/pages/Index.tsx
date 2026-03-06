@@ -51,6 +51,7 @@ export default function Index() {
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [openClawOpen, setOpenClawOpen] = useState(false);
+  const [planningMode, setPlanningMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const chatInputRef = useRef<ChatInputRef>(null);
@@ -124,15 +125,15 @@ export default function Index() {
     toast({ title: 'Chat deleted' });
   };
 
-  const handleSendMessage = async (content: string) => {
-    return sendMessageAndGetResponse(content);
+  const handleSendMessage = async (content: string, isPlan?: boolean) => {
+    return sendMessageAndGetResponse(content, isPlan);
   };
 
   const handleVoiceCallMessage = async (content: string): Promise<string> => {
     return sendMessageAndGetResponse(content);
   };
 
-  const sendMessageAndGetResponse = async (content: string): Promise<string> => {
+  const sendMessageAndGetResponse = async (content: string, isPlan?: boolean): Promise<string> => {
     const userMessage: Message = {
       id: generateId(),
       role: 'user',
@@ -181,9 +182,14 @@ export default function Index() {
       // Build effective settings with mode-specific system prompt
       const modePrompt = getModeSystemPrompt(currentModeKey, (settings as any).jailbreakPrompt);
       const effectiveSettings = { ...settings };
-      if (modePrompt) {
-        // Combine mode prompt with user's custom system prompt
-        effectiveSettings.systemPrompt = modePrompt + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
+      
+      // Add planning prefix if in planning mode
+      const planningPrefix = isPlan
+        ? `You are in PLANNING MODE. Do NOT write code yet. Instead:\n1. Ask clarifying questions about requirements\n2. Outline architecture and file structure\n3. List technologies and libraries to use\n4. Break the project into implementation steps\n5. Only when the user says "start building" should you switch to code generation.\n\n`
+        : '';
+      
+      if (modePrompt || planningPrefix) {
+        effectiveSettings.systemPrompt = planningPrefix + (modePrompt || '') + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
       }
 
       await sendChatMessage(
@@ -353,6 +359,8 @@ export default function Index() {
           autoSendOnVoice={settings.voiceConversation}
           modelLoaded={modelLoaded}
           modeKey={currentModeKey}
+          planningMode={planningMode}
+          onPlanningToggle={setPlanningMode}
         />
       </div>
 
