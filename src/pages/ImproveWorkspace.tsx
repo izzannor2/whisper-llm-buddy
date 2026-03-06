@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
+import { Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown, RefreshCw, Loader2, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -99,6 +99,7 @@ export default function ImproveWorkspace() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState('');
+  const [isPlanMode, setIsPlanMode] = useState(false);
 
   useState(() => { applyModeTheme('ai-improvement'); });
 
@@ -114,7 +115,10 @@ export default function ImproveWorkspace() {
 
     try {
       const settings = loadSettings();
-      const systemPrompt = getModeSystemPrompt('ai-improvement') + 
+      const planPrefix = isPlanMode
+        ? `You are in PLANNING MODE. Do NOT write code. Instead outline the improvement plan: what files to change, what approach to take, and what steps are needed. Only produce code when the user says "start building".\n\n`
+        : '';
+      const systemPrompt = planPrefix + getModeSystemPrompt('ai-improvement') + 
         (selectedFile ? `\n\nThe user is currently viewing: ${selectedFile}` : '');
 
       const chatMsgs = [
@@ -213,10 +217,23 @@ export default function ImproveWorkspace() {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Suggest an improvement..."
+                  placeholder={isPlanMode ? "Describe what to plan..." : "Suggest an improvement..."}
                   className="min-h-[40px] max-h-[100px] resize-none flex-1 bg-pink-950/30 border-pink-800/30 text-pink-100 placeholder:text-pink-500/40"
                   rows={1}
                 />
+                <Button
+                  onClick={() => setIsPlanMode(!isPlanMode)}
+                  size="icon"
+                  variant={isPlanMode ? "default" : "ghost"}
+                  className={cn(
+                    isPlanMode
+                      ? "bg-amber-500/90 hover:bg-amber-500 text-white"
+                      : "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                  )}
+                  title={isPlanMode ? "Planning mode ON" : "Toggle planning mode"}
+                >
+                  <Lightbulb className="w-4 h-4" />
+                </Button>
                 <Button onClick={handleSend} disabled={!input.trim() || isLoading} size="icon" className="bg-pink-600 hover:bg-pink-500">
                   <Sparkles className="w-4 h-4" />
                 </Button>

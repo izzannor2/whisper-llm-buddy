@@ -18,7 +18,7 @@ import {
   setMurmurCallback,
 } from '@/lib/openclaw-agent';
 import { ActionLog } from '@/lib/openclaw-store';
-import { ChatMessage } from '@/lib/ollama-client';
+import { ChatMessage } from '@/lib/chat-api';
 
 export interface UseOpenClawReturn {
   state: OpenClawState;

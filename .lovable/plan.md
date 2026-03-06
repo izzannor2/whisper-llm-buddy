@@ -1,94 +1,114 @@
 
 
-## Plan: Full Mode Audit, Planning Buttons, OpenClaw Integration, Models Page Overhaul, and Script Fixes
+## Plan: Unique Mode Experiences + Planning Feature + Script Updates
 
-This is a large scope covering 5 major areas. Here's what needs to happen:
+### What You're Asking For
 
----
-
-### 1. Planning Button in ChatInput for App Builder & AI Improvement
-
-Currently, the `PlanningView` component exists but is only reachable via `EmptyState` workspace buttons. The user wants a **Plan button right next to the Send button** so they can toggle between "planning" and "building/improving" from within the chat.
-
-**Changes:**
-- **`src/components/ChatInput.tsx`**: Add a "Plan" toggle button (e.g., a `Lightbulb` or `ListTodo` icon) next to the Send button, visible only when `modeKey` is `app-builder` or `ai-improvement`. When active, it prefixes the system prompt with planning instructions before sending.
-- **`src/pages/Index.tsx`**: Accept a `planningMode` state. When planning is active, prepend the planning-phase system prompt (architecture steps, file list, etc.) to messages. Show a visual indicator that planning mode is on.
+Each mode needs its own **layout and behavior**, not just a color swap. Plus a "Plan first" workflow for App Builder and AI Improvement, and updated setup/start scripts.
 
 ---
 
-### 2. All 9 Modes — Ensure Each Works with Unique Style
+### Mode-by-Mode Design
 
-Current issues found:
-- **Chat**: Works. Teal theme. No issues.
-- **App Builder**: Navigates to `/ide`. Works but the IDE uses `streamChat` from `ollama-client` directly instead of `sendChatMessage` from `chat-api.ts`, meaning it won't work with Cloud backend. **Fix needed.**
-- **IoT/Embedded**: Navigates to `/iot`. Same `streamChat` issue — only works with Ollama. Arduino-style theme is good. **Fix chat to use `sendChatMessage`.**
-- **System Helper**: Stays on `/`. Theme works. System commands parsing works in IDE but NOT on the main chat page. **Add command parsing to Index.tsx for this mode.**
-- **AI Improvement**: Navigates to `/improve`. Chat works via `sendChatMessage`. Theme is good. File tree is hardcoded/static. OK for now.
-- **Learning Mode**: Stays on `/`. Theme works. `PatternsSidebar` exists but is never rendered on Index. **Wire up PatternsSidebar.**
-- **Sandbox**: Navigates to `/sandbox`. Code execution works (Python via Pyodide, JS via eval). Theme is good. Uses a `<textarea>` instead of Monaco editor. **Upgrade to Monaco for consistency.**
-- **Uncensored/Jailbreak**: Stays on `/`. Red theme works. Uses jailbreak prompt from settings. Works.
-- **Plugin Mode**: Stays on `/`. Blue theme works. No actual plugin management on the main page — it's only in the IDE. **Add a plugin list/grid to EmptyState or a sidebar panel.**
+**1. App Builder** (navigates to `/ide`)
+- Add a **Planning Phase**: Before entering the IDE, show a planning chat where you describe what you want built. A "Start Building" button transitions to the full IDE with the plan context carried over.
+- The IDE layout stays as-is (file tree + editor + preview).
 
-**Changes:**
-- **`src/pages/IoTWorkspace.tsx`**: Replace `streamChat` with `sendChatMessage` from `chat-api.ts` so it works with Cloud and all backends.
-- **`src/pages/IDE.tsx`**: Same — replace `streamChat` with `sendChatMessage` so App Builder works regardless of backend.
-- **`src/pages/Index.tsx`**: For System Helper mode, parse AI responses for commands and show them. For Learning mode, render `PatternsSidebar` in the sidebar area.
-- **`src/pages/SandboxWorkspace.tsx`**: Replace `<textarea>` with Monaco `CodeEditor` component.
-- **`src/components/EmptyState.tsx`**: For Plugin mode, show a basic plugin card grid. For Learning mode, mention patterns sidebar.
+**2. IoT / Embedded** (new route `/iot`)
+- **Arduino IDE-inspired layout**: Dark green/teal header bar, single editor pane with board selector dropdown at top, serial monitor panel at bottom, "Verify" and "Upload" buttons in the toolbar.
+- File tabs styled like Arduino sketches. Board selector prominent in header.
+- Chat panel on the left (collapsible).
 
----
+**3. System Helper** (stays on `/` but with unique UI)
+- Terminal-centric layout: Chat renders commands in a terminal-style format. Output panel below chat shows command queue with approve/reject/run buttons.
+- Amber monospace styling throughout.
 
-### 3. OpenClaw Agent — Make It Actually Work with Everything
+**4. AI Improvement** (new route `/improve`)
+- **Planning phase** like App Builder — describe what to improve first.
+- Split layout: Left = chat, Right = file browser of the app's own source code with a "Preview Changes" diff view.
+- Pink/magenta theme. Shows the app's file tree and lets AI suggest diffs.
 
-Currently OpenClaw:
-- Requires Ollama (hardcoded `streamChat` from `ollama-client`)
-- The `chat` function in `openclaw-agent.ts` only uses Ollama's streaming
-- Won't work if user is on Cloud backend
+**5. Learning Mode** (stays on `/`)
+- Card-based UI showing learned patterns (preferences, conventions, libraries).
+- Chat with a "Patterns Learned" sidebar panel showing what it's picked up.
+- Green theme with a dashboard feel.
 
-**Changes:**
-- **`src/lib/openclaw-agent.ts`**: Replace `streamChat` from `ollama-client` with `sendChatMessage` from `chat-api.ts` (with streaming). This lets OpenClaw use whatever backend the user has configured (Cloud, Ollama, llama.cpp, API keys).
-- **`src/lib/openclaw-agent.ts`**: Update `initOpenClaw` to not require Ollama — check if any backend is available (Cloud is always available).
-- **`src/hooks/use-openclaw.ts`**: No changes needed if the agent is fixed.
-- **`src/components/OpenClawOverlay.tsx`**: Update the "Ollama not detected" message to be backend-agnostic.
+**6. Sandbox** (new route `/sandbox`)
+- Playground layout: Code editor on left, live output/console on right.
+- Pyodide integration for instant Python execution, plus JS eval.
+- Cyan theme with "experimental" warning banner. No file persistence.
 
----
+**7. Uncensored/Jailbreak** (stays on `/`)
+- Dark red theme with danger styling. Custom system prompt editor inline at the top.
+- Warning banner always visible. Otherwise standard chat.
 
-### 4. Models Page — Real Hugging Face Integration
+**8. Plugin Mode** (stays on `/`)
+- Plugin marketplace-style grid showing installed plugins with toggle switches.
+- Chat below for creating/configuring plugins.
+- Blue theme.
 
-The Models page (`src/pages/Models.tsx`) is entirely mock data. The "Explore Models" button does nothing. No actual download capability.
-
-**Changes:**
-- **`src/pages/Models.tsx`**: 
-  - Add a "Browse Hugging Face" tab that fetches from the HF API (`https://huggingface.co/api/models?filter=gguf&sort=downloads&limit=20`)
-  - Show model cards with name, size, download count, and a "Download" button
-  - Download button fetches the GGUF file and stores it in IndexedDB (since we can't write to filesystem from browser) or triggers a browser download to `models/gguf/`
-  - "Scan Local Models" button actually calls `ollama list` via the local agent or checks `localhost:11434/api/tags` and `localhost:8081/v1/models`
-  - Remove mock `MOCK_MODELS` data and replace with real detection from Ollama/llama.cpp endpoints
-  - Add Ollama pull integration: input a model name, call `POST localhost:11434/api/pull` to download directly
+**9. Chat** (stays on `/`)
+- Default teal. No changes needed — this is the baseline.
 
 ---
 
-### 5. Scripts — setup.bat/start.bat
+### New Routes
 
-The scripts look functional already. Minor fixes:
-- **`setup.bat`**: Add a check for `curl` availability (some old Windows). Already handles bun/npm.
-- **`start.bat`**: Already handles port 8080 conflict detection, llama-server auto-start, Ollama start. Looks solid. Minor: add `setup.sh`/`start.sh` parity checks.
-- Both scripts reference correct paths and behaviors. No major issues found.
+| Route | Mode |
+|-------|------|
+| `/` | Chat, System Helper, Learning, Uncensored, Plugin (all chat-based with unique UI tweaks) |
+| `/ide` | App Builder |
+| `/iot` | IoT / Embedded (Arduino IDE layout) |
+| `/sandbox` | Sandbox (playground) |
+| `/improve` | AI Improvement (self-modification workspace) |
 
 ---
 
-### File Summary
+### Planning Feature (App Builder + AI Improvement)
 
-| File | Action |
-|------|--------|
-| `src/components/ChatInput.tsx` | Add Plan toggle button for app-builder/ai-improvement modes |
-| `src/pages/Index.tsx` | Planning mode state, system-helper command parsing, learning sidebar |
-| `src/pages/IDE.tsx` | Replace `streamChat` with `sendChatMessage` |
-| `src/pages/IoTWorkspace.tsx` | Replace `streamChat` with `sendChatMessage` |
-| `src/pages/SandboxWorkspace.tsx` | Upgrade textarea to Monaco editor |
-| `src/pages/Models.tsx` | Real HF API integration, Ollama scanning, model download |
-| `src/lib/openclaw-agent.ts` | Use `sendChatMessage` instead of Ollama-only `streamChat` |
-| `src/components/OpenClawOverlay.tsx` | Fix status messages to be backend-agnostic |
-| `src/components/EmptyState.tsx` | Plugin grid for plugin mode |
-| `src/pages/ImproveWorkspace.tsx` | Add plan button in input area |
+Both modes get a **two-phase workflow**:
+1. **Plan Phase**: A focused chat screen where you describe what you want. The AI responds with a structured plan (steps, files to create/modify, architecture).
+2. **Build Phase**: Click "Start Building" → navigates to the full workspace with the plan loaded as context.
+
+Implementation: A `PlanningView` component shared by both modes, with mode-specific prompts and styling.
+
+---
+
+### Files to Create/Modify
+
+**New files (5):**
+- `src/pages/IoTWorkspace.tsx` — Arduino IDE-style layout
+- `src/pages/SandboxWorkspace.tsx` — Playground with live execution
+- `src/pages/ImproveWorkspace.tsx` — Self-improvement workspace with diff view
+- `src/components/PlanningView.tsx` — Shared planning phase component
+- `src/components/PatternsSidebar.tsx` — Learning mode patterns panel
+
+**Modified files (7):**
+- `src/App.tsx` — Add new routes (`/iot`, `/sandbox`, `/improve`)
+- `src/pages/Index.tsx` — Route IoT → `/iot`, AI Improvement → `/improve`, Sandbox → `/sandbox`; add mode-specific UI panels for System Helper, Learning, Uncensored, Plugin when on `/`
+- `src/pages/IDE.tsx` — Accept plan context from planning phase
+- `src/components/EmptyState.tsx` — Add planning button for app-builder and ai-improvement modes
+- `src/lib/mode-themes.ts` — No structural changes needed
+- `setup.bat` — Fix and update for reliability
+- `start.bat` — Fix and update for reliability
+
+---
+
+### Script Updates (setup.bat + start.bat)
+
+- Ensure `setup.bat` checks for Bun as alternative to npm
+- `start.bat` should handle the case where port 8080 is already in use
+- Add error handling for missing `curl` on older Windows
+- Both scripts already exist and are functional — just need robustness fixes and ensuring `npm run dev` launches correctly with the Vite config
+
+---
+
+### Technical Notes
+
+- Mode routing uses the existing `handleModeChange` pattern — just adding more `navigate()` calls
+- Each workspace page imports its own subset of components (no bloated single page)
+- Planning state is passed via React Router `state` or a lightweight store
+- The IoT workspace reuses `CodeEditor` (Monaco) but with Arduino-style chrome around it
+- Sandbox uses existing Pyodide integration from `src/lib/python-runner.ts`
+- AI Improvement workspace reads the project's own file tree to show what can be modified
 
