@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { CodeEditor } from '@/components/ide/CodeEditor';
 import { applyModeTheme } from '@/lib/mode-themes';
 import { runPython, isPyodideLoaded, isPyodideLoading } from '@/lib/python-runner';
 import { cn } from '@/lib/utils';
+import { ProjectFile } from '@/lib/ide-types';
 
 interface OutputLine {
   type: 'stdout' | 'stderr' | 'info';
@@ -15,7 +17,7 @@ interface OutputLine {
   timestamp: number;
 }
 
-const EXAMPLES: Record<string, { name: string; lang: string; code: string }> = {
+const EXAMPLES: Record<string, { name: string; lang: 'python' | 'javascript'; code: string }> = {
   'py-hello': { name: 'Hello World', lang: 'python', code: 'print("Hello from Sandbox!")\nfor i in range(5):\n    print(f"  Count: {i}")' },
   'py-math': { name: 'Math & NumPy', lang: 'python', code: 'import math\nprint(f"Pi = {math.pi}")\nprint(f"e = {math.e}")\nprint(f"sqrt(2) = {math.sqrt(2)}")' },
   'js-fetch': { name: 'Fetch API', lang: 'javascript', code: '// JavaScript sandbox\nconst data = { message: "Hello from JS!" };\nconsole.log(JSON.stringify(data, null, 2));\nconsole.log("Array:", [1,2,3].map(x => x * 2));' },
@@ -24,12 +26,25 @@ const EXAMPLES: Record<string, { name: string; lang: string; code: string }> = {
 
 export default function SandboxWorkspace() {
   const navigate = useNavigate();
-  const [code, setCode] = useState(EXAMPLES['py-hello'].code);
   const [language, setLanguage] = useState<'python' | 'javascript'>('python');
   const [output, setOutput] = useState<OutputLine[]>([]);
   const [isRunning, setIsRunning] = useState(false);
 
+  // Monaco-compatible file object
+  const [sandboxFile, setSandboxFile] = useState<ProjectFile>({
+    id: 'sandbox',
+    name: language === 'python' ? 'sandbox.py' : 'sandbox.js',
+    path: language === 'python' ? '/sandbox.py' : '/sandbox.js',
+    content: EXAMPLES['py-hello'].code,
+    language: language === 'python' ? 'python' : 'javascript',
+    isDirectory: false,
+  });
+
   useState(() => { applyModeTheme('sandbox'); });
+
+  const handleFileChange = useCallback((_path: string, content: string) => {
+    setSandboxFile(prev => ({ ...prev, content }));
+  }, []);
 
   const runCode = useCallback(async () => {
     setIsRunning(true);
@@ -37,7 +52,7 @@ export default function SandboxWorkspace() {
 
     try {
       if (language === 'python') {
-        const result = await runPython(code);
+        const result = await runPython(sandboxFile.content);
         if (result.output) {
           setOutput(prev => [...prev, { type: 'stdout', text: result.output, timestamp: Date.now() }]);
         }
@@ -56,7 +71,7 @@ export default function SandboxWorkspace() {
         console.error = (...args) => logs.push('ERROR: ' + args.join(' '));
         
         try {
-          const result = eval(code);
+          const result = eval(sandboxFile.content);
           if (result !== undefined) logs.push(`→ ${String(result)}`);
         } catch (e: any) {
           logs.push(`Error: ${e.message}`);
@@ -76,14 +91,31 @@ export default function SandboxWorkspace() {
     } finally {
       setIsRunning(false);
     }
-  }, [code, language]);
+  }, [sandboxFile.content, language]);
 
   const loadExample = (id: string) => {
     const ex = EXAMPLES[id];
     if (ex) {
-      setCode(ex.code);
-      setLanguage(ex.lang as 'python' | 'javascript');
+      setLanguage(ex.lang);
+      setSandboxFile(prev => ({
+        ...prev,
+        content: ex.code,
+        name: ex.lang === 'python' ? 'sandbox.py' : 'sandbox.js',
+        path: ex.lang === 'python' ? '/sandbox.py' : '/sandbox.js',
+        language: ex.lang === 'python' ? 'python' : 'javascript',
+      }));
     }
+  };
+
+  const handleLanguageChange = (v: string) => {
+    const lang = v as 'python' | 'javascript';
+    setLanguage(lang);
+    setSandboxFile(prev => ({
+      ...prev,
+      name: lang === 'python' ? 'sandbox.py' : 'sandbox.js',
+      path: lang === 'python' ? '/sandbox.py' : '/sandbox.js',
+      language: lang === 'python' ? 'python' : 'javascript',
+    }));
   };
 
   return (
@@ -107,7 +139,7 @@ export default function SandboxWorkspace() {
             <span className="text-[10px] text-amber-400 font-medium">Experimental</span>
           </div>
 
-          <Select value={language} onValueChange={(v) => setLanguage(v as 'python' | 'javascript')}>
+          <Select value={language} onValueChange={handleLanguageChange}>
             <SelectTrigger className="w-32 h-8 text-xs bg-cyan-900/30 border-cyan-700/50 text-cyan-200">
               <SelectValue />
             </SelectTrigger>
@@ -150,23 +182,16 @@ export default function SandboxWorkspace() {
 
       {/* Main */}
       <ResizablePanelGroup direction="horizontal" className="flex-1">
-        {/* Code Editor */}
+        {/* Code Editor (Monaco) */}
         <ResizablePanel defaultSize={55} minSize={30}>
-          <div className="h-full flex flex-col" style={{ background: 'hsl(195, 25%, 7%)' }}>
-            <div className="h-8 flex items-center px-3 border-b" style={{ borderColor: 'hsl(195, 30%, 16%)' }}>
-              <FileCode2 className="w-3.5 h-3.5 text-cyan-500 mr-2" />
-              <span className="text-xs font-mono text-cyan-400">
-                {language === 'python' ? 'sandbox.py' : 'sandbox.js'}
-              </span>
-            </div>
-            <textarea
-              value={code}
-              onChange={e => setCode(e.target.value)}
-              className="flex-1 w-full bg-transparent text-cyan-100 font-mono text-sm p-4 resize-none outline-none"
-              style={{ tabSize: 2 }}
-              spellCheck={false}
-            />
-          </div>
+          <CodeEditor
+            file={sandboxFile}
+            openFiles={[sandboxFile]}
+            onFileChange={handleFileChange}
+            onCloseFile={() => {}}
+            onSelectFile={() => {}}
+            fontSize={14}
+          />
         </ResizablePanel>
 
         <ResizableHandle withHandle />

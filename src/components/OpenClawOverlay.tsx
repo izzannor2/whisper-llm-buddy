@@ -464,7 +464,7 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
               
               {!state.isActive && (
                 <p className="text-xs mt-3 text-yellow-500">
-                  Ollama not detected at localhost:11434
+                  No backend connected — check Settings
                 </p>
               )}
             </div>
