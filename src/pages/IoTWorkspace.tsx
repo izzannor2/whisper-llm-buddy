@@ -11,12 +11,14 @@ import { IDEChat } from '@/components/ide/IDEChat';
 import { applyModeTheme } from '@/lib/mode-themes';
 import { BOARD_TYPES, ProjectFile } from '@/lib/ide-types';
 import { generateId } from '@/lib/ide-store';
-import { streamChat, ChatMessage } from '@/lib/ollama-client';
+import { sendChatMessage, loadSettings, ChatMessage } from '@/lib/chat-api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-interface Message extends ChatMessage {
+interface Message {
   id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
   timestamp: number;
 }
 
@@ -112,16 +114,21 @@ export default function IoTWorkspace() {
         { role: 'user', content },
       ];
 
+      const settings = loadSettings();
       let fullResponse = '';
-      for await (const chunk of streamChat(chatMessages)) {
-        fullResponse += chunk;
-        setStreamingContent(fullResponse);
-      }
+      await sendChatMessage(
+        chatMessages,
+        { ...settings, systemPrompt: '' },
+        (chunk) => {
+          fullResponse += chunk;
+          setStreamingContent(fullResponse);
+        }
+      );
 
       setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() }]);
       setStreamingContent('');
-    } catch {
-      toast.error('Failed to get response. Check your LLM connection.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to get response. Check your backend settings.');
     } finally {
       setIsLoading(false);
     }

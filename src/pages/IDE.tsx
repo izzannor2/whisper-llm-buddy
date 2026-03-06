@@ -12,7 +12,8 @@ import { Terminal } from '@/components/ide/Terminal';
 import { TTSControls } from '@/components/ide/TTSControls';
 import { IDESettings as IDESettingsType, Project, ProjectFile, Plugin, DEFAULT_SETTINGS } from '@/lib/ide-types';
 import { getIDESettings, saveIDESettings, getProjects, saveProject, createProject, generateId, getPlugins } from '@/lib/ide-store';
-import { isOllamaRunning, streamChat, ChatMessage } from '@/lib/ollama-client';
+import { isOllamaRunning, ChatMessage } from '@/lib/ollama-client';
+import { sendChatMessage as sendChat, loadSettings as loadChatSettings } from '@/lib/chat-api';
 import { SystemCommand, parseCommandFromAIResponse, executeCommand as executeSystemCommand } from '@/lib/system-commands';
 import { downloadProjectAsZip, downloadStartupScript, generateDocumentation } from '@/lib/project-export';
 import { checkAgentStatus, downloadAgentScript, startDevServer, stopDevServer, AgentStatus, onOutput } from '@/lib/local-backend-agent';
@@ -151,11 +152,16 @@ export default function IDE() {
       const chatMessages: ChatMessage[] = messages.map(m => ({ role: m.role, content: m.content }));
       chatMessages.push({ role: 'user', content });
       
+      const chatSettings = loadChatSettings();
       let fullResponse = '';
-      for await (const chunk of streamChat(chatMessages)) {
-        fullResponse += chunk;
-        setStreamingContent(fullResponse);
-      }
+      await sendChat(
+        chatMessages,
+        chatSettings,
+        (chunk) => {
+          fullResponse += chunk;
+          setStreamingContent(fullResponse);
+        }
+      );
 
       const assistantMessage: Message = { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() };
       setMessages(prev => [...prev, assistantMessage]);
@@ -176,8 +182,8 @@ export default function IDE() {
           toast.info(`${commands.length} command(s) need review`);
         }
       }
-    } catch (error) {
-      toast.error('Failed to get response. Check Ollama connection.');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to get response. Check your backend settings.');
       console.error(error);
     } finally {
       setIsLoading(false);

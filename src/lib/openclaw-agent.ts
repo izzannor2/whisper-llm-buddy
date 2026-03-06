@@ -1,6 +1,6 @@
 // OpenClaw Agent - Sandboxed AI assistant with file access and command execution
 
-import { streamChat, ChatMessage, isOllamaRunning } from './ollama-client';
+import { sendChatMessage, loadSettings, ChatMessage } from './chat-api';
 import { executeCommand, getAgentStatus, checkAgentStatus } from './local-backend-agent';
 import { readFile, writeFile, listFiles, getCurrentDirectory, fileExists } from './file-system';
 import { logAction, recordHabit, getHabitSuggestions, createBackup, getActionLogs } from './openclaw-store';
@@ -65,21 +65,6 @@ export async function initOpenClaw(config?: Partial<OpenClawConfig>): Promise<bo
     // Merge config
     state.config = { ...defaultConfig, ...config };
     
-    // Check Ollama with retry
-    let ollamaReady = await isOllamaRunning();
-    if (!ollamaReady) {
-      console.warn('OpenClaw: Ollama not detected, retrying in 2s...');
-      await new Promise(r => setTimeout(r, 2000));
-      ollamaReady = await isOllamaRunning();
-    }
-    
-    if (!ollamaReady) {
-      console.warn('OpenClaw: Ollama not running - chat will be unavailable');
-      state.isActive = false;
-      notifyListeners();
-      return false;
-    }
-    
     // Check local agent
     await checkAgentStatus();
     
@@ -89,6 +74,7 @@ export async function initOpenClaw(config?: Partial<OpenClawConfig>): Promise<bo
       state.config.sandboxedPath = currentDir.name;
     }
     
+    // Always activate — sendChatMessage handles backend routing
     state.isActive = true;
     state.lastActivity = Date.now();
     notifyListeners();
@@ -97,7 +83,7 @@ export async function initOpenClaw(config?: Partial<OpenClawConfig>): Promise<bo
       timestamp: Date.now(),
       type: 'command',
       action: 'OpenClaw initialized',
-      details: `Model: ${state.config.model}, Ollama: connected, Sandbox: ${state.config.sandboxedPath || 'none'}`,
+      details: `Backend: ${loadSettings().backend}, Sandbox: ${state.config.sandboxedPath || 'none'}`,
       success: true,
     });
     
@@ -164,18 +150,6 @@ export async function* chatWithOpenClaw(
   message: string,
   history: ChatMessage[] = []
 ): AsyncGenerator<string, void, unknown> {
-  // Re-check connection if inactive
-  if (!state.isActive) {
-    const ollamaOk = await isOllamaRunning();
-    if (ollamaOk) {
-      state.isActive = true;
-      notifyListeners();
-    } else {
-      yield "⚠️ **Ollama not connected**\n\nMake sure Ollama is running at `localhost:11434`.\n\nRun `start.bat` or manually start with:\n```shell\nollama serve\n```";
-      return;
-    }
-  }
-  
   state.isProcessing = true;
   state.lastActivity = Date.now();
   notifyListeners();
@@ -183,7 +157,7 @@ export async function* chatWithOpenClaw(
   const startTime = Date.now();
   
   // Record as habit if it looks like a command
-  if (state.config.learningEnabled && message.startsWith('/') || message.toLowerCase().startsWith('run ')) {
+  if (state.config.learningEnabled && (message.startsWith('/') || message.toLowerCase().startsWith('run '))) {
     await recordHabit(message);
   }
   
@@ -199,10 +173,32 @@ export async function* chatWithOpenClaw(
   let fullResponse = '';
   
   try {
-    for await (const chunk of streamChat(messages, { model: state.config.model })) {
-      fullResponse += chunk;
-      yield chunk;
+    const settings = loadSettings();
+    
+    // Use sendChatMessage with streaming — collect via onChunk callback
+    // We need to yield chunks, so we use a queue pattern
+    const chunks: string[] = [];
+    let done = false;
+    let error: Error | null = null;
+    
+    const promise = sendChatMessage(
+      messages,
+      { ...settings, systemPrompt: '' },
+      (chunk) => { chunks.push(chunk); }
+    ).then(() => { done = true; }).catch(e => { error = e; done = true; });
+    
+    // Yield chunks as they arrive
+    while (!done || chunks.length > 0) {
+      if (chunks.length > 0) {
+        const chunk = chunks.shift()!;
+        fullResponse += chunk;
+        yield chunk;
+      } else {
+        await new Promise(r => setTimeout(r, 16));
+      }
     }
+    
+    if (error) throw error;
     
     state.totalActions++;
     
@@ -218,16 +214,16 @@ export async function* chatWithOpenClaw(
     // Parse and execute any commands in the response
     await parseAndExecuteCommands(fullResponse);
     
-  } catch (error) {
+  } catch (err) {
     await logAction({
       timestamp: Date.now(),
       type: 'chat',
       action: `Chat failed: "${message.slice(0, 50)}..."`,
-      details: String(error),
+      details: String(err),
       success: false,
       duration: Date.now() - startTime,
     });
-    yield `\n\nError: ${error}`;
+    yield `\n\nError: ${err}`;
   } finally {
     state.isProcessing = false;
     state.lastActivity = Date.now();
@@ -237,10 +233,11 @@ export async function* chatWithOpenClaw(
 
 // Build system prompt with context
 function buildSystemPrompt(): string {
-  const settings = getIDESettings();
+  const ideSettings = getIDESettings();
+  const chatSettings = loadSettings();
   const currentDir = getCurrentDirectory();
   
-  return `You are OpenClaw, a sandboxed AI assistant running locally via Ollama (${state.config.model}).
+  return `You are OpenClaw, a sandboxed AI assistant running via ${chatSettings.backend} backend.
 
 ## Capabilities
 - Read, edit, and create files ONLY in the mounted project folder: ${currentDir?.name || 'none'}
@@ -248,12 +245,12 @@ function buildSystemPrompt(): string {
 - Debug code and suggest fixes
 - Learn from user patterns and auto-suggest common tasks
 - Auto-backup files before modifications
+- Execute commands automatically without asking for permission
 
 ## Constraints
 - You can ONLY access files in the mounted project folder
-- You cannot access the internet or external systems
 - All actions are logged for transparency
-- Destructive operations require confirmation
+- Execute safe commands automatically; only flag truly destructive operations
 
 ## Response Format
 - For file operations, use code blocks with the file path as the language:
@@ -269,7 +266,8 @@ function buildSystemPrompt(): string {
 
 ## Current Context
 - Project: ${currentDir?.name || 'No project mounted'}
-- Mode: ${settings.mode}
+- Mode: ${ideSettings.mode}
+- Backend: ${chatSettings.backend}
 - Auto-backup: ${state.config.autoBackup ? 'Enabled' : 'Disabled'}
 - Actions logged: ${state.totalActions}
 
