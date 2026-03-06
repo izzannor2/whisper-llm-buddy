@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2 } from 'lucide-react';
+import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -23,7 +23,7 @@ import { loadSettings, CLOUD_MODELS } from '@/lib/chat-api';
 import { getModeTheme } from '@/lib/mode-themes';
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, isPlan?: boolean) => void;
   isLoading: boolean;
   onStop?: () => void;
   autoSendOnVoice?: boolean;
@@ -31,6 +31,8 @@ interface ChatInputProps {
   onModelChange?: (model: string) => void;
   modelLoaded?: boolean;
   modeKey?: string;
+  planningMode?: boolean;
+  onPlanningToggle?: (active: boolean) => void;
 }
 
 export interface ChatInputRef {
@@ -83,6 +85,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     onModelChange,
     modelLoaded = false,
     modeKey = 'chat',
+    planningMode = false,
+    onPlanningToggle,
   }, ref) {
     const settings = loadSettings();
     const [message, setMessage] = useState('');
@@ -230,10 +234,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
     const handleSend = () => {
       if (message.trim() && !isLoading) {
-        onSend(message.trim());
+        onSend(message.trim(), planningMode);
         setMessage('');
       }
     };
+
+    const showPlanButton = modeKey === 'app-builder' || modeKey === 'ai-improvement';
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -390,6 +396,25 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
               >
                 <Volume2 className="w-4 h-4" />
               </Button>
+
+              {/* Plan toggle (app-builder / ai-improvement only) */}
+              {showPlanButton && (
+                <Button
+                  variant={planningMode ? "default" : "ghost"}
+                  size="sm"
+                  className={cn(
+                    "h-8 gap-1.5 text-xs font-medium",
+                    planningMode
+                      ? "bg-amber-500/90 hover:bg-amber-500 text-white"
+                      : "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                  )}
+                  onClick={() => onPlanningToggle?.(!planningMode)}
+                  title={planningMode ? "Planning mode ON — messages plan before building" : "Toggle planning mode"}
+                >
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  {planningMode ? 'Planning' : 'Plan'}
+                </Button>
+              )}
 
               {/* Spacer */}
               <div className="flex-1" />
