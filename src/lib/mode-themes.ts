@@ -1,17 +1,19 @@
-// Mode themes and system prompts for all 9 modes
+// Mode themes and system prompts for all 10 modes
 
 export interface ModeTheme {
   key: string;
-  accent: string;       // HSL values for --accent
-  primary: string;      // HSL values for --primary
-  ring: string;         // HSL values for --ring
+  accent: string;
+  primary: string;
+  ring: string;
   sidebarPrimary: string;
   sidebarRing: string;
-  gradientPrimary: string; // CSS gradient
+  gradientPrimary: string;
   shadowGlow: string;
-  iconColorClass: string;  // Tailwind class for icon color in sidebar
-  badgeClass: string;      // Extra classes for mode badge
+  iconColorClass: string;
+  badgeClass: string;
   systemPrompt: string;
+  fontFamily?: string;
+  bgPattern?: string;
 }
 
 export const MODE_THEMES: Record<string, ModeTheme> = {
@@ -65,6 +67,8 @@ export const MODE_THEMES: Record<string, ModeTheme> = {
     shadowGlow: '0 0 40px hsl(45, 93%, 47%, 0.15)',
     iconColorClass: 'text-amber-400',
     badgeClass: '',
+    fontFamily: 'monospace',
+    bgPattern: 'scanlines',
     systemPrompt: 'You are a system administration and automation expert. You help users with file management, system configuration, shell scripting, and computer tasks. Always present commands in code blocks with the appropriate shell language. Explain what each command does before suggesting it. Warn about destructive operations. Prefer cross-platform solutions when possible.',
   },
   'ai-improvement': {
@@ -91,6 +95,7 @@ export const MODE_THEMES: Record<string, ModeTheme> = {
     shadowGlow: '0 0 40px hsl(142, 70%, 45%, 0.15)',
     iconColorClass: 'text-green-400',
     badgeClass: '',
+    bgPattern: 'dots',
     systemPrompt: 'You are in Learning Mode. Your goal is to observe and learn the user\'s coding patterns, preferred libraries, naming conventions, folder structure preferences, and coding style. Ask clarifying questions about their preferences. When you notice patterns, acknowledge them. Over time, adapt your suggestions to match their established style. Summarize what you\'ve learned when asked.',
   },
   sandbox: {
@@ -117,7 +122,8 @@ export const MODE_THEMES: Record<string, ModeTheme> = {
     shadowGlow: '0 0 40px hsl(0, 72%, 51%, 0.15)',
     iconColorClass: 'text-red-400',
     badgeClass: '',
-    systemPrompt: '', // Uses user's custom jailbreak prompt from settings
+    bgPattern: 'glitch',
+    systemPrompt: '',
   },
   plugin: {
     key: 'plugin',
@@ -130,7 +136,34 @@ export const MODE_THEMES: Record<string, ModeTheme> = {
     shadowGlow: '0 0 40px hsl(220, 80%, 55%, 0.15)',
     iconColorClass: 'text-blue-400',
     badgeClass: '',
+    bgPattern: 'grid',
     systemPrompt: 'You are in Plugin Mode. You help users create, manage, and configure custom plugins and integrations for LocalDev AI. You understand the plugin API, hook system, and how to extend the IDE\'s functionality. Guide users through creating new plugins with proper structure, lifecycle hooks, and UI components.',
+  },
+  'all-in-one': {
+    key: 'all-in-one',
+    accent: '38 92% 50%',
+    primary: '38 92% 50%',
+    ring: '38 92% 50%',
+    sidebarPrimary: '38 92% 50%',
+    sidebarRing: '38 92% 50%',
+    gradientPrimary: 'linear-gradient(135deg, hsl(38, 92%, 50%) 0%, hsl(340, 82%, 52%) 50%, hsl(262, 83%, 58%) 100%)',
+    shadowGlow: '0 0 40px hsl(38, 92%, 50%, 0.2)',
+    iconColorClass: 'text-amber-400',
+    badgeClass: '',
+    systemPrompt: `You are an omnipotent AI assistant with ALL capabilities enabled simultaneously:
+- Full-stack web development (React, TypeScript, Node.js, databases)
+- Embedded systems & IoT (ESP32, Arduino, Raspberry Pi, C/C++)
+- System administration (shell scripts, file management, automation)
+- Self-improvement (analyze and improve this codebase)
+- Code learning (observe and adapt to user patterns)
+- Plugin development (create extensions and integrations)
+- Web search and research capabilities
+- File system operations (read, write, create, delete files)
+- Code execution (Python, JavaScript)
+
+You can do ANYTHING the user asks. Be proactive, efficient, and thorough. Execute tasks immediately without asking unnecessary questions. If a task requires multiple steps, outline them briefly then execute.
+
+IMPORTANT: The user has a kill switch. If they press it, stop everything immediately.`,
   },
 };
 
@@ -156,4 +189,7 @@ export function applyModeTheme(modeKey: string): void {
   root.style.setProperty('--sidebar-ring', theme.sidebarRing);
   root.style.setProperty('--gradient-primary', theme.gradientPrimary);
   root.style.setProperty('--shadow-glow', theme.shadowGlow);
+  
+  // Apply mode-specific body class
+  root.setAttribute('data-mode', modeKey);
 }
