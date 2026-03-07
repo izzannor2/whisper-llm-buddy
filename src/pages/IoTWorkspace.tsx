@@ -1,10 +1,9 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Check, Upload, ChevronDown, Settings, Cpu, Activity, Wifi, WifiOff } from 'lucide-react';
+import { Home, Check, Upload, Cpu, Activity, Mic, MicOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CodeEditor } from '@/components/ide/CodeEditor';
 import { IDEChat } from '@/components/ide/IDEChat';
@@ -12,6 +11,7 @@ import { applyModeTheme } from '@/lib/mode-themes';
 import { BOARD_TYPES, ProjectFile } from '@/lib/ide-types';
 import { generateId } from '@/lib/ide-store';
 import { sendChatMessage, loadSettings, ChatMessage } from '@/lib/chat-api';
+import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -23,39 +23,9 @@ interface Message {
 }
 
 const DEFAULT_SKETCH: ProjectFile = {
-  id: 'main',
-  name: 'sketch.ino',
-  path: '/sketch.ino',
-  content: `// IoT Sketch
-// Board: ESP32
-
-#include <WiFi.h>
-
-const char* ssid = "your_ssid";
-const char* password = "your_password";
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(LED_BUILTIN, OUTPUT);
-  
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\\nConnected!");
-  Serial.println(WiFi.localIP());
-}
-
-void loop() {
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(1000);
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(1000);
-}
-`,
-  language: 'cpp',
-  isDirectory: false,
+  id: 'main', name: 'sketch.ino', path: '/sketch.ino',
+  content: `// IoT Sketch\n// Board: ESP32\n\n#include <WiFi.h>\n\nconst char* ssid = "your_ssid";\nconst char* password = "your_password";\n\nvoid setup() {\n  Serial.begin(115200);\n  pinMode(LED_BUILTIN, OUTPUT);\n  \n  WiFi.begin(ssid, password);\n  while (WiFi.status() != WL_CONNECTED) {\n    delay(500);\n    Serial.print(".");\n  }\n  Serial.println("\\nConnected!");\n  Serial.println(WiFi.localIP());\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(1000);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(1000);\n}\n`,
+  language: 'cpp', isDirectory: false,
 };
 
 export default function IoTWorkspace() {
@@ -70,7 +40,6 @@ export default function IoTWorkspace() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Apply IoT theme on mount
   useState(() => { applyModeTheme('embedded-iot'); });
 
   const handleVerify = () => {
@@ -93,9 +62,9 @@ export default function IoTWorkspace() {
     }, 2000);
   };
 
-  const handleFileChange = useCallback((path: string, content: string) => {
+  const handleFileChange = useCallback((_path: string, content: string) => {
     setSelectedFile(prev => prev ? { ...prev, content } : prev);
-    setOpenFiles(prev => prev.map(f => f.path === path ? { ...f, content } : f));
+    setOpenFiles(prev => prev.map(f => f.path === _path ? { ...f, content } : f));
   }, []);
 
   const handleSendMessage = useCallback(async (content: string) => {
@@ -107,7 +76,6 @@ export default function IoTWorkspace() {
     try {
       const boardName = BOARD_TYPES.find(b => b.id === board)?.name || board;
       const systemPrompt = `You are an embedded systems expert. The user is working with a ${boardName}. Help with hardware code, wiring, sensor integration, and debugging. Always specify pin numbers and include required libraries.`;
-      
       const chatMessages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
         ...messages.map(m => ({ role: m.role, content: m.content })),
@@ -116,17 +84,15 @@ export default function IoTWorkspace() {
 
       const settings = loadSettings();
       let fullResponse = '';
-      await sendChatMessage(
-        chatMessages,
-        { ...settings, systemPrompt: '' },
-        (chunk) => {
-          fullResponse += chunk;
-          setStreamingContent(fullResponse);
-        }
-      );
+      await sendChatMessage(chatMessages, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
 
       setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() }]);
       setStreamingContent('');
+
+      // TTS auto-play
+      if (settings.autoPlayTTS && isTTSSupported() && fullResponse) {
+        speak(fullResponse, { voice: settings.ttsVoice, rate: settings.ttsRate });
+      }
     } catch (err: any) {
       toast.error(err.message || 'Failed to get response. Check your backend settings.');
     } finally {
@@ -136,94 +102,47 @@ export default function IoTWorkspace() {
 
   return (
     <div className="h-screen flex flex-col" style={{ background: 'hsl(160, 20%, 6%)' }}>
-      {/* Arduino-style header */}
       <header className="h-12 flex items-center justify-between px-3 border-b" style={{
         background: 'linear-gradient(180deg, hsl(168, 50%, 18%) 0%, hsl(168, 50%, 12%) 100%)',
         borderColor: 'hsl(168, 40%, 25%)',
       }}>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="h-8 w-8 text-teal-300 hover:text-teal-100">
-            <Home className="h-4 w-4" />
-          </Button>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="h-8 w-8 text-teal-300 hover:text-teal-100"><Home className="h-4 w-4" /></Button>
           <Cpu className="w-5 h-5 text-orange-400" />
           <span className="font-bold text-orange-300 text-sm">IoT Workspace</span>
           <span className="text-xs text-teal-400/60 ml-2">|</span>
           <span className="text-xs text-teal-400/80 font-mono">{selectedFile.name}</span>
         </div>
-
         <div className="flex items-center gap-2">
-          {/* Verify button */}
-          <Button
-            size="sm"
-            className="h-8 gap-1.5 bg-teal-700 hover:bg-teal-600 text-white"
-            onClick={handleVerify}
-            disabled={isVerifying}
-          >
-            <Check className="w-3.5 h-3.5" />
-            {isVerifying ? 'Verifying...' : 'Verify'}
+          <Button size="sm" className="h-8 gap-1.5 bg-teal-700 hover:bg-teal-600 text-white" onClick={handleVerify} disabled={isVerifying}>
+            <Check className="w-3.5 h-3.5" />{isVerifying ? 'Verifying...' : 'Verify'}
           </Button>
-          {/* Upload button */}
-          <Button
-            size="sm"
-            className="h-8 gap-1.5 bg-orange-600 hover:bg-orange-500 text-white"
-            onClick={handleUpload}
-            disabled={isUploading}
-          >
-            <Upload className="w-3.5 h-3.5" />
-            {isUploading ? 'Uploading...' : 'Upload'}
+          <Button size="sm" className="h-8 gap-1.5 bg-orange-600 hover:bg-orange-500 text-white" onClick={handleUpload} disabled={isUploading}>
+            <Upload className="w-3.5 h-3.5" />{isUploading ? 'Uploading...' : 'Upload'}
           </Button>
-
-          {/* Board selector */}
           <Select value={board} onValueChange={setBoard}>
-            <SelectTrigger className="w-44 h-8 text-xs bg-teal-900/50 border-teal-700 text-teal-200">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="w-44 h-8 text-xs bg-teal-900/50 border-teal-700 text-teal-200"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {BOARD_TYPES.map(b => (
-                <SelectItem key={b.id} value={b.id} className="text-xs">
-                  {b.name} — {b.description}
-                </SelectItem>
-              ))}
+              {BOARD_TYPES.map(b => (<SelectItem key={b.id} value={b.id} className="text-xs">{b.name} — {b.description}</SelectItem>))}
             </SelectContent>
           </Select>
         </div>
       </header>
 
-      {/* Main content */}
       <ResizablePanelGroup direction="horizontal" className="flex-1">
-        {/* Chat */}
         <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
-          <IDEChat
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            isLoading={isLoading}
-            streamingContent={streamingContent}
-            mode="embedded-iot"
-            onOpenSettings={() => navigate('/settings')}
-            onToggleCodeLibrary={() => {}}
-          />
+          <IDEChat messages={messages} onSendMessage={handleSendMessage} isLoading={isLoading}
+            streamingContent={streamingContent} mode="embedded-iot"
+            onOpenSettings={() => navigate('/settings')} onToggleCodeLibrary={() => {}} />
         </ResizablePanel>
-
         <ResizableHandle withHandle />
-
-        {/* Editor + Serial Monitor */}
         <ResizablePanel defaultSize={75}>
           <ResizablePanelGroup direction="vertical">
-            {/* Code Editor */}
             <ResizablePanel defaultSize={65} minSize={30}>
-              <CodeEditor
-                file={selectedFile}
-                openFiles={openFiles}
-                onFileChange={handleFileChange}
-                onCloseFile={() => {}}
-                onSelectFile={() => {}}
-                fontSize={14}
-              />
+              <CodeEditor file={selectedFile} openFiles={openFiles} onFileChange={handleFileChange}
+                onCloseFile={() => {}} onSelectFile={() => {}} fontSize={14} />
             </ResizablePanel>
-
             <ResizableHandle />
-
-            {/* Serial Monitor */}
             <ResizablePanel defaultSize={35} minSize={15}>
               <div className="h-full flex flex-col" style={{ background: 'hsl(160, 20%, 5%)' }}>
                 <div className="h-8 flex items-center justify-between px-3 border-b" style={{ borderColor: 'hsl(168, 40%, 20%)' }}>
@@ -233,14 +152,8 @@ export default function IoTWorkspace() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono text-teal-500">115200 baud</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-[10px] text-teal-400 hover:text-teal-200"
-                      onClick={() => setSerialOutput(['[Serial Monitor] Cleared'])}
-                    >
-                      Clear
-                    </Button>
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px] text-teal-400 hover:text-teal-200"
+                      onClick={() => setSerialOutput(['[Serial Monitor] Cleared'])}>Clear</Button>
                   </div>
                 </div>
                 <ScrollArea className="flex-1 p-2">
@@ -250,9 +163,7 @@ export default function IoTWorkspace() {
                         line.includes('✓') ? 'text-green-400' :
                         line.includes('Error') ? 'text-red-400' :
                         line.startsWith('[') ? 'text-teal-400' : 'text-teal-200/70'
-                      )}>
-                        {line}
-                      </div>
+                      )}>{line}</div>
                     ))}
                   </div>
                 </ScrollArea>
