@@ -92,8 +92,8 @@ export default function ImproveWorkspace() {
   const handleSend = useCallback(async () => {
     if (!input.trim() || isLoading) return;
     const userMsg: ChatMsg = { id: generateId(), role: 'user', content: input.trim() };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    const allMsgsBefore = [...messages, userMsg];
+    setMessages(allMsgsBefore);
     setInput('');
     setIsLoading(true);
     setStreamingContent('');
@@ -107,17 +107,18 @@ export default function ImproveWorkspace() {
         (selectedFile ? `\n\nThe user is currently viewing: ${selectedFile}` : '');
       const chatMsgs = [
         { role: 'system' as const, content: systemPrompt },
-        ...newMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+        ...allMsgsBefore.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       ];
       let fullResponse = '';
       await sendChatMessage(chatMsgs, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; setStreamingContent(prev => prev + chunk); });
-      const newMessages = [...newMessages_pre, { id: generateId(), role: 'assistant' as const, content: fullResponse }];
-      setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse }]);
+      const assistantMsg: ChatMsg = { id: generateId(), role: 'assistant', content: fullResponse };
+      const allMsgsAfter = [...allMsgsBefore, assistantMsg];
+      setMessages(allMsgsAfter);
 
       // Persist to IndexedDB
       const conv: Conversation = {
         id: convId, title: `Improve: ${messages.length === 0 ? input.trim().slice(0, 40) : 'session'}`,
-        messages: newMessages.map(m => ({ ...m, timestamp: Date.now() })),
+        messages: allMsgsAfter.map(m => ({ ...m, timestamp: Date.now() })),
         createdAt: Date.now(), updatedAt: Date.now(), model: settings.model || 'local', modeKey: 'ai-improvement',
       };
       await saveConversation(conv);
