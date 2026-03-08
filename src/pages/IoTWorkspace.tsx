@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Home, Check, Upload, Cpu, Activity, Mic, MicOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { BOARD_TYPES, ProjectFile } from '@/lib/ide-types';
 import { generateId } from '@/lib/ide-store';
 import { sendChatMessage, loadSettings, ChatMessage } from '@/lib/chat-api';
 import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
+import { saveConversation, Conversation } from '@/lib/db';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +40,7 @@ export default function IoTWorkspace() {
   const [openFiles, setOpenFiles] = useState<ProjectFile[]>([DEFAULT_SKETCH]);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [convId] = useState(() => generateId());
 
   useState(() => { applyModeTheme('embedded-iot'); });
 
@@ -86,10 +88,17 @@ export default function IoTWorkspace() {
       let fullResponse = '';
       await sendChatMessage(chatMessages, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
 
+      const newMessages = [...messages, userMessage, { id: generateId(), role: 'assistant' as const, content: fullResponse, timestamp: Date.now() }];
       setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() }]);
       setStreamingContent('');
 
-      // TTS auto-play
+      // Persist to IndexedDB
+      const conv: Conversation = {
+        id: convId, title: `IoT: ${messages.length === 0 ? content.slice(0, 40) : 'session'}`,
+        messages: newMessages, createdAt: Date.now(), updatedAt: Date.now(),
+        model: settings.model || 'local', modeKey: 'embedded-iot',
+      };
+      await saveConversation(conv);
       if (settings.autoPlayTTS && isTTSSupported() && fullResponse) {
         speak(fullResponse, { voice: settings.ttsVoice, rate: settings.ttsRate });
       }

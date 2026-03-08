@@ -9,6 +9,7 @@ import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
 import { sendChatMessage, loadSettings } from '@/lib/chat-api';
 import { speak, isTTSSupported } from '@/lib/tts';
 import { generateId } from '@/lib/ide-store';
+import { saveConversation, Conversation } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import { isWhisperLoaded, getDownloadedModels, transcribeAudio, loadWhisperModel, getSelectedWhisperModel } from '@/lib/local-stt';
 import { toast } from 'sonner';
@@ -82,6 +83,7 @@ export default function ImproveWorkspace() {
   const [isPlanMode, setIsPlanMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [convId] = useState(() => generateId());
 
   useState(() => { applyModeTheme('ai-improvement'); });
 
@@ -109,8 +111,16 @@ export default function ImproveWorkspace() {
       ];
       let fullResponse = '';
       await sendChatMessage(chatMsgs, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; setStreamingContent(prev => prev + chunk); });
+      const newMessages = [...newMessages_pre, { id: generateId(), role: 'assistant' as const, content: fullResponse }];
       setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse }]);
 
+      // Persist to IndexedDB
+      const conv: Conversation = {
+        id: convId, title: `Improve: ${messages.length === 0 ? input.trim().slice(0, 40) : 'session'}`,
+        messages: newMessages.map(m => ({ ...m, timestamp: Date.now() })),
+        createdAt: Date.now(), updatedAt: Date.now(), model: settings.model || 'local', modeKey: 'ai-improvement',
+      };
+      await saveConversation(conv);
       // TTS auto-play
       if (settings.autoPlayTTS && isTTSSupported() && fullResponse) {
         speak(fullResponse, { voice: settings.ttsVoice, rate: settings.ttsRate });
