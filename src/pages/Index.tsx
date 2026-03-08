@@ -138,7 +138,7 @@ export default function Index() {
     const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
     let conv = currentConversation;
     if (!conv) {
-      conv = { id: generateId(), title: content.slice(0, 50) + (content.length > 50 ? '...' : ''), messages: [], createdAt: Date.now(), updatedAt: Date.now(), model: settings.model };
+      conv = { id: generateId(), title: content.slice(0, 50) + (content.length > 50 ? '...' : ''), messages: [], createdAt: Date.now(), updatedAt: Date.now(), model: settings.model, modeKey: currentModeKey };
     }
     conv = { ...conv, messages: [...conv.messages, userMessage], updatedAt: Date.now() };
     setCurrentConversation(conv);

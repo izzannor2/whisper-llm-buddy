@@ -9,6 +9,7 @@ import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
 import { sendChatMessage, loadSettings } from '@/lib/chat-api';
 import { speak, isTTSSupported } from '@/lib/tts';
 import { generateId } from '@/lib/ide-store';
+import { saveConversation, Conversation } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import { isWhisperLoaded, getDownloadedModels, transcribeAudio, loadWhisperModel, getSelectedWhisperModel } from '@/lib/local-stt';
 import { toast } from 'sonner';
@@ -82,6 +83,7 @@ export default function ImproveWorkspace() {
   const [isPlanMode, setIsPlanMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [convId] = useState(() => generateId());
 
   useState(() => { applyModeTheme('ai-improvement'); });
 
@@ -90,8 +92,8 @@ export default function ImproveWorkspace() {
   const handleSend = useCallback(async () => {
     if (!input.trim() || isLoading) return;
     const userMsg: ChatMsg = { id: generateId(), role: 'user', content: input.trim() };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    const allMsgsBefore = [...messages, userMsg];
+    setMessages(allMsgsBefore);
     setInput('');
     setIsLoading(true);
     setStreamingContent('');
@@ -105,12 +107,21 @@ export default function ImproveWorkspace() {
         (selectedFile ? `\n\nThe user is currently viewing: ${selectedFile}` : '');
       const chatMsgs = [
         { role: 'system' as const, content: systemPrompt },
-        ...newMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+        ...allMsgsBefore.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       ];
       let fullResponse = '';
       await sendChatMessage(chatMsgs, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; setStreamingContent(prev => prev + chunk); });
-      setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse }]);
+      const assistantMsg: ChatMsg = { id: generateId(), role: 'assistant', content: fullResponse };
+      const allMsgsAfter = [...allMsgsBefore, assistantMsg];
+      setMessages(allMsgsAfter);
 
+      // Persist to IndexedDB
+      const conv: Conversation = {
+        id: convId, title: `Improve: ${messages.length === 0 ? input.trim().slice(0, 40) : 'session'}`,
+        messages: allMsgsAfter.map(m => ({ ...m, timestamp: Date.now() })),
+        createdAt: Date.now(), updatedAt: Date.now(), model: settings.model || 'local', modeKey: 'ai-improvement',
+      };
+      await saveConversation(conv);
       // TTS auto-play
       if (settings.autoPlayTTS && isTTSSupported() && fullResponse) {
         speak(fullResponse, { voice: settings.ttsVoice, rate: settings.ttsRate });

@@ -14,6 +14,7 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
   model: string;
+  modeKey?: string;
 }
 
 const DB_NAME = 'AraChat';

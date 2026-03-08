@@ -1,92 +1,114 @@
 
 
-## Plan: TTS Speaker Buttons, Sidebar Enhancements, Chat Labeling, All-in-One Routing, and Sidebar Items
+## Plan: Unique Mode Experiences + Planning Feature + Script Updates
 
-This covers 6 areas from the user's requests.
+### What You're Asking For
 
----
-
-### 1. Speaker Button on Every AI Message (TTS everywhere)
-
-**Current state:** `ChatMessage.tsx` already has a speaker button (`Volume2`/`VolumeX`) on every AI message that calls `speak()`/`stopSpeaking()`. TTS auto-play after responses works in `Index.tsx` via `settings.autoPlayTTS`. The workspaces (`IoTWorkspace`, `ImproveWorkspace`, IDE) were updated in the last round to include TTS.
-
-**What's needed:** Verify the speaker button is visible and working. Currently it exists but may be hidden behind `group-hover` opacity. Make it always visible on AI messages so users see it clearly.
-
-**Changes:**
-- **`src/components/ChatMessage.tsx`**: Make the speaker button always visible on assistant messages (not hidden behind hover). This ensures it works across all modes since `ChatMessage` is shared everywhere.
+Each mode needs its own **layout and behavior**, not just a color swap. Plus a "Plan first" workflow for App Builder and AI Improvement, and updated setup/start scripts.
 
 ---
 
-### 2. Sidebar: Add "My Apps" / Saved Apps Section + File Search
+### Mode-by-Mode Design
 
-Between "New Chat" and "Models" in the sidebar, add:
-- **My Apps** button — shows apps the user has built via App Builder. These are conversations tagged with the `app-builder` mode. Clicking opens that conversation.
-- **File Search** button — opens a search dialog that can search conversation content and files.
+**1. App Builder** (navigates to `/ide`)
+- Add a **Planning Phase**: Before entering the IDE, show a planning chat where you describe what you want built. A "Start Building" button transitions to the full IDE with the plan context carried over.
+- The IDE layout stays as-is (file tree + editor + preview).
 
-**Changes:**
-- **`src/lib/db.ts`**: Add a `modeKey` field to the `Conversation` interface so chats are tagged with their mode.
-- **`src/pages/Index.tsx`**: When saving conversations, include `modeKey` so we know which mode produced it.
-- **`src/components/ChatSidebar.tsx`**: 
-  - Add "My Apps" button (with `FolderHeart` icon) between New Chat and Models that filters conversations to `app-builder` mode.
-  - Add "File Search" button (with `FileSearch` icon) that opens a search across all conversations.
-  - Show mode badge/icon next to each conversation in the list so users can see which mode created it.
-  - Group conversations by mode label (App Builder, AI Improvement, etc.)
+**2. IoT / Embedded** (new route `/iot`)
+- **Arduino IDE-inspired layout**: Dark green/teal header bar, single editor pane with board selector dropdown at top, serial monitor panel at bottom, "Verify" and "Upload" buttons in the toolbar.
+- File tabs styled like Arduino sketches. Board selector prominent in header.
+- Chat panel on the left (collapsible).
 
----
+**3. System Helper** (stays on `/` but with unique UI)
+- Terminal-centric layout: Chat renders commands in a terminal-style format. Output panel below chat shows command queue with approve/reject/run buttons.
+- Amber monospace styling throughout.
 
-### 3. Label Conversations by Mode (AI Improvement, App Builder, etc.)
+**4. AI Improvement** (new route `/improve`)
+- **Planning phase** like App Builder — describe what to improve first.
+- Split layout: Left = chat, Right = file browser of the app's own source code with a "Preview Changes" diff view.
+- Pink/magenta theme. Shows the app's file tree and lets AI suggest diffs.
 
-**Current state:** Conversations are saved with no mode tag. They all look the same in the sidebar.
+**5. Learning Mode** (stays on `/`)
+- Card-based UI showing learned patterns (preferences, conventions, libraries).
+- Chat with a "Patterns Learned" sidebar panel showing what it's picked up.
+- Green theme with a dashboard feel.
 
-**Changes:**
-- **`src/lib/db.ts`**: Add optional `modeKey?: string` to `Conversation` interface.
-- **`src/pages/Index.tsx`**: Pass `currentModeKey` when creating new conversations.
-- **`src/components/ChatSidebar.tsx`**: Show a small colored dot or mode icon next to each conversation title. Group or filter by mode.
+**6. Sandbox** (new route `/sandbox`)
+- Playground layout: Code editor on left, live output/console on right.
+- Pyodide integration for instant Python execution, plus JS eval.
+- Cyan theme with "experimental" warning banner. No file persistence.
 
----
+**7. Uncensored/Jailbreak** (stays on `/`)
+- Dark red theme with danger styling. Custom system prompt editor inline at the top.
+- Warning banner always visible. Otherwise standard chat.
 
-### 4. All-in-One AI: Cross-Mode Routing
+**8. Plugin Mode** (stays on `/`)
+- Plugin marketplace-style grid showing installed plugins with toggle switches.
+- Chat below for creating/configuring plugins.
+- Blue theme.
 
-The All-in-One mode needs to actually dispatch tasks to other modes. When the user says "send this to sandbox" or "open IDE for this," it should route.
-
-**Changes:**
-- **`src/pages/Index.tsx`**: In the All-in-One system prompt, instruct the AI to output special tags like `[ROUTE:sandbox]` or `[ROUTE:ide]`. After receiving a response, parse for these tags and offer a button to navigate.
-- **`src/components/ChatMessage.tsx`**: Detect `[ROUTE:xxx]` tags in AI messages and render them as clickable action buttons that navigate to the appropriate workspace.
-
----
-
-### 5. Sidebar: System Files + PC Search under Models
-
-Add two new sidebar items below Models:
-- **System Files** — browse the app's own source files (uses the existing file-system API)
-- **PC Search** — search files on the local computer (uses the File System Access API to search within an opened directory)
-
-These make more sense in the sidebar than as plugins since they're core navigation features.
-
-**Changes:**
-- **`src/components/ChatSidebar.tsx`**: Add "System Files" and "PC Search" buttons below Models. System Files opens a dialog/panel showing the project's file tree. PC Search triggers the File System Access API to pick a directory and search within it.
+**9. Chat** (stays on `/`)
+- Default teal. No changes needed — this is the baseline.
 
 ---
 
-### 6. Conversation Persistence Across Workspaces
+### New Routes
 
-Currently when navigating to `/ide`, `/iot`, `/sandbox`, `/improve`, the chat history from those workspaces is not saved to the main conversation list.
-
-**Changes:**
-- **Workspace pages** (`IoTWorkspace.tsx`, `SandboxWorkspace.tsx`, `ImproveWorkspace.tsx`): Use the same `db.ts` functions (`saveConversation`, `getAllConversations`) to persist workspace chats. Tag them with the appropriate `modeKey`.
-- These will then appear in the sidebar labeled with their mode.
+| Route | Mode |
+|-------|------|
+| `/` | Chat, System Helper, Learning, Uncensored, Plugin (all chat-based with unique UI tweaks) |
+| `/ide` | App Builder |
+| `/iot` | IoT / Embedded (Arduino IDE layout) |
+| `/sandbox` | Sandbox (playground) |
+| `/improve` | AI Improvement (self-modification workspace) |
 
 ---
 
-### File Summary
+### Planning Feature (App Builder + AI Improvement)
 
-| File | Action |
-|------|--------|
-| `src/lib/db.ts` | Add `modeKey` field to `Conversation` interface |
-| `src/components/ChatMessage.tsx` | Make speaker button always visible on AI messages; add route-action button parsing |
-| `src/components/ChatSidebar.tsx` | Add My Apps, File Search, System Files, PC Search buttons; show mode icons on conversations |
-| `src/pages/Index.tsx` | Tag conversations with `modeKey`; All-in-One route parsing |
-| `src/pages/IoTWorkspace.tsx` | Persist chats to IndexedDB with `modeKey: 'embedded-iot'` |
-| `src/pages/SandboxWorkspace.tsx` | Persist chats to IndexedDB with `modeKey: 'sandbox'` |
-| `src/pages/ImproveWorkspace.tsx` | Persist chats to IndexedDB with `modeKey: 'ai-improvement'` |
+Both modes get a **two-phase workflow**:
+1. **Plan Phase**: A focused chat screen where you describe what you want. The AI responds with a structured plan (steps, files to create/modify, architecture).
+2. **Build Phase**: Click "Start Building" → navigates to the full workspace with the plan loaded as context.
+
+Implementation: A `PlanningView` component shared by both modes, with mode-specific prompts and styling.
+
+---
+
+### Files to Create/Modify
+
+**New files (5):**
+- `src/pages/IoTWorkspace.tsx` — Arduino IDE-style layout
+- `src/pages/SandboxWorkspace.tsx` — Playground with live execution
+- `src/pages/ImproveWorkspace.tsx` — Self-improvement workspace with diff view
+- `src/components/PlanningView.tsx` — Shared planning phase component
+- `src/components/PatternsSidebar.tsx` — Learning mode patterns panel
+
+**Modified files (7):**
+- `src/App.tsx` — Add new routes (`/iot`, `/sandbox`, `/improve`)
+- `src/pages/Index.tsx` — Route IoT → `/iot`, AI Improvement → `/improve`, Sandbox → `/sandbox`; add mode-specific UI panels for System Helper, Learning, Uncensored, Plugin when on `/`
+- `src/pages/IDE.tsx` — Accept plan context from planning phase
+- `src/components/EmptyState.tsx` — Add planning button for app-builder and ai-improvement modes
+- `src/lib/mode-themes.ts` — No structural changes needed
+- `setup.bat` — Fix and update for reliability
+- `start.bat` — Fix and update for reliability
+
+---
+
+### Script Updates (setup.bat + start.bat)
+
+- Ensure `setup.bat` checks for Bun as alternative to npm
+- `start.bat` should handle the case where port 8080 is already in use
+- Add error handling for missing `curl` on older Windows
+- Both scripts already exist and are functional — just need robustness fixes and ensuring `npm run dev` launches correctly with the Vite config
+
+---
+
+### Technical Notes
+
+- Mode routing uses the existing `handleModeChange` pattern — just adding more `navigate()` calls
+- Each workspace page imports its own subset of components (no bloated single page)
+- Planning state is passed via React Router `state` or a lightweight store
+- The IoT workspace reuses `CodeEditor` (Monaco) but with Arduino-style chrome around it
+- Sandbox uses existing Pyodide integration from `src/lib/python-runner.ts`
+- AI Improvement workspace reads the project's own file tree to show what can be modified
 
