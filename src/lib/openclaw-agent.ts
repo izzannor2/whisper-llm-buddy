@@ -268,6 +268,9 @@ IMPORTANT: When writing code, ALWAYS use this exact format so it can be parsed a
 - Backend: ${chatSettings.backend}
 - Actions logged: ${state.totalActions}
 
+${projectCtx ? projectCtx : '- No App Builder project loaded yet.'}
+
+When modifying existing files, reference the exact file paths from the project above.
 Keep responses focused and actionable. Always output complete, working code files.`;
 }
 
