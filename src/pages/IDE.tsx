@@ -18,6 +18,7 @@ import { sendChatMessage as sendChat, loadSettings as loadChatSettings } from '@
 import { SystemCommand, parseCommandFromAIResponse, executeCommand as executeSystemCommand } from '@/lib/system-commands';
 import { downloadProjectAsZip, downloadStartupScript, generateDocumentation } from '@/lib/project-export';
 import { parseCodeBlocks, applyCodeBlocks, isBuildTrigger, getAppBuilderBuildPrompt, getAppBuilderPlanPrompt } from '@/lib/code-parser';
+import { buildPreviewHTML, createPreviewBlobUrl } from '@/lib/preview-builder';
 import { checkAgentStatus, downloadAgentScript, startDevServer, stopDevServer, AgentStatus, onOutput } from '@/lib/local-backend-agent';
 import { initTTS, speakAIResponse, getTTSSettings } from '@/lib/tts-engine';
 import { speak, isTTSSupported } from '@/lib/tts';
@@ -54,6 +55,7 @@ export default function IDE() {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins'>('preview');
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | undefined>();
 
   useEffect(() => {
     setSettings(getIDESettings());
@@ -183,6 +185,9 @@ export default function IDE() {
 
           const totalChanges = created.length + updated.length;
           toast.success(`Applied ${totalChanges} file${totalChanges > 1 ? 's' : ''}: ${created.length} created, ${updated.length} updated`);
+
+          // Auto-generate preview
+          generatePreview(updatedFiles);
         }
       }
 
@@ -228,6 +233,17 @@ export default function IDE() {
     await stopDevServer(); setIsServerRunning(false); setPreviewUrl(undefined);
     setLogs(prev => [...prev, 'Dev server stopped']); toast.success('Dev server stopped');
   };
+
+  const generatePreview = useCallback((files?: ProjectFile[]) => {
+    const filesToUse = files || project?.files;
+    if (!filesToUse || filesToUse.length === 0) return;
+    // Revoke old blob URL
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+    const html = buildPreviewHTML(filesToUse);
+    const url = createPreviewBlobUrl(html);
+    setPreviewBlobUrl(url);
+    setRightPanelTab('preview');
+  }, [project, previewBlobUrl]);
 
   const handleDownloadZip = async () => { if (!project) return; try { await downloadProjectAsZip(project); toast.success('Project downloaded'); } catch { toast.error('Failed to download'); } };
   const handleDownloadStartupScript = (platform: 'windows' | 'linux' | 'macos') => { downloadStartupScript(settings, platform); toast.success(`Script for ${platform} downloaded`); };
@@ -308,8 +324,9 @@ export default function IDE() {
                 <TabsTrigger value="plugins" className="gap-1"><Plug className="h-3 w-3" />Plugins</TabsTrigger>
               </TabsList>
               <TabsContent value="preview" className="flex-1 m-0">
-                <PreviewPane previewUrl={previewUrl} isServerRunning={isServerRunning} logs={logs} errors={errors}
-                  onRefresh={() => {}} onStartServer={handleStartServer} onStopServer={handleStopServer} />
+                <PreviewPane previewUrl={previewUrl} previewBlobUrl={previewBlobUrl} isServerRunning={isServerRunning} logs={logs} errors={errors}
+                  onRefresh={() => {}} onStartServer={handleStartServer} onStopServer={handleStopServer}
+                  onGeneratePreview={() => generatePreview()} />
               </TabsContent>
               <TabsContent value="terminal" className="flex-1 m-0"><Terminal className="h-full" /></TabsContent>
               <TabsContent value="commands" className="flex-1 m-0">
