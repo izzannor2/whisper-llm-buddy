@@ -65,7 +65,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   useWebGPU: false,
   offlineMode: false,
   // OpenClaw defaults
-  openClawEnabled: false,
+  openClawEnabled: true,
   openClawModel: '', // Empty - will use first detected Ollama model
   openClawAutoBackup: true,
   openClawLearning: true,
