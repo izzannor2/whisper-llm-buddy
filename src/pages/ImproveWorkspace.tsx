@@ -189,6 +189,8 @@ export default function ImproveWorkspace() {
         createdAt: Date.now(), updatedAt: Date.now(), model: settings.model || 'local', modeKey: 'ai-improvement',
       };
       await saveConversation(conv);
+      setActiveConvId(convId);
+      loadHistory();
 
       if (settings.autoPlayTTS && isTTSSupported() && fullResponse) {
         speak(fullResponse, { voice: settings.ttsVoice, rate: settings.ttsRate });
