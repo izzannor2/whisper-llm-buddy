@@ -655,6 +655,16 @@ export default function ImproveWorkspace() {
         </ResizablePanel>
       </ResizablePanelGroup>
       </div>
+
+      {diffPreview && (
+        <DiffPreview
+          open={!!diffPreview}
+          onOpenChange={(open) => !open && setDiffPreview(null)}
+          filePath={diffPreview.filePath}
+          newContent={diffPreview.content}
+          onApply={() => handleApplySingle(diffPreview.filePath, diffPreview.content)}
+        />
+      )}
     </div>
   );
 }
