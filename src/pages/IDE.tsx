@@ -185,6 +185,9 @@ export default function IDE() {
 
           const totalChanges = created.length + updated.length;
           toast.success(`Applied ${totalChanges} file${totalChanges > 1 ? 's' : ''}: ${created.length} created, ${updated.length} updated`);
+
+          // Auto-generate preview
+          generatePreview(updatedFiles);
         }
       }
 
