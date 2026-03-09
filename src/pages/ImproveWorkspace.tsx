@@ -59,8 +59,8 @@ const QUICK_SUGGESTIONS = [
   { icon: Wand2, label: 'Refactor code', prompt: 'Identify areas of the codebase that need refactoring. Focus on code duplication, complexity, and maintainability.' },
 ];
 
-function FileTreeNode({ node, depth = 0, selectedPath, onSelect }: {
-  node: FileNode; depth?: number; selectedPath: string | null; onSelect: (path: string) => void;
+function FileTreeNode({ node, depth = 0, selectedFiles, onToggle }: {
+  node: FileNode; depth?: number; selectedFiles: Set<string>; onToggle: (path: string) => void;
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
   if (node.type === 'directory') {
@@ -72,15 +72,19 @@ function FileTreeNode({ node, depth = 0, selectedPath, onSelect }: {
           <FolderOpen className="w-3 h-3 text-pink-400/70" /><span>{node.name}</span>
         </button>
         {expanded && node.children?.map(child => (
-          <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
+          <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedFiles={selectedFiles} onToggle={onToggle} />
         ))}
       </div>
     );
   }
+  const isSelected = selectedFiles.has(node.path);
   return (
     <button className={cn("flex items-center gap-1 w-full px-2 py-1 text-xs hover:bg-pink-500/10",
-      selectedPath === node.path ? 'bg-pink-500/15 text-pink-200' : 'text-pink-200/60'
-    )} style={{ paddingLeft: `${depth * 12 + 8}px` }} onClick={() => onSelect(node.path)}>
+      isSelected ? 'bg-pink-500/15 text-pink-200' : 'text-pink-200/60'
+    )} style={{ paddingLeft: `${depth * 12 + 8}px` }} onClick={() => onToggle(node.path)}>
+      {isSelected
+        ? <CheckSquare className="w-3 h-3 text-pink-400 shrink-0" />
+        : <Square className="w-3 h-3 text-pink-500/30 shrink-0" />}
       <FileText className="w-3 h-3 text-pink-400/50" /><span>{node.name}</span>
     </button>
   );
