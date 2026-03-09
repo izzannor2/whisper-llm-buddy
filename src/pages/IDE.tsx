@@ -211,7 +211,8 @@ export default function IDE() {
       if (f.children) return { ...f, children: updateFile(f.children) };
       return f;
     });
-    const updatedProject = { ...project, files: updateFile(project.files), updatedAt: Date.now() };
+    const updatedFiles = updateFile(project.files);
+    const updatedProject = { ...project, files: updatedFiles, updatedAt: Date.now() };
     setProject(updatedProject);
     saveProject(updatedProject);
     setOpenFiles(prev => prev.map(f => f.path === path ? { ...f, content, isModified: true } : f));
