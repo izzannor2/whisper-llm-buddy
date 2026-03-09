@@ -20,6 +20,7 @@ import { downloadProjectAsZip, downloadStartupScript, generateDocumentation } fr
 import { parseCodeBlocks, applyCodeBlocks, isBuildTrigger, getAppBuilderBuildPrompt, getAppBuilderPlanPrompt } from '@/lib/code-parser';
 import { buildPreviewHTML, createPreviewBlobUrl } from '@/lib/preview-builder';
 import { checkAgentStatus, downloadAgentScript, startDevServer, stopDevServer, AgentStatus, onOutput } from '@/lib/local-backend-agent';
+import { onOpenClawEvent } from '@/lib/openclaw-bridge';
 import { initTTS, speakAIResponse, getTTSSettings } from '@/lib/tts-engine';
 import { speak, isTTSSupported } from '@/lib/tts';
 import { loadSettings } from '@/lib/chat-api';
