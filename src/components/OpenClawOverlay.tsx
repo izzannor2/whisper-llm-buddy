@@ -16,6 +16,7 @@ import { sendToIDE, sendToChat, navigateTo, applyCodeToIDE } from '@/lib/opencla
 import { parseCodeBlocks } from '@/lib/code-parser';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
+import { getProjectSummary } from '@/lib/project-context';
 
 interface OpenClawConfig {
   model?: string;
