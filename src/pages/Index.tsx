@@ -24,6 +24,7 @@ import {
   ChatSettings, loadSettings, saveSettings, sendChatMessage,
 } from '@/lib/chat-api';
 import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
+import { onOpenClawEvent } from '@/lib/openclaw-bridge';
 import { cn } from '@/lib/utils';
 
 export default function Index() {
@@ -57,6 +58,17 @@ export default function Index() {
   useEffect(() => {
     const init = async () => { await initDB(); setConversations(await getAllConversations()); };
     init();
+
+    // Listen for OpenClaw bridge events
+    const unsubscribe = onOpenClawEvent((event) => {
+      if (event.type === 'navigate' && event.payload.route) {
+        navigate(event.payload.route);
+      }
+      if (event.type === 'send-to-chat' && event.payload.message) {
+        handleSendMessage(event.payload.message);
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {

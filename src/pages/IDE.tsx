@@ -20,6 +20,7 @@ import { downloadProjectAsZip, downloadStartupScript, generateDocumentation } fr
 import { parseCodeBlocks, applyCodeBlocks, isBuildTrigger, getAppBuilderBuildPrompt, getAppBuilderPlanPrompt } from '@/lib/code-parser';
 import { buildPreviewHTML, createPreviewBlobUrl } from '@/lib/preview-builder';
 import { checkAgentStatus, downloadAgentScript, startDevServer, stopDevServer, AgentStatus, onOutput } from '@/lib/local-backend-agent';
+import { onOpenClawEvent } from '@/lib/openclaw-bridge';
 import { initTTS, speakAIResponse, getTTSSettings } from '@/lib/tts-engine';
 import { speak, isTTSSupported } from '@/lib/tts';
 import { loadSettings } from '@/lib/chat-api';
@@ -71,7 +72,43 @@ export default function IDE() {
       if (isError) setErrors(prev => [...prev, output]);
       else setLogs(prev => [...prev, output]);
     });
-    return () => { clearInterval(interval); unsubscribe(); };
+
+    // Listen for OpenClaw bridge events
+    const unsubscribeClaw = onOpenClawEvent((event) => {
+      if (event.type === 'send-to-ide' && event.payload.message) {
+        // Inject as a user message and auto-send
+        handleSendMessage(event.payload.message);
+      }
+      if (event.type === 'apply-code' && event.payload.filePath && event.payload.code) {
+        // Apply code directly to project files
+        if (project) {
+          const codeBlocks = [{ filePath: event.payload.filePath, content: event.payload.code, language: 'typescript' }];
+          const { files: updatedFiles, created, updated } = applyCodeBlocks(project.files, codeBlocks);
+          const updatedProject = { ...project, files: updatedFiles, updatedAt: Date.now() };
+          setProject(updatedProject);
+          saveProject(updatedProject);
+          const firstPath = [...created, ...updated][0];
+          if (firstPath) {
+            const fileToOpen = findFileByPath(updatedFiles, firstPath);
+            if (fileToOpen) {
+              setSelectedFile(fileToOpen);
+              setOpenFiles(prev => {
+                const exists = prev.find(f => f.path === fileToOpen.path);
+                return exists ? prev.map(f => f.path === fileToOpen.path ? fileToOpen : f) : [...prev, fileToOpen];
+              });
+            }
+          }
+          toast.success(`OpenClaw applied: ${event.payload.filePath}`);
+          generatePreview(updatedFiles);
+        }
+      }
+      if (event.type === 'edit-file' && event.payload.filePath && event.payload.content) {
+        handleFileChange(event.payload.filePath, event.payload.content);
+        toast.success(`OpenClaw edited: ${event.payload.filePath}`);
+      }
+    });
+
+    return () => { clearInterval(interval); unsubscribe(); unsubscribeClaw(); };
   }, []);
 
   useEffect(() => {
