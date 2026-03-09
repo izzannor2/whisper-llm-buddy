@@ -544,11 +544,13 @@ export default function ImproveWorkspace() {
             <div className="h-9 flex items-center px-3 border-b shrink-0" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
               <FolderOpen className="w-3.5 h-3.5 text-pink-400 mr-2" />
               <span className="text-xs font-mono text-pink-300">Project Source</span>
-              {selectedFile && <span className="ml-auto text-[10px] text-pink-500 font-mono truncate max-w-[200px]">{selectedFile}</span>}
+              {selectedFiles.size > 0 && (
+                <span className="ml-auto text-[10px] text-pink-500 font-mono">{selectedFiles.size} selected</span>
+              )}
             </div>
             <ScrollArea className="flex-1 py-1">
               {PROJECT_TREE.map(node => (
-                <FileTreeNode key={node.path} node={node} selectedPath={selectedFile} onSelect={setSelectedFile} />
+                <FileTreeNode key={node.path} node={node} selectedFiles={selectedFiles} onToggle={toggleFile} />
               ))}
             </ScrollArea>
           </div>
