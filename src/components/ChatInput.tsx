@@ -253,6 +253,19 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                 <Volume2 className="w-4 h-4" />
               </Button>
 
+              <Button
+                variant={webSearchEnabled ? "default" : "ghost"}
+                size="sm"
+                className={cn("h-8 gap-1.5 text-xs font-medium",
+                  webSearchEnabled ? "bg-cyan-500/90 hover:bg-cyan-500 text-white" : "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                )}
+                onClick={() => onWebSearchToggle?.(!webSearchEnabled)}
+                title={webSearchEnabled ? "Web search ON — queries will search the web first" : "Toggle web search"}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                {webSearchEnabled ? 'Search On' : 'Search'}
+              </Button>
+
               {showPlanButton && (
                 <Button
                   variant={planningMode ? "default" : "ghost"}
