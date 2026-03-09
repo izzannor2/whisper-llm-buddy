@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Home, Play, Trash2, FlaskConical, AlertTriangle, FileCode2, Terminal as TerminalIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
