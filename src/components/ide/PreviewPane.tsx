@@ -138,6 +138,22 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
               <TooltipContent side="bottom"><p>Desktop (full width)</p></TooltipContent>
             </Tooltip>
           </div>
+          {isResponsive && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className={cn(
+                    'h-7 w-7 flex items-center justify-center rounded-md border border-border transition-colors',
+                    isLandscape ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  )}
+                  onClick={() => setIsLandscape(!isLandscape)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p>{isLandscape ? 'Portrait' : 'Landscape'}</p></TooltipContent>
+            </Tooltip>
+          )}
 
           {onGeneratePreview && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onGeneratePreview} title="Generate Preview">
