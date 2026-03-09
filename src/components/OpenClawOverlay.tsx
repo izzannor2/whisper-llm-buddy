@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { 
   MessageSquare, X, Minimize2, Maximize2, Mic, MicOff, Volume2, VolumeX,
   Send, Loader2, Terminal, FileText, Zap, Settings, ArrowRight, Code2,
-  Wrench, Navigation, Hammer,
+  Wrench, Navigation, Hammer, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,7 +56,14 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
   const [showLogs, setShowLogs] = useState(false);
   const [whisperReady, setWhisperReady] = useState(false);
   const [showActions, setShowActions] = useState(false);
-  const projectSummary = getProjectSummary();
+  const [projectSummary, setProjectSummary] = useState(getProjectSummary());
+
+  const handleRefreshContext = () => {
+    const updated = getProjectSummary();
+    setProjectSummary(updated);
+    toast.success(updated ? `Context refreshed: ${updated.fileCount} files from "${updated.name}"` : 'No project found');
+    setShowActions(false);
+  };
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -335,6 +342,9 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
             </Button>
             <Button variant="secondary" size="sm" className="h-8 text-xs gap-1.5 justify-start" onClick={handleEditFile}>
               <FileText className="w-3 h-3" /> Edit File
+            </Button>
+            <Button variant="secondary" size="sm" className="h-8 text-xs gap-1.5 justify-start" onClick={handleRefreshContext}>
+              <RefreshCw className="w-3 h-3" /> Refresh Context
             </Button>
           </div>
         </div>
