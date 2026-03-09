@@ -13,7 +13,7 @@ import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
 import { sendChatMessage, loadSettings } from '@/lib/chat-api';
 import { speak, isTTSSupported } from '@/lib/tts';
 import { generateId } from '@/lib/ide-store';
-import { saveConversation, Conversation } from '@/lib/db';
+import { saveConversation, getAllConversations, deleteConversation, Conversation } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import { isWhisperLoaded, getDownloadedModels, transcribeAudio, loadWhisperModel, getSelectedWhisperModel } from '@/lib/local-stt';
 import { toast } from 'sonner';
