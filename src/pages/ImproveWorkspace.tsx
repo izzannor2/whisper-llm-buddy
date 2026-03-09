@@ -578,6 +578,73 @@ export default function ImproveWorkspace() {
                   </div>
                 )}
 
+                {/* Fixes Summary Bar — shows after AI responds with code blocks */}
+                {!isLoading && !streamingContent && allCodeBlocks.length > 0 && (
+                  <div className="rounded-xl border overflow-hidden" style={{
+                    background: 'hsl(330, 25%, 8%)',
+                    borderColor: 'hsl(330, 30%, 18%)',
+                  }}>
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-400" />
+                        <span className="text-xs font-semibold text-pink-200">
+                          {allCodeBlocks.length} fix{allCodeBlocks.length > 1 ? 'es' : ''} ready
+                        </span>
+                        <span className="text-[10px] text-pink-500/50">
+                          {appliedFiles.size}/{allCodeBlocks.length} applied
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white"
+                        onClick={handleApplyAll}
+                        disabled={isApplying || appliedFiles.size === allCodeBlocks.length}
+                      >
+                        {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
+                        {appliedFiles.size === allCodeBlocks.length ? 'All Applied' : 'Fix All'}
+                      </Button>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: 'hsl(330, 30%, 14%)' }}>
+                      {allCodeBlocks.map((block, idx) => {
+                        const isApplied = appliedFiles.has(block.filePath);
+                        return (
+                          <div key={idx} className="flex items-center justify-between px-4 py-2 hover:bg-pink-500/5 transition-colors">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileCode className="w-3.5 h-3.5 text-pink-400/60 shrink-0" />
+                              <span className="text-xs font-mono text-pink-200/80 truncate">{block.filePath}</span>
+                              <span className="text-[10px] text-pink-500/40 shrink-0">{block.language}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-[10px] px-2 text-pink-300 hover:text-pink-100 hover:bg-pink-500/15"
+                                onClick={() => setDiffPreview({ filePath: block.filePath, content: block.content })}
+                                disabled={isApplied}
+                              >
+                                Diff
+                              </Button>
+                              <Button
+                                size="sm"
+                                className={cn(
+                                  "h-6 text-[10px] px-2.5 gap-1",
+                                  isApplied
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default hover:bg-emerald-500/20"
+                                    : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                                )}
+                                onClick={() => !isApplied && handleApplySingle(block.filePath, block.content)}
+                                disabled={isApplied}
+                              >
+                                {isApplied ? <><Check className="w-3 h-3" /> Done</> : 'Apply'}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div ref={bottomRef} />
               </div>
             </ScrollArea>
