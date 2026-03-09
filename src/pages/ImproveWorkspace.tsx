@@ -308,34 +308,65 @@ export default function ImproveWorkspace() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const renderMarkdown = (content: string) => (
-    <ReactMarkdown
-      components={{
-        code({ className, children, ...props }) {
-          const match = /language-(\w+)/.exec(className || '');
-          const codeStr = String(children).replace(/\n$/, '');
-          if (match) {
-            return <CodeBlock code={codeStr} language={match[1]} />;
-          }
-          return (
-            <code className="px-1.5 py-0.5 rounded bg-pink-900/50 text-pink-200 text-xs font-mono" {...props}>
-              {children}
-            </code>
-          );
-        },
-        p({ children }) { return <p className="mb-2 last:mb-0">{children}</p>; },
-        ul({ children }) { return <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>; },
-        ol({ children }) { return <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>; },
-        h1({ children }) { return <h1 className="text-lg font-bold mb-2 text-pink-200">{children}</h1>; },
-        h2({ children }) { return <h2 className="text-base font-bold mb-2 text-pink-200">{children}</h2>; },
-        h3({ children }) { return <h3 className="text-sm font-bold mb-1 text-pink-200">{children}</h3>; },
-        strong({ children }) { return <strong className="font-semibold text-pink-100">{children}</strong>; },
-        blockquote({ children }) { return <blockquote className="border-l-2 border-pink-500/40 pl-3 italic text-pink-300/80 mb-2">{children}</blockquote>; },
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  );
+  const handleApplySingle = useCallback(async (filePath: string, content: string) => {
+    try {
+      await writeFile(filePath, content);
+      toast.success(`Applied to ${filePath}`);
+    } catch (err: any) {
+      toast.error(`Failed to write ${filePath}: ${err.message}`);
+    }
+  }, []);
+
+  const renderMarkdown = (content: string) => {
+    // Pre-parse code blocks with file paths from this message
+    const parsed = parseCodeBlocks(content);
+
+    return (
+      <ReactMarkdown
+        components={{
+          code({ className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '');
+            const codeStr = String(children).replace(/\n$/, '');
+            if (match) {
+              // Try to find a matching parsed block for this code
+              const matchedBlock = parsed.find(b => b.content.trim() === codeStr.trim());
+              return (
+                <div className="relative">
+                  <CodeBlock code={codeStr} language={match[1]} />
+                  {matchedBlock && (
+                    <button
+                      onClick={() => handleApplySingle(matchedBlock.filePath, matchedBlock.content)}
+                      className="absolute top-2 right-24 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono
+                        bg-emerald-500/15 text-emerald-300 border border-emerald-500/25
+                        hover:bg-emerald-500/25 hover:text-emerald-200 transition-colors z-10"
+                    >
+                      <FileCode className="w-3 h-3" />
+                      Apply → {matchedBlock.filePath.split('/').pop()}
+                    </button>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <code className="px-1.5 py-0.5 rounded bg-pink-900/50 text-pink-200 text-xs font-mono" {...props}>
+                {children}
+              </code>
+            );
+          },
+          p({ children }) { return <p className="mb-2 last:mb-0">{children}</p>; },
+          ul({ children }) { return <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>; },
+          ol({ children }) { return <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>; },
+          h1({ children }) { return <h1 className="text-lg font-bold mb-2 text-pink-200">{children}</h1>; },
+          h2({ children }) { return <h2 className="text-base font-bold mb-2 text-pink-200">{children}</h2>; },
+          h3({ children }) { return <h3 className="text-sm font-bold mb-1 text-pink-200">{children}</h3>; },
+          strong({ children }) { return <strong className="font-semibold text-pink-100">{children}</strong>; },
+          blockquote({ children }) { return <blockquote className="border-l-2 border-pink-500/40 pl-3 italic text-pink-300/80 mb-2">{children}</blockquote>; },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    );
+  };
 
   return (
     <div className="h-screen flex flex-col" style={{ background: 'hsl(330, 20%, 6%)' }}>
