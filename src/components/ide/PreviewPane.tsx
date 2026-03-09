@@ -17,7 +17,7 @@ interface PreviewPaneProps {
   className?: string;
 }
 
-export function PreviewPane({
+export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
   previewUrl,
   isServerRunning,
   logs,
@@ -27,7 +27,7 @@ export function PreviewPane({
   onStopServer,
   onOpenExternal,
   className,
-}: PreviewPaneProps) {
+}, ref) => {
   const [activeTab, setActiveTab] = useState<'preview' | 'console'>('preview');
   const [isMaximized, setIsMaximized] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -47,7 +47,7 @@ export function PreviewPane({
   };
 
   return (
-    <div className={cn('flex flex-col h-full bg-card', isMaximized && 'fixed inset-0 z-50', className)}>
+    <div ref={ref} className={cn('flex flex-col h-full bg-card', isMaximized && 'fixed inset-0 z-50', className)}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <div className="flex items-center gap-2">
@@ -186,4 +186,6 @@ export function PreviewPane({
       </div>
     </div>
   );
-}
+});
+
+PreviewPane.displayName = 'PreviewPane';

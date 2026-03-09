@@ -33,14 +33,14 @@ const categoryIcons: Record<SystemCommand['category'], React.ReactNode> = {
   cleanup: <Trash2 className="h-4 w-4" />,
 };
 
-export function SystemCommandPanel({
+export const SystemCommandPanel = React.forwardRef<HTMLDivElement, SystemCommandPanelProps>(({
   commands,
   onApprove,
   onReject,
   onExecute,
   onClear,
   className,
-}: SystemCommandPanelProps) {
+}, ref) => {
   const [confirmCommand, setConfirmCommand] = useState<SystemCommand | null>(null);
 
   const pendingCommands = commands.filter(c => c.status === 'pending');
@@ -55,7 +55,7 @@ export function SystemCommandPanel({
   };
 
   return (
-    <div className={cn('flex flex-col h-full bg-card', className)}>
+    <div ref={ref} className={cn('flex flex-col h-full bg-card', className)}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-primary" />
@@ -208,4 +208,6 @@ export function SystemCommandPanel({
       </AlertDialog>
     </div>
   );
-}
+});
+
+SystemCommandPanel.displayName = 'SystemCommandPanel';
