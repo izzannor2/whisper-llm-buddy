@@ -135,13 +135,17 @@ export default function IDE() {
 
   const handleCreateFile = useCallback((parentPath: string, isDirectory: boolean) => {
     if (!project) return;
-    const name = prompt(isDirectory ? 'Folder name:' : 'File name:');
-    if (!name?.trim()) return;
+    setFileDialog({ open: true, parentPath, isDirectory });
+  }, [project]);
+
+  const handleCreateFileSubmit = useCallback((name: string) => {
+    if (!project) return;
+    const { parentPath, isDirectory } = fileDialog;
     const newPath = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`;
     const ext = name.split('.').pop()?.toLowerCase() || '';
     const langMap: Record<string, string> = { tsx: 'typescript', ts: 'typescript', jsx: 'javascript', js: 'javascript', css: 'css', html: 'html', json: 'json', py: 'python', md: 'markdown', cpp: 'cpp', c: 'c', h: 'c' };
     const newFile: ProjectFile = {
-      id: generateId(), name: name.trim(), path: newPath, content: isDirectory ? '' : '', language: langMap[ext] || 'text',
+      id: generateId(), name, path: newPath, content: isDirectory ? '' : '', language: langMap[ext] || 'text',
       isDirectory, ...(isDirectory ? { children: [] } : {}),
     };
     const addToTree = (files: ProjectFile[]): ProjectFile[] => {
@@ -157,11 +161,16 @@ export default function IDE() {
     saveProject(updatedProject);
     if (!isDirectory) handleSelectFile(newFile);
     toast.success(`${isDirectory ? 'Folder' : 'File'} created: ${name}`);
-  }, [project, handleSelectFile]);
+  }, [project, fileDialog, handleSelectFile]);
 
   const handleDeleteFile = useCallback((path: string) => {
     if (!project) return;
-    if (!confirm(`Delete ${path}?`)) return;
+    setDeleteDialog({ open: true, path });
+  }, [project]);
+
+  const handleDeleteFileConfirm = useCallback(() => {
+    if (!project) return;
+    const { path } = deleteDialog;
     const removeFromTree = (files: ProjectFile[]): ProjectFile[] =>
       files.filter(f => f.path !== path).map(f => f.children ? { ...f, children: removeFromTree(f.children) } : f);
     const updatedProject = { ...project, files: removeFromTree(project.files), updatedAt: Date.now() };
@@ -169,8 +178,9 @@ export default function IDE() {
     saveProject(updatedProject);
     setOpenFiles(prev => prev.filter(f => !f.path.startsWith(path)));
     if (selectedFile?.path.startsWith(path)) setSelectedFile(null);
+    setDeleteDialog({ open: false, path: '' });
     toast.success(`Deleted: ${path}`);
-  }, [project, selectedFile]);
+  }, [project, selectedFile, deleteDialog]);
 
   const handleRenameFile = useCallback((oldPath: string, newPath: string) => {
     if (!project) return;
