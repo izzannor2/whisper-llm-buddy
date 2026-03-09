@@ -234,6 +234,17 @@ export default function IDE() {
     setLogs(prev => [...prev, 'Dev server stopped']); toast.success('Dev server stopped');
   };
 
+  const generatePreview = useCallback((files?: ProjectFile[]) => {
+    const filesToUse = files || project?.files;
+    if (!filesToUse || filesToUse.length === 0) return;
+    // Revoke old blob URL
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+    const html = buildPreviewHTML(filesToUse);
+    const url = createPreviewBlobUrl(html);
+    setPreviewBlobUrl(url);
+    setRightPanelTab('preview');
+  }, [project, previewBlobUrl]);
+
   const handleDownloadZip = async () => { if (!project) return; try { await downloadProjectAsZip(project); toast.success('Project downloaded'); } catch { toast.error('Failed to download'); } };
   const handleDownloadStartupScript = (platform: 'windows' | 'linux' | 'macos') => { downloadStartupScript(settings, platform); toast.success(`Script for ${platform} downloaded`); };
   const handleDownloadDocs = () => {
