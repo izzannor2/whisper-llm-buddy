@@ -5,6 +5,7 @@ import { executeCommand, getAgentStatus, checkAgentStatus } from './local-backen
 import { readFile, writeFile, listFiles, getCurrentDirectory, fileExists } from './file-system';
 import { logAction, recordHabit, getHabitSuggestions, createBackup, getActionLogs } from './openclaw-store';
 import { getIDESettings } from './ide-store';
+import { getProjectContext } from './project-context';
 
 export interface OpenClawConfig {
   model: string;
