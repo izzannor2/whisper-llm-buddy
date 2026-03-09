@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { Send, Mic, MicOff, Settings, Library, Loader2, Volume2, Lightbulb } from 'lucide-react';
+import { Send, Mic, MicOff, Settings, Library, Loader2, Volume2, Lightbulb, FileCode, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -8,6 +8,7 @@ import { ChatMessage as ChatMessageType } from '@/lib/ollama-client';
 import { IDEMode, MODE_INFO } from '@/lib/ide-types';
 import { Badge } from '@/components/ui/badge';
 import ReactMarkdown from 'react-markdown';
+import { parseCodeBlocks } from '@/lib/code-parser';
 import { isWhisperLoaded, getDownloadedModels, transcribeAudio, loadWhisperModel, getSelectedWhisperModel } from '@/lib/local-stt';
 import { toast } from 'sonner';
 
@@ -25,6 +26,48 @@ interface IDEChatProps {
   onOpenSettings: () => void;
   onToggleCodeLibrary: () => void;
   className?: string;
+}
+
+/**
+ * Strip code blocks that have file paths (applied files) from text,
+ * leaving only the conversational parts. Returns cleaned text + list of file paths.
+ */
+function stripAppliedCode(content: string): { cleanText: string; appliedFiles: string[] } {
+  const blocks = parseCodeBlocks(content);
+  const appliedFiles = blocks.map(b => b.filePath);
+
+  // Remove code blocks with file paths from the markdown
+  let cleanText = content;
+  // Remove ```lang:filepath ... ``` blocks
+  cleanText = cleanText.replace(/```\w+(?::|\s+)\/?\S+\.\w+\s*\n[\s\S]*?```/g, '');
+  // Remove ```lang\n// filepath: ... blocks
+  cleanText = cleanText.replace(/```\w+\s*\n\/\/\s*(?:filepath|file|path):\s*\S+\n[\s\S]*?```/g, '');
+  // Clean up excessive newlines
+  cleanText = cleanText.replace(/\n{3,}/g, '\n\n').trim();
+
+  return { cleanText, appliedFiles };
+}
+
+function AppliedFilesCard({ files }: { files: string[] }) {
+  if (files.length === 0) return null;
+  return (
+    <div className="mt-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
+      <div className="flex items-center gap-2 mb-2">
+        <CheckCircle2 className="h-4 w-4 text-green-500" />
+        <span className="text-xs font-semibold text-foreground">
+          Applied {files.length} file{files.length > 1 ? 's' : ''} to project
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {files.map(f => (
+          <div key={f} className="flex items-center gap-1 px-2 py-0.5 rounded bg-muted text-xs font-mono text-muted-foreground">
+            <FileCode className="h-3 w-3" />
+            {f.split('/').pop()}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function IDEChat({
@@ -123,6 +166,38 @@ export function IDEChat({
 
   const toggleRecording = () => { isRecording ? stopRecording() : startRecording(); };
 
+  const renderAssistantMessage = (content: string) => {
+    const { cleanText, appliedFiles } = stripAppliedCode(content);
+    return (
+      <>
+        {cleanText && (
+          <div className="prose prose-sm prose-invert max-w-none text-sm">
+            <ReactMarkdown
+              components={{
+                // Render remaining (non-file-path) code blocks as inline snippets
+                code: ({ className, children, ...props }) => {
+                  const codeStr = String(children).replace(/\n$/, '');
+                  const match = /language-(\w+)/.exec(className || '');
+                  const isBlock = match || codeStr.includes('\n') || codeStr.length > 80;
+                  if (isBlock) {
+                    return (
+                      <pre className="bg-muted/50 rounded-md p-2 overflow-x-auto my-2 text-xs">
+                        <code className={className} {...props}>{children}</code>
+                      </pre>
+                    );
+                  }
+                  return <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
+                },
+                pre: ({ children }) => <>{children}</>,
+              }}
+            >{cleanText}</ReactMarkdown>
+          </div>
+        )}
+        <AppliedFilesCard files={appliedFiles} />
+      </>
+    );
+  };
+
   return (
     <div className={cn('flex flex-col h-full bg-sidebar', className)}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-sidebar-border">
@@ -154,7 +229,7 @@ export function IDEChat({
                 message.role === 'user' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-secondary-foreground rounded-bl-md'
               )}>
                 {message.role === 'assistant' ? (
-                  <div className="prose prose-sm prose-invert max-w-none"><ReactMarkdown>{message.content}</ReactMarkdown></div>
+                  renderAssistantMessage(message.content)
                 ) : (
                   <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 )}
@@ -164,7 +239,9 @@ export function IDEChat({
           {streamingContent && (
             <div className="flex justify-start">
               <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-secondary text-secondary-foreground rounded-bl-md">
-                <div className="prose prose-sm prose-invert max-w-none"><ReactMarkdown>{streamingContent}</ReactMarkdown></div>
+                <div className="prose prose-sm prose-invert max-w-none text-sm">
+                  <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                </div>
               </div>
             </div>
           )}
