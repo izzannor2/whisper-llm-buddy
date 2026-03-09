@@ -83,7 +83,7 @@ export default function IDE() {
         handleSendMessage(event.payload.message);
       }
       if (event.type === 'apply-code' && event.payload.filePath && event.payload.code) {
-        const currentProject = project || getProjects()[0] || createDefaultProject();
+        const currentProject = project || getProjects()[0] || createProject('My App', 'react');
         const codeBlocks = [{ filePath: event.payload.filePath, content: event.payload.code, language: 'typescript' }];
         const { files: updatedFiles, created, updated } = applyCodeBlocks(currentProject.files, codeBlocks);
         const updatedProject = { ...currentProject, files: updatedFiles, updatedAt: Date.now() };
