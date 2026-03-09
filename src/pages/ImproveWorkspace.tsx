@@ -357,6 +357,17 @@ export default function ImproveWorkspace() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {allCodeBlocks.length > 0 && (
+            <Button
+              variant="ghost" size="sm"
+              className="h-7 text-xs gap-1 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 border border-emerald-500/20"
+              onClick={handleApplyAll}
+              disabled={isApplying}
+            >
+              {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
+              Apply All ({allCodeBlocks.length})
+            </Button>
+          )}
           <Button
             variant="ghost" size="sm"
             className={cn("h-7 text-xs gap-1", showHistory ? "bg-pink-500/20 text-pink-200" : "text-pink-400 hover:text-pink-200")}
