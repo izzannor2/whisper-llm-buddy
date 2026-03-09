@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileTree } from '@/components/ide/FileTree';
+import { FileNameDialog, DeleteConfirmDialog } from '@/components/ide/FileDialogs';
 import { CodeEditor } from '@/components/ide/CodeEditor';
 import { PreviewPane } from '@/components/ide/PreviewPane';
 import { IDEChat } from '@/components/ide/IDEChat';
