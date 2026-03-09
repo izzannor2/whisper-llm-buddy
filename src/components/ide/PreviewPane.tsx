@@ -32,7 +32,7 @@ interface PreviewPaneProps {
   className?: string;
 }
 
-export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
+export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   previewUrl,
   previewBlobUrl,
   isServerRunning,
