@@ -63,6 +63,7 @@ interface SpeechRecognition extends EventTarget {
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
   function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice, selectedModel = 'llama-3.2-1b',
     onModelChange, modelLoaded = false, modeKey = 'chat', planningMode = false, onPlanningToggle,
+    webSearchEnabled = false, onWebSearchToggle,
   }, ref) {
     const settings = loadSettings();
     const [message, setMessage] = useState('');
