@@ -98,13 +98,52 @@ export default function ImproveWorkspace() {
   const [isPlanMode, setIsPlanMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [convId] = useState(() => generateId());
+  const [convId, setConvId] = useState(() => generateId());
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<Conversation[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { applyModeTheme('ai-improvement'); }, []);
+
+  // Load history on mount and after saves
+  const loadHistory = useCallback(async () => {
+    const all = await getAllConversations();
+    setHistory(all.filter(c => c.modeKey === 'ai-improvement'));
+  }, []);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  const handleResumeSession = useCallback((conv: Conversation) => {
+    const restored: ChatMsg[] = conv.messages
+      .filter(m => m.role !== 'system')
+      .map(m => ({ id: m.id, role: m.role as 'user' | 'assistant', content: m.content }));
+    setMessages(restored);
+    setConvId(conv.id);
+    setActiveConvId(conv.id);
+    setShowHistory(false);
+  }, []);
+
+  const handleDeleteSession = useCallback(async (id: string) => {
+    await deleteConversation(id);
+    if (activeConvId === id) {
+      setMessages([]);
+      setConvId(generateId());
+      setActiveConvId(null);
+    }
+    loadHistory();
+  }, [activeConvId, loadHistory]);
+
+  const handleNewSession = useCallback(() => {
+    setMessages([]);
+    setInput('');
+    setConvId(generateId());
+    setActiveConvId(null);
+    setStreamingContent('');
+  }, []);
 
   const whisperAvailable = isWhisperLoaded() || getDownloadedModels().length > 0;
 
