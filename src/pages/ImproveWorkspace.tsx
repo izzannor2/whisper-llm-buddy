@@ -180,8 +180,8 @@ export default function ImproveWorkspace() {
       const planPrefix = isPlanMode
         ? `You are in PLANNING MODE. Do NOT write code. Instead outline the improvement plan: what files to change, what approach to take, and what steps are needed. Only produce code when the user says "start building".\n\n`
         : '';
-      const systemPrompt = planPrefix + getModeSystemPrompt('ai-improvement') +
-        (selectedFile ? `\n\nThe user is currently viewing: ${selectedFile}` : '');
+      const filesContext = selectedFiles.size > 0 ? `\n\nThe user has selected these files for context: ${[...selectedFiles].join(', ')}` : '';
+      const systemPrompt = planPrefix + getModeSystemPrompt('ai-improvement') + filesContext;
       const chatMsgs = [
         { role: 'system' as const, content: systemPrompt },
         ...allMsgsBefore.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
