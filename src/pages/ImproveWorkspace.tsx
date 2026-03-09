@@ -196,6 +196,7 @@ export default function ImproveWorkspace() {
     setConvId(generateId());
     setActiveConvId(null);
     setStreamingContent('');
+    setAppliedFiles(new Set());
   }, []);
 
   const whisperAvailable = isWhisperLoaded() || getDownloadedModels().length > 0;
