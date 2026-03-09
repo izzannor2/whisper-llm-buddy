@@ -484,11 +484,13 @@ export default function ImproveWorkspace() {
 
             {/* Input area */}
             <div className="p-3 border-t shrink-0" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
-              {selectedFile && (
-                <div className="flex items-center gap-1 mb-2 px-1">
-                  <FileText className="w-3 h-3 text-pink-400/50" />
-                  <span className="text-[10px] text-pink-400/60 font-mono">{selectedFile}</span>
-                  <button onClick={() => setSelectedFile(null)} className="text-[10px] text-pink-500/40 hover:text-pink-400 ml-1">✕</button>
+              {selectedFiles.size > 0 && (
+                <div className="flex items-center gap-1 mb-2 px-1 flex-wrap">
+                  <FileText className="w-3 h-3 text-pink-400/50 shrink-0" />
+                  <span className="text-[10px] text-pink-400/60">{selectedFiles.size} file{selectedFiles.size > 1 ? 's' : ''} selected</span>
+                  <button onClick={() => setSelectedFiles(new Set())} className="text-[10px] text-pink-500/40 hover:text-pink-400 ml-1 flex items-center gap-0.5">
+                    <X className="w-3 h-3" /> clear
+                  </button>
                 </div>
               )}
               <div className="flex items-end gap-2">
