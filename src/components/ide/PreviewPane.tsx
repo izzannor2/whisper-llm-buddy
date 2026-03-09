@@ -67,7 +67,10 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
     onRefresh();
   };
 
-  const device = DEVICE_SIZES[deviceSize];
+  const baseDevice = DEVICE_SIZES[deviceSize];
+  const device = isLandscape && deviceSize !== 'desktop'
+    ? { width: baseDevice.height, height: baseDevice.width, label: `${baseDevice.height}×${baseDevice.width}` }
+    : baseDevice;
   const isResponsive = deviceSize !== 'desktop';
 
   return (
