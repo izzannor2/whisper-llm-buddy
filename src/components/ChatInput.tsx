@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2, Lightbulb } from 'lucide-react';
+import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2, Lightbulb, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -23,6 +23,8 @@ interface ChatInputProps {
   modeKey?: string;
   planningMode?: boolean;
   onPlanningToggle?: (active: boolean) => void;
+  webSearchEnabled?: boolean;
+  onWebSearchToggle?: (enabled: boolean) => void;
 }
 
 export interface ChatInputRef {
@@ -61,6 +63,7 @@ interface SpeechRecognition extends EventTarget {
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
   function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice, selectedModel = 'llama-3.2-1b',
     onModelChange, modelLoaded = false, modeKey = 'chat', planningMode = false, onPlanningToggle,
+    webSearchEnabled = false, onWebSearchToggle,
   }, ref) {
     const settings = loadSettings();
     const [message, setMessage] = useState('');
@@ -248,6 +251,19 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-accent hover:text-accent/80">
                 <Volume2 className="w-4 h-4" />
+              </Button>
+
+              <Button
+                variant={webSearchEnabled ? "default" : "ghost"}
+                size="sm"
+                className={cn("h-8 gap-1.5 text-xs font-medium",
+                  webSearchEnabled ? "bg-cyan-500/90 hover:bg-cyan-500 text-white" : "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                )}
+                onClick={() => onWebSearchToggle?.(!webSearchEnabled)}
+                title={webSearchEnabled ? "Web search ON — queries will search the web first" : "Toggle web search"}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                {webSearchEnabled ? 'Search On' : 'Search'}
               </Button>
 
               {showPlanButton && (

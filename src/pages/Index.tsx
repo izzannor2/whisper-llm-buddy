@@ -26,6 +26,7 @@ import {
 import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { onOpenClawEvent } from '@/lib/openclaw-bridge';
 import { cn } from '@/lib/utils';
+import { searchWeb, formatSearchContext } from '@/lib/web-search';
 
 export default function Index() {
   const navigate = useNavigate();
@@ -45,6 +46,7 @@ export default function Index() {
   const [modelLoaded, setModelLoaded] = useState(false);
   const [openClawOpen, setOpenClawOpen] = useState(false);
   const [planningMode, setPlanningMode] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
   const [killSwitchActive, setKillSwitchActive] = useState(false);
@@ -174,8 +176,22 @@ export default function Index() {
       const planningPrefix = isPlan
         ? `You are in PLANNING MODE. Do NOT write code yet. Instead:\n1. Ask clarifying questions about requirements\n2. Outline architecture and file structure\n3. List technologies and libraries to use\n4. Break the project into implementation steps\n5. Only when the user says "start building" should you switch to code generation.\n\n`
         : '';
-      if (modePrompt || planningPrefix) {
-        effectiveSettings.systemPrompt = planningPrefix + (modePrompt || '') + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
+
+      // Web search: search before sending to AI, inject results as context
+      let searchContext = '';
+      if (webSearchEnabled) {
+        try {
+          const searchResult = await searchWeb(content);
+          if (searchResult.success && searchResult.results && searchResult.results.length > 0) {
+            searchContext = '\n\n' + formatSearchContext(searchResult.results);
+          }
+        } catch (e) {
+          console.error('Web search failed, continuing without:', e);
+        }
+      }
+
+      if (modePrompt || planningPrefix || searchContext) {
+        effectiveSettings.systemPrompt = planningPrefix + (modePrompt || '') + searchContext + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
       }
 
       await sendChatMessage(chatMessages, effectiveSettings, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
@@ -362,6 +378,8 @@ export default function Index() {
           modeKey={currentModeKey}
           planningMode={planningMode}
           onPlanningToggle={setPlanningMode}
+          webSearchEnabled={webSearchEnabled}
+          onWebSearchToggle={setWebSearchEnabled}
         />
       </div>
 
