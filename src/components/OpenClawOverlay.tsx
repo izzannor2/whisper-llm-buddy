@@ -56,13 +56,24 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
   const [showLogs, setShowLogs] = useState(false);
   const [whisperReady, setWhisperReady] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const [showContext, setShowContext] = useState(false);
   const [projectSummary, setProjectSummary] = useState(getProjectSummary());
+  const [contextFiles, setContextFiles] = useState<ProjectFileDetail[]>([]);
+  const [expandedFile, setExpandedFile] = useState<string | null>(null);
 
   const handleRefreshContext = () => {
     const updated = getProjectSummary();
     setProjectSummary(updated);
+    setContextFiles(getProjectFilesDetail(300));
     toast.success(updated ? `Context refreshed: ${updated.fileCount} files from "${updated.name}"` : 'No project found');
     setShowActions(false);
+  };
+
+  const handleToggleContext = () => {
+    if (!showContext) {
+      setContextFiles(getProjectFilesDetail(300));
+    }
+    setShowContext(!showContext);
   };
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
