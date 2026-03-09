@@ -313,6 +313,7 @@ export default function ImproveWorkspace() {
   const handleApplySingle = useCallback(async (filePath: string, content: string) => {
     try {
       await writeFile(filePath, content);
+      setAppliedFiles(prev => new Set(prev).add(filePath));
       toast.success(`Applied to ${filePath}`);
     } catch (err: any) {
       toast.error(`Failed to write ${filePath}: ${err.message}`);
