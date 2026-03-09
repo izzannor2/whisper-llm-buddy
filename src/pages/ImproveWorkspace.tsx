@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown,
   RefreshCw, Loader2, Lightbulb, Mic, MicOff, Send, Wand2, Zap,
-  Shield, Palette, Bug, Gauge, ArrowDown,
+  Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2, PanelLeftClose, PanelLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -13,7 +13,7 @@ import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
 import { sendChatMessage, loadSettings } from '@/lib/chat-api';
 import { speak, isTTSSupported } from '@/lib/tts';
 import { generateId } from '@/lib/ide-store';
-import { saveConversation, Conversation } from '@/lib/db';
+import { saveConversation, getAllConversations, deleteConversation, Conversation } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import { isWhisperLoaded, getDownloadedModels, transcribeAudio, loadWhisperModel, getSelectedWhisperModel } from '@/lib/local-stt';
 import { toast } from 'sonner';
@@ -98,13 +98,52 @@ export default function ImproveWorkspace() {
   const [isPlanMode, setIsPlanMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [convId] = useState(() => generateId());
+  const [convId, setConvId] = useState(() => generateId());
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<Conversation[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { applyModeTheme('ai-improvement'); }, []);
+
+  // Load history on mount and after saves
+  const loadHistory = useCallback(async () => {
+    const all = await getAllConversations();
+    setHistory(all.filter(c => c.modeKey === 'ai-improvement'));
+  }, []);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  const handleResumeSession = useCallback((conv: Conversation) => {
+    const restored: ChatMsg[] = conv.messages
+      .filter(m => m.role !== 'system')
+      .map(m => ({ id: m.id, role: m.role as 'user' | 'assistant', content: m.content }));
+    setMessages(restored);
+    setConvId(conv.id);
+    setActiveConvId(conv.id);
+    setShowHistory(false);
+  }, []);
+
+  const handleDeleteSession = useCallback(async (id: string) => {
+    await deleteConversation(id);
+    if (activeConvId === id) {
+      setMessages([]);
+      setConvId(generateId());
+      setActiveConvId(null);
+    }
+    loadHistory();
+  }, [activeConvId, loadHistory]);
+
+  const handleNewSession = useCallback(() => {
+    setMessages([]);
+    setInput('');
+    setConvId(generateId());
+    setActiveConvId(null);
+    setStreamingContent('');
+  }, []);
 
   const whisperAvailable = isWhisperLoaded() || getDownloadedModels().length > 0;
 
@@ -150,6 +189,8 @@ export default function ImproveWorkspace() {
         createdAt: Date.now(), updatedAt: Date.now(), model: settings.model || 'local', modeKey: 'ai-improvement',
       };
       await saveConversation(conv);
+      setActiveConvId(convId);
+      loadHistory();
 
       if (settings.autoPlayTTS && isTTSSupported() && fullResponse) {
         speak(fullResponse, { voice: settings.ttsVoice, rate: settings.ttsRate });
@@ -264,7 +305,23 @@ export default function ImproveWorkspace() {
             <span className="text-[10px] text-pink-500/60 ml-2 hidden sm:inline">Talk to improve your app</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost" size="sm"
+            className={cn("h-7 text-xs gap-1", showHistory ? "bg-pink-500/20 text-pink-200" : "text-pink-400 hover:text-pink-200")}
+            onClick={() => setShowHistory(!showHistory)}
+          >
+            <History className="w-3 h-3" />
+            History
+          </Button>
+          <Button
+            variant="ghost" size="sm"
+            className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
+            onClick={handleNewSession}
+          >
+            <Plus className="w-3 h-3" />
+            New
+          </Button>
           <Button
             variant="ghost" size="sm"
             className={cn("h-7 text-xs gap-1", isPlanMode ? "bg-amber-500/20 text-amber-300" : "text-pink-400 hover:text-pink-200")}
@@ -278,6 +335,54 @@ export default function ImproveWorkspace() {
           </Button>
         </div>
       </header>
+
+      <div className="flex flex-1 min-h-0">
+        {/* History Sidebar */}
+        {showHistory && (
+          <div className="w-64 shrink-0 border-r flex flex-col" style={{
+            background: 'hsl(330, 25%, 7%)',
+            borderColor: 'hsl(330, 30%, 16%)',
+          }}>
+            <div className="h-9 flex items-center justify-between px-3 border-b shrink-0" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
+              <span className="text-xs font-semibold text-pink-300">Sessions</span>
+              <span className="text-[10px] text-pink-500/50">{history.length}</span>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="p-1.5 space-y-0.5">
+                {history.length === 0 ? (
+                  <p className="text-[11px] text-pink-500/40 text-center py-6">No previous sessions</p>
+                ) : (
+                  history.map(conv => (
+                    <div
+                      key={conv.id}
+                      className={cn(
+                        "group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors",
+                        activeConvId === conv.id
+                          ? "bg-pink-500/15 text-pink-200"
+                          : "text-pink-300/60 hover:bg-pink-500/8 hover:text-pink-200"
+                      )}
+                      onClick={() => handleResumeSession(conv)}
+                    >
+                      <Sparkles className="w-3 h-3 shrink-0 text-pink-400/40" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs truncate">{conv.title.replace('Improve: ', '')}</p>
+                        <p className="text-[10px] text-pink-500/40">
+                          {new Date(conv.updatedAt).toLocaleDateString()} · {conv.messages.length} msgs
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteSession(conv.id); }}
+                        className="opacity-0 group-hover:opacity-100 h-5 w-5 flex items-center justify-center rounded hover:bg-pink-500/20 transition-opacity"
+                      >
+                        <Trash2 className="w-3 h-3 text-pink-400/60" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
 
       <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0">
         {/* Chat Panel */}
@@ -435,6 +540,7 @@ export default function ImproveWorkspace() {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      </div>
     </div>
   );
 }
