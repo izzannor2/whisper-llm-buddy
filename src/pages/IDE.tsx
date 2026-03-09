@@ -126,6 +126,20 @@ export default function IDE() {
     else setRightPanelTab('preview');
   }, [settings.mode]);
 
+  // Auto-generate preview on project load and on every file change (debounced)
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!project || project.files.length === 0) return;
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(() => {
+      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+      const html = buildPreviewHTML(project.files);
+      const url = createPreviewBlobUrl(html);
+      setPreviewBlobUrl(url);
+    }, 600);
+    return () => { if (previewTimerRef.current) clearTimeout(previewTimerRef.current); };
+  }, [project?.updatedAt]);
+
   const handleSelectFile = useCallback((file: ProjectFile) => {
     if (!file.isDirectory) {
       setSelectedFile(file);
