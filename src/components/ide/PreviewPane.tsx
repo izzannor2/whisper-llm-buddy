@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { RefreshCw, ExternalLink, Terminal, X, Play, Square, Maximize2, Minimize2 } from 'lucide-react';
+import { RefreshCw, ExternalLink, Terminal, Play, Square, Maximize2, Minimize2, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface PreviewPaneProps {
   previewUrl?: string;
+  /** Blob URL for inline project preview (no dev server needed) */
+  previewBlobUrl?: string;
   isServerRunning: boolean;
   logs: string[];
   errors: string[];
@@ -14,11 +16,14 @@ interface PreviewPaneProps {
   onStartServer: () => void;
   onStopServer: () => void;
   onOpenExternal?: () => void;
+  /** Called when user clicks "Generate Preview" */
+  onGeneratePreview?: () => void;
   className?: string;
 }
 
 export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
   previewUrl,
+  previewBlobUrl,
   isServerRunning,
   logs,
   errors,
@@ -26,12 +31,16 @@ export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
   onStartServer,
   onStopServer,
   onOpenExternal,
+  onGeneratePreview,
   className,
 }, ref) => {
   const [activeTab, setActiveTab] = useState<'preview' | 'console'>('preview');
   const [isMaximized, setIsMaximized] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
+
+  // The actual URL to show — prefer live server, then blob preview
+  const displayUrl = isServerRunning && previewUrl ? previewUrl : previewBlobUrl;
 
   useEffect(() => {
     if (consoleRef.current) {
@@ -40,8 +49,9 @@ export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
   }, [logs, errors]);
 
   const handleRefresh = () => {
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src;
+    if (iframeRef.current && displayUrl) {
+      // For blob URLs, reassign src
+      iframeRef.current.src = displayUrl;
     }
     onRefresh();
   };
@@ -53,9 +63,7 @@ export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
         <div className="flex items-center gap-2">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'preview' | 'console')}>
             <TabsList className="h-7">
-              <TabsTrigger value="preview" className="text-xs px-2 py-1">
-                Preview
-              </TabsTrigger>
+              <TabsTrigger value="preview" className="text-xs px-2 py-1">Preview</TabsTrigger>
               <TabsTrigger value="console" className="text-xs px-2 py-1">
                 Console
                 {errors.length > 0 && (
@@ -68,34 +76,30 @@ export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
           </Tabs>
         </div>
         <div className="flex items-center gap-1">
+          {onGeneratePreview && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onGeneratePreview} title="Generate Preview">
+              <Eye className="h-4 w-4 text-primary" />
+            </Button>
+          )}
+          {displayUrl && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRefresh} title="Refresh">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          )}
           {isServerRunning ? (
-            <>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRefresh}>
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStopServer}>
-                <Square className="h-4 w-4 text-destructive" />
-              </Button>
-            </>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStopServer}>
+              <Square className="h-4 w-4 text-destructive" />
+            </Button>
           ) : (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStartServer}>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStartServer} title="Start Dev Server">
               <Play className="h-4 w-4 text-green-500" />
             </Button>
           )}
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onOpenExternal}>
             <ExternalLink className="h-4 w-4" />
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7"
-            onClick={() => setIsMaximized(!isMaximized)}
-          >
-            {isMaximized ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsMaximized(!isMaximized)}>
+            {isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
         </div>
       </div>
@@ -104,10 +108,10 @@ export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
       <div className="flex-1 min-h-0">
         {activeTab === 'preview' ? (
           <div className="h-full bg-white">
-            {isServerRunning && previewUrl ? (
+            {displayUrl ? (
               <iframe
                 ref={iframeRef}
-                src={previewUrl}
+                src={displayUrl}
                 className="w-full h-full border-0"
                 title="Preview"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
@@ -116,28 +120,29 @@ export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
               <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-muted/40 to-muted/20 text-muted-foreground p-6">
                 <div className="text-center max-w-md">
                   <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary/10 flex items-center justify-center">
-                    <Terminal className="h-10 w-10 text-primary/60" />
+                    <Eye className="h-10 w-10 text-primary/60" />
                   </div>
                   <h3 className="text-xl font-semibold mb-2 text-foreground">Preview Your App</h3>
-                  <p className="text-sm mb-6 leading-relaxed">
-                    Start the dev server to see a live preview of your application. The preview will automatically reload when you make changes.
+                  <p className="text-sm mb-6 leading-relaxed text-muted-foreground">
+                    Ask the AI to build something, then click the <strong>eye icon</strong> above to generate an instant preview — no dev server needed.
                   </p>
-                  <Button 
-                    variant="default" 
-                    size="lg"
-                    onClick={onStartServer}
-                    className="gap-2"
-                  >
-                    <Play className="h-4 w-4" />
-                    Start Dev Server
-                  </Button>
+                  <div className="flex flex-col gap-3">
+                    {onGeneratePreview && (
+                      <Button variant="default" size="lg" onClick={onGeneratePreview} className="gap-2">
+                        <Eye className="h-4 w-4" />
+                        Generate Preview
+                      </Button>
+                    )}
+                    <Button variant="outline" size="lg" onClick={onStartServer} className="gap-2">
+                      <Play className="h-4 w-4" />
+                      Start Dev Server
+                    </Button>
+                  </div>
                   <div className="mt-6 p-4 rounded-lg bg-muted/50 text-left">
-                    <p className="text-xs font-medium mb-2 text-foreground/80">💡 How it works:</p>
+                    <p className="text-xs font-medium mb-2 text-foreground/80">💡 Two ways to preview:</p>
                     <ul className="text-xs space-y-1 text-muted-foreground">
-                      <li>1. Download the LocalDev Agent script</li>
-                      <li>2. Run it in your project folder</li>
-                      <li>3. Click "Start Dev Server" above</li>
-                      <li>4. Your app appears here live!</li>
+                      <li><strong>Instant Preview</strong> — Renders your code right here</li>
+                      <li><strong>Dev Server</strong> — Full live reload via LocalDev Agent</li>
                     </ul>
                   </div>
                 </div>
@@ -146,10 +151,7 @@ export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
           </div>
         ) : (
           <ScrollArea className="h-full">
-            <div
-              ref={consoleRef}
-              className="p-3 font-mono text-xs space-y-1"
-            >
+            <div ref={consoleRef} className="p-3 font-mono text-xs space-y-1">
               {logs.length === 0 && errors.length === 0 ? (
                 <div className="text-muted-foreground">No console output yet...</div>
               ) : (
@@ -174,15 +176,10 @@ export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
       {/* Status bar */}
       <div className="flex items-center justify-between px-3 py-1 border-t border-border text-xs text-muted-foreground bg-card">
         <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              'w-2 h-2 rounded-full',
-              isServerRunning ? 'bg-green-500' : 'bg-muted'
-            )}
-          />
-          <span>{isServerRunning ? 'Server running' : 'Server stopped'}</span>
+          <span className={cn('w-2 h-2 rounded-full', displayUrl ? 'bg-green-500' : 'bg-muted')} />
+          <span>{isServerRunning ? 'Server running' : previewBlobUrl ? 'Instant preview' : 'No preview'}</span>
         </div>
-        {previewUrl && <span className="font-mono">{previewUrl}</span>}
+        {isServerRunning && previewUrl && <span className="font-mono">{previewUrl}</span>}
       </div>
     </div>
   );
