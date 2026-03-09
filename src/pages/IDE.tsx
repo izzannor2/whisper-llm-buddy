@@ -444,6 +444,21 @@ export default function IDE() {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      <FileNameDialog
+        open={fileDialog.open}
+        onOpenChange={(open) => setFileDialog(prev => ({ ...prev, open }))}
+        onSubmit={handleCreateFileSubmit}
+        title={fileDialog.isDirectory ? 'New Folder' : 'New File'}
+        description={`Create a new ${fileDialog.isDirectory ? 'folder' : 'file'} in ${fileDialog.parentPath}`}
+        icon={fileDialog.isDirectory ? 'folder' : 'file'}
+      />
+      <DeleteConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        onConfirm={handleDeleteFileConfirm}
+        path={deleteDialog.path}
+      />
     </div>
   );
 }
