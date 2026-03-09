@@ -205,7 +205,7 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
     if (!lastResponse) { toast.info('No response to send'); return; }
     const codeBlocks = parseCodeBlocks(lastResponse);
     if (codeBlocks.length > 0) {
-      codeBlocks.forEach(block => applyCodeToIDE(block.code, block.filePath));
+      codeBlocks.forEach(block => applyCodeToIDE(block.content, block.filePath));
       toast.success(`Sent ${codeBlocks.length} file(s) to App Builder`);
     } else {
       sendToIDE(lastResponse);
