@@ -540,6 +540,7 @@ export default function ImproveWorkspace() {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      </div>
     </div>
   );
 }
