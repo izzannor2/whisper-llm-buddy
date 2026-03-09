@@ -392,7 +392,7 @@ export default function IDE() {
         <ResizablePanel defaultSize={45} minSize={30}>
           <ResizablePanelGroup direction="horizontal">
             <ResizablePanel defaultSize={25} minSize={15} maxSize={35}>
-              <FileTree files={project?.files || []} selectedFile={selectedFile?.path} onSelectFile={handleSelectFile} />
+              <FileTree files={project?.files || []} selectedFile={selectedFile?.path} onSelectFile={handleSelectFile} onCreateFile={handleCreateFile} onDeleteFile={handleDeleteFile} onRenameFile={handleRenameFile} />
             </ResizablePanel>
             <ResizableHandle />
             <ResizablePanel defaultSize={75}>
