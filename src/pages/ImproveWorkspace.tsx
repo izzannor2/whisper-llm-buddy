@@ -120,6 +120,43 @@ export default function ImproveWorkspace() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [isApplying, setIsApplying] = useState(false);
+
+  // Extract all code blocks with file paths from assistant messages
+  const allCodeBlocks = useMemo(() => {
+    const blocks: ParsedCodeBlock[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'assistant') {
+        blocks.push(...parseCodeBlocks(msg.content));
+      }
+    }
+    return blocks;
+  }, [messages]);
+
+  const handleApplyAll = useCallback(async () => {
+    if (allCodeBlocks.length === 0) {
+      toast.info('No code blocks with file paths found to apply');
+      return;
+    }
+    setIsApplying(true);
+    let applied = 0;
+    let failed = 0;
+    for (const block of allCodeBlocks) {
+      try {
+        await writeFile(block.filePath, block.content);
+        applied++;
+      } catch (err: any) {
+        failed++;
+        console.error(`Failed to write ${block.filePath}:`, err);
+      }
+    }
+    setIsApplying(false);
+    if (failed === 0) {
+      toast.success(`Applied ${applied} file${applied > 1 ? 's' : ''} successfully`);
+    } else {
+      toast.warning(`Applied ${applied}, failed ${failed}. Make sure a project folder is open.`);
+    }
+  }, [allCodeBlocks]);
 
   useEffect(() => { applyModeTheme('ai-improvement'); }, []);
 
