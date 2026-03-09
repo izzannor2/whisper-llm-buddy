@@ -18,33 +18,47 @@ export interface ParsedCodeBlock {
  */
 export function parseCodeBlocks(response: string): ParsedCodeBlock[] {
   const blocks: ParsedCodeBlock[] = [];
-  
-  // Match ```lang:filepath or ```lang filepath patterns
-  const codeBlockRegex = /```(\w+)(?::|\s+)(\/?\S+\.\w+)\s*\n([\s\S]*?)```/g;
   let match;
   
-  while ((match = codeBlockRegex.exec(response)) !== null) {
+  // 1. Match ```lang:/filepath or ```lang /filepath patterns (preferred format)
+  const primaryRegex = /```(\w+)(?::|\s+)(\/?\S+\.\w+)\s*\n([\s\S]*?)```/g;
+  while ((match = primaryRegex.exec(response)) !== null) {
     const language = match[1];
     let filePath = match[2].trim();
     const content = match[3].trimEnd();
-    
-    // Normalize path
     if (!filePath.startsWith('/')) filePath = '/' + filePath;
-    
     blocks.push({ filePath, content, language });
   }
 
-  // Also try: filepath comment inside code block
+  // 2. Match when the "language" IS a file path: ```src/components/Counter.tsx or ```/src/components/Counter.tsx
   if (blocks.length === 0) {
-    const altRegex = /```(\w+)\s*\n\/\/\s*(?:filepath|file|path):\s*(\S+)\n([\s\S]*?)```/g;
-    while ((match = altRegex.exec(response)) !== null) {
+    const pathAsLangRegex = /```(\/?\S+\.(\w+))\s*\n([\s\S]*?)```/g;
+    while ((match = pathAsLangRegex.exec(response)) !== null) {
+      let filePath = match[1].trim();
+      if (!filePath.startsWith('/')) filePath = '/' + filePath;
+      const ext = match[2];
+      const langMap: Record<string, string> = { tsx: 'tsx', ts: 'typescript', jsx: 'jsx', js: 'javascript', css: 'css', json: 'json', html: 'html', md: 'markdown', py: 'python' };
+      blocks.push({ filePath, content: match[3].trimEnd(), language: langMap[ext] || ext });
+    }
+  }
+
+  // 3. Match filepath comment inside code block (// filepath: ..., // file: ..., // path: ...)
+  if (blocks.length === 0) {
+    const commentRegex = /```(\w+)\s*\n\/\/\s*(?:filepath|file|path):\s*(\S+)\n([\s\S]*?)```/g;
+    while ((match = commentRegex.exec(response)) !== null) {
       let filePath = match[2].trim();
       if (!filePath.startsWith('/')) filePath = '/' + filePath;
-      blocks.push({
-        filePath,
-        content: match[3].trimEnd(),
-        language: match[1],
-      });
+      blocks.push({ filePath, content: match[3].trimEnd(), language: match[1] });
+    }
+  }
+
+  // 4. Match bare path comment at start of code block (// src/Counter.tsx)
+  if (blocks.length === 0) {
+    const barePathRegex = /```(\w+)\s*\n\/\/\s+((?:src\/|\/)\S+\.\w+)\s*\n([\s\S]*?)```/g;
+    while ((match = barePathRegex.exec(response)) !== null) {
+      let filePath = match[2].trim();
+      if (!filePath.startsWith('/')) filePath = '/' + filePath;
+      blocks.push({ filePath, content: match[3].trimEnd(), language: match[1] });
     }
   }
 
