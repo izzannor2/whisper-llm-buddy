@@ -333,18 +333,29 @@ export default function ImproveWorkspace() {
             if (match) {
               // Try to find a matching parsed block for this code
               const matchedBlock = parsed.find(b => b.content.trim() === codeStr.trim());
+              const isApplied = matchedBlock ? appliedFiles.has(matchedBlock.filePath) : false;
               return (
-                <div className="relative">
+                <div className={cn("relative rounded-lg", isApplied && "ring-1 ring-emerald-500/30")}>
+                  {isApplied && (
+                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500/60 via-emerald-400/40 to-emerald-500/60 rounded-t-lg z-10" />
+                  )}
                   <CodeBlock code={codeStr} language={match[1]} />
                   {matchedBlock && (
                     <button
-                      onClick={() => handleApplySingle(matchedBlock.filePath, matchedBlock.content)}
-                      className="absolute top-2 right-24 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono
-                        bg-emerald-500/15 text-emerald-300 border border-emerald-500/25
-                        hover:bg-emerald-500/25 hover:text-emerald-200 transition-colors z-10"
+                      onClick={() => !isApplied && handleApplySingle(matchedBlock.filePath, matchedBlock.content)}
+                      disabled={isApplied}
+                      className={cn(
+                        "absolute top-2 right-24 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono transition-colors z-10",
+                        isApplied
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default"
+                          : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 hover:bg-emerald-500/25 hover:text-emerald-200"
+                      )}
                     >
-                      <FileCode className="w-3 h-3" />
-                      Apply → {matchedBlock.filePath.split('/').pop()}
+                      {isApplied ? (
+                        <><Check className="w-3 h-3" /> Applied</>
+                      ) : (
+                        <><FileCode className="w-3 h-3" /> Apply → {matchedBlock.filePath.split('/').pop()}</>
+                      )}
                     </button>
                   )}
                 </div>
