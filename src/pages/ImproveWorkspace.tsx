@@ -223,7 +223,7 @@ export default function ImproveWorkspace() {
       const settings = loadSettings();
       const planPrefix = isPlanMode
         ? `You are in PLANNING MODE. Do NOT write code. Instead outline the improvement plan: what files to change, what approach to take, and what steps are needed. Only produce code when the user says "start building".\n\n`
-        : '';
+        : `IMPORTANT: When outputting code changes, always use the format \`\`\`language:/path/to/file.ext with the COMPLETE file contents so the user can apply changes directly.\n\n`;
       const filesContext = selectedFiles.size > 0 ? `\n\nThe user has selected these files for context: ${[...selectedFiles].join(', ')}` : '';
       const systemPrompt = planPrefix + getModeSystemPrompt('ai-improvement') + filesContext;
       const chatMsgs = [
