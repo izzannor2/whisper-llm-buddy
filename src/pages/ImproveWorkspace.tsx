@@ -54,12 +54,12 @@ const PROJECT_TREE: FileNode[] = [
 ];
 
 const QUICK_SUGGESTIONS = [
-  { icon: Bug, label: 'Fix bugs', prompt: 'Scan the codebase for potential bugs and fix them. Focus on runtime errors, edge cases, and null checks.' },
-  { icon: Gauge, label: 'Optimize performance', prompt: 'Analyze the app for performance bottlenecks and suggest optimizations. Focus on rendering, bundle size, and memory leaks.' },
-  { icon: Shield, label: 'Improve security', prompt: 'Review the codebase for security vulnerabilities and suggest fixes. Check for XSS, injection, and auth issues.' },
-  { icon: Palette, label: 'Polish UI/UX', prompt: 'Review the UI for usability improvements. Focus on accessibility, responsive design, and visual consistency.' },
-  { icon: Zap, label: 'Add features', prompt: 'What are the most impactful features we could add next? Consider user experience, technical feasibility, and value.' },
-  { icon: Wand2, label: 'Refactor code', prompt: 'Identify areas of the codebase that need refactoring. Focus on code duplication, complexity, and maintainability.' },
+  { icon: Bug, label: 'Fix bugs', prompt: 'Scan the selected files for potential bugs and fix them. Focus on runtime errors, edge cases, and null checks. For every fix, output the COMPLETE corrected file using the format ```language:/path/to/file.ext so I can apply them.' },
+  { icon: Gauge, label: 'Optimize', prompt: 'Analyze the selected files for performance bottlenecks and optimize them. Focus on rendering, bundle size, and memory leaks. Output the COMPLETE corrected file for each change using ```language:/path/to/file.ext format.' },
+  { icon: Shield, label: 'Security', prompt: 'Review the selected files for security vulnerabilities and fix them. Check for XSS, injection, and auth issues. Output the COMPLETE corrected file for each fix using ```language:/path/to/file.ext format.' },
+  { icon: Palette, label: 'Polish UI', prompt: 'Review the selected files for UI/UX improvements. Focus on accessibility, responsive design, and visual consistency. Output the COMPLETE corrected file using ```language:/path/to/file.ext format.' },
+  { icon: Zap, label: 'Add features', prompt: 'What are the most impactful features we could add? Output complete file contents using ```language:/path/to/file.ext format for each new or modified file.' },
+  { icon: Wand2, label: 'Refactor', prompt: 'Identify areas in the selected files that need refactoring. Focus on code duplication, complexity, and maintainability. Output the COMPLETE refactored file for each change using ```language:/path/to/file.ext format.' },
 ];
 
 function FileTreeNode({ node, depth = 0, selectedFiles, onToggle }: {
@@ -223,7 +223,7 @@ export default function ImproveWorkspace() {
       const settings = loadSettings();
       const planPrefix = isPlanMode
         ? `You are in PLANNING MODE. Do NOT write code. Instead outline the improvement plan: what files to change, what approach to take, and what steps are needed. Only produce code when the user says "start building".\n\n`
-        : '';
+        : `IMPORTANT: When outputting code changes, always use the format \`\`\`language:/path/to/file.ext with the COMPLETE file contents so the user can apply changes directly.\n\n`;
       const filesContext = selectedFiles.size > 0 ? `\n\nThe user has selected these files for context: ${[...selectedFiles].join(', ')}` : '';
       const systemPrompt = planPrefix + getModeSystemPrompt('ai-improvement') + filesContext;
       const chatMsgs = [
