@@ -24,6 +24,7 @@ import {
   ChatSettings, loadSettings, saveSettings, sendChatMessage,
 } from '@/lib/chat-api';
 import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
+import { onOpenClawEvent } from '@/lib/openclaw-bridge';
 import { cn } from '@/lib/utils';
 
 export default function Index() {
