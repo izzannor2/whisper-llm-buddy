@@ -5,6 +5,7 @@ import { executeCommand, getAgentStatus, checkAgentStatus } from './local-backen
 import { readFile, writeFile, listFiles, getCurrentDirectory, fileExists } from './file-system';
 import { logAction, recordHabit, getHabitSuggestions, createBackup, getActionLogs } from './openclaw-store';
 import { getIDESettings } from './ide-store';
+import { getProjectContext } from './project-context';
 
 export interface OpenClawConfig {
   model: string;
@@ -236,7 +237,7 @@ function buildSystemPrompt(): string {
   const ideSettings = getIDESettings();
   const chatSettings = loadSettings();
   const currentDir = getCurrentDirectory();
-  
+  const projectCtx = getProjectContext();
   return `You are OpenClaw, an expert AI coding assistant running via ${chatSettings.backend} backend.
 
 ## Capabilities
@@ -267,6 +268,9 @@ IMPORTANT: When writing code, ALWAYS use this exact format so it can be parsed a
 - Backend: ${chatSettings.backend}
 - Actions logged: ${state.totalActions}
 
+${projectCtx ? projectCtx : '- No App Builder project loaded yet.'}
+
+When modifying existing files, reference the exact file paths from the project above.
 Keep responses focused and actionable. Always output complete, working code files.`;
 }
 

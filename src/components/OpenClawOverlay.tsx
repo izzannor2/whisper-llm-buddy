@@ -16,6 +16,7 @@ import { sendToIDE, sendToChat, navigateTo, applyCodeToIDE } from '@/lib/opencla
 import { parseCodeBlocks } from '@/lib/code-parser';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
+import { getProjectSummary } from '@/lib/project-context';
 
 interface OpenClawConfig {
   model?: string;
@@ -55,6 +56,7 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
   const [showLogs, setShowLogs] = useState(false);
   const [whisperReady, setWhisperReady] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const projectSummary = getProjectSummary();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -292,6 +294,11 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
           <Badge variant="outline" className={cn("text-xs", state.isActive ? "text-green-500 border-green-500/50" : "text-yellow-500 border-yellow-500/50")}>
             {state.isActive ? 'Active' : 'Offline'}
           </Badge>
+          {projectSummary && (
+            <Badge variant="outline" className="text-xs text-blue-400 border-blue-400/50" title={`Project: ${projectSummary.name} (${projectSummary.fileCount} files)`}>
+              {projectSummary.fileCount} files
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-1 no-drag">
           <Button variant="ghost" size="icon" className={cn("h-7 w-7", showActions && "bg-primary/20")} onClick={() => setShowActions(!showActions)} title="Quick Actions">
