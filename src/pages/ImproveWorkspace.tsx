@@ -121,6 +121,7 @@ export default function ImproveWorkspace() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [isApplying, setIsApplying] = useState(false);
+  const [appliedFiles, setAppliedFiles] = useState<Set<string>>(new Set());
 
   // Extract all code blocks with file paths from assistant messages
   const allCodeBlocks = useMemo(() => {
