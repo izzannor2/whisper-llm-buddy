@@ -33,14 +33,14 @@ const categoryIcons: Record<SystemCommand['category'], React.ReactNode> = {
   cleanup: <Trash2 className="h-4 w-4" />,
 };
 
-export function SystemCommandPanel({
+export const SystemCommandPanel = React.forwardRef<HTMLDivElement, SystemCommandPanelProps>(({
   commands,
   onApprove,
   onReject,
   onExecute,
   onClear,
   className,
-}: SystemCommandPanelProps) {
+}, ref) => {
   const [confirmCommand, setConfirmCommand] = useState<SystemCommand | null>(null);
 
   const pendingCommands = commands.filter(c => c.status === 'pending');
