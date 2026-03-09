@@ -237,7 +237,7 @@ function buildSystemPrompt(): string {
   const ideSettings = getIDESettings();
   const chatSettings = loadSettings();
   const currentDir = getCurrentDirectory();
-  
+  const projectCtx = getProjectContext();
   return `You are OpenClaw, an expert AI coding assistant running via ${chatSettings.backend} backend.
 
 ## Capabilities
