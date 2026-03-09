@@ -56,6 +56,7 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
   const [showLogs, setShowLogs] = useState(false);
   const [whisperReady, setWhisperReady] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const projectSummary = getProjectSummary();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
