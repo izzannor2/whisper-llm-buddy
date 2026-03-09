@@ -110,6 +110,17 @@ export default function IDE() {
     if (selectedFile?.path === path) setSelectedFile(prev => prev ? { ...prev, content, isModified: true } : null);
   }, [project, selectedFile]);
 
+  const findFileByPath = (files: ProjectFile[], path: string): ProjectFile | null => {
+    for (const f of files) {
+      if (f.path === path && !f.isDirectory) return f;
+      if (f.isDirectory && f.children) {
+        const found = findFileByPath(f.children, path);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
   const handleSendMessage = useCallback(async (content: string, isPlan?: boolean) => {
     const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
     setMessages(prev => [...prev, userMessage]);
