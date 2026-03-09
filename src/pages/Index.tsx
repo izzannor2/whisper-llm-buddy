@@ -46,6 +46,7 @@ export default function Index() {
   const [modelLoaded, setModelLoaded] = useState(false);
   const [openClawOpen, setOpenClawOpen] = useState(false);
   const [planningMode, setPlanningMode] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
   const [killSwitchActive, setKillSwitchActive] = useState(false);
