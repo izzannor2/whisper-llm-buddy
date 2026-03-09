@@ -17,7 +17,7 @@ interface PreviewPaneProps {
   className?: string;
 }
 
-export function PreviewPane({
+export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
   previewUrl,
   isServerRunning,
   logs,
@@ -27,7 +27,7 @@ export function PreviewPane({
   onStopServer,
   onOpenExternal,
   className,
-}: PreviewPaneProps) {
+}, ref) => {
   const [activeTab, setActiveTab] = useState<'preview' | 'console'>('preview');
   const [isMaximized, setIsMaximized] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
