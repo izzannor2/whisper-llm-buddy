@@ -107,7 +107,7 @@ export function DiffPreview({ open, onOpenChange, filePath, newContent, onApply 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 gap-0" style={{
+      <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[85vh] h-[80vh] flex flex-col p-0 gap-0" style={{
         background: 'hsl(330, 20%, 7%)',
         borderColor: 'hsl(330, 30%, 18%)',
       }}>

@@ -338,28 +338,30 @@ export default function ImproveWorkspace() {
               const matchedBlock = parsed.find(b => b.content.trim() === codeStr.trim());
               const isApplied = matchedBlock ? appliedFiles.has(matchedBlock.filePath) : false;
               return (
-                <div className={cn("relative rounded-lg", isApplied && "ring-1 ring-emerald-500/30")}>
+                <div className={cn("rounded-lg overflow-hidden", isApplied && "ring-1 ring-emerald-500/30")}>
                   {isApplied && (
-                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500/60 via-emerald-400/40 to-emerald-500/60 rounded-t-lg z-10" />
+                    <div className="h-0.5 bg-gradient-to-r from-emerald-500/60 via-emerald-400/40 to-emerald-500/60" />
                   )}
                   <CodeBlock code={codeStr} language={match[1]} />
                   {matchedBlock && (
-                    <button
-                      onClick={() => !isApplied && setDiffPreview({ filePath: matchedBlock.filePath, content: matchedBlock.content })}
-                      disabled={isApplied}
-                      className={cn(
-                        "absolute top-2 right-24 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono transition-colors z-10",
-                        isApplied
-                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default"
-                          : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 hover:bg-emerald-500/25 hover:text-emerald-200"
-                      )}
-                    >
-                      {isApplied ? (
-                        <><Check className="w-3 h-3" /> Applied</>
-                      ) : (
-                        <><FileCode className="w-3 h-3" /> Apply → {matchedBlock.filePath.split('/').pop()}</>
-                      )}
-                    </button>
+                    <div className="flex items-center justify-end px-3 py-1.5 border-t border-border/50" style={{ background: 'hsl(330, 20%, 8%)' }}>
+                      <button
+                        onClick={() => !isApplied && setDiffPreview({ filePath: matchedBlock.filePath, content: matchedBlock.content })}
+                        disabled={isApplied}
+                        className={cn(
+                          "flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-mono transition-colors",
+                          isApplied
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default"
+                            : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 hover:bg-emerald-500/25 hover:text-emerald-200"
+                        )}
+                      >
+                        {isApplied ? (
+                          <><Check className="w-3 h-3" /> Applied</>
+                        ) : (
+                          <><FileCode className="w-3 h-3" /> Apply → {matchedBlock.filePath.split('/').pop()}</>
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
               );
