@@ -213,7 +213,7 @@ export default function ImproveWorkspace() {
       setIsLoading(false);
       setStreamingContent('');
     }
-  }, [input, messages, isLoading, selectedFile, isPlanMode, convId]);
+  }, [input, messages, isLoading, selectedFiles, isPlanMode, convId]);
 
   const toggleRecording = useCallback(async () => {
     // If already recording, stop it
