@@ -4,6 +4,7 @@ import {
   Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown,
   RefreshCw, Loader2, Lightbulb, Mic, MicOff, Send, Wand2, Zap,
   Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2, PanelLeftClose, PanelLeft,
+  CheckSquare, Square, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -58,8 +59,8 @@ const QUICK_SUGGESTIONS = [
   { icon: Wand2, label: 'Refactor code', prompt: 'Identify areas of the codebase that need refactoring. Focus on code duplication, complexity, and maintainability.' },
 ];
 
-function FileTreeNode({ node, depth = 0, selectedPath, onSelect }: {
-  node: FileNode; depth?: number; selectedPath: string | null; onSelect: (path: string) => void;
+function FileTreeNode({ node, depth = 0, selectedFiles, onToggle }: {
+  node: FileNode; depth?: number; selectedFiles: Set<string>; onToggle: (path: string) => void;
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
   if (node.type === 'directory') {
@@ -71,15 +72,19 @@ function FileTreeNode({ node, depth = 0, selectedPath, onSelect }: {
           <FolderOpen className="w-3 h-3 text-pink-400/70" /><span>{node.name}</span>
         </button>
         {expanded && node.children?.map(child => (
-          <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
+          <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedFiles={selectedFiles} onToggle={onToggle} />
         ))}
       </div>
     );
   }
+  const isSelected = selectedFiles.has(node.path);
   return (
     <button className={cn("flex items-center gap-1 w-full px-2 py-1 text-xs hover:bg-pink-500/10",
-      selectedPath === node.path ? 'bg-pink-500/15 text-pink-200' : 'text-pink-200/60'
-    )} style={{ paddingLeft: `${depth * 12 + 8}px` }} onClick={() => onSelect(node.path)}>
+      isSelected ? 'bg-pink-500/15 text-pink-200' : 'text-pink-200/60'
+    )} style={{ paddingLeft: `${depth * 12 + 8}px` }} onClick={() => onToggle(node.path)}>
+      {isSelected
+        ? <CheckSquare className="w-3 h-3 text-pink-400 shrink-0" />
+        : <Square className="w-3 h-3 text-pink-500/30 shrink-0" />}
       <FileText className="w-3 h-3 text-pink-400/50" /><span>{node.name}</span>
     </button>
   );
@@ -93,7 +98,14 @@ export default function ImproveWorkspace() {
   const [messages, setMessages] = useState<ChatMsg[]>(planContext || []);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const toggleFile = useCallback((path: string) => {
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  }, []);
   const [streamingContent, setStreamingContent] = useState('');
   const [isPlanMode, setIsPlanMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -168,8 +180,8 @@ export default function ImproveWorkspace() {
       const planPrefix = isPlanMode
         ? `You are in PLANNING MODE. Do NOT write code. Instead outline the improvement plan: what files to change, what approach to take, and what steps are needed. Only produce code when the user says "start building".\n\n`
         : '';
-      const systemPrompt = planPrefix + getModeSystemPrompt('ai-improvement') +
-        (selectedFile ? `\n\nThe user is currently viewing: ${selectedFile}` : '');
+      const filesContext = selectedFiles.size > 0 ? `\n\nThe user has selected these files for context: ${[...selectedFiles].join(', ')}` : '';
+      const systemPrompt = planPrefix + getModeSystemPrompt('ai-improvement') + filesContext;
       const chatMsgs = [
         { role: 'system' as const, content: systemPrompt },
         ...allMsgsBefore.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
@@ -201,7 +213,7 @@ export default function ImproveWorkspace() {
       setIsLoading(false);
       setStreamingContent('');
     }
-  }, [input, messages, isLoading, selectedFile, isPlanMode, convId]);
+  }, [input, messages, isLoading, selectedFiles, isPlanMode, convId]);
 
   const toggleRecording = useCallback(async () => {
     // If already recording, stop it
@@ -472,11 +484,13 @@ export default function ImproveWorkspace() {
 
             {/* Input area */}
             <div className="p-3 border-t shrink-0" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
-              {selectedFile && (
-                <div className="flex items-center gap-1 mb-2 px-1">
-                  <FileText className="w-3 h-3 text-pink-400/50" />
-                  <span className="text-[10px] text-pink-400/60 font-mono">{selectedFile}</span>
-                  <button onClick={() => setSelectedFile(null)} className="text-[10px] text-pink-500/40 hover:text-pink-400 ml-1">✕</button>
+              {selectedFiles.size > 0 && (
+                <div className="flex items-center gap-1 mb-2 px-1 flex-wrap">
+                  <FileText className="w-3 h-3 text-pink-400/50 shrink-0" />
+                  <span className="text-[10px] text-pink-400/60">{selectedFiles.size} file{selectedFiles.size > 1 ? 's' : ''} selected</span>
+                  <button onClick={() => setSelectedFiles(new Set())} className="text-[10px] text-pink-500/40 hover:text-pink-400 ml-1 flex items-center gap-0.5">
+                    <X className="w-3 h-3" /> clear
+                  </button>
                 </div>
               )}
               <div className="flex items-end gap-2">
@@ -530,11 +544,13 @@ export default function ImproveWorkspace() {
             <div className="h-9 flex items-center px-3 border-b shrink-0" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
               <FolderOpen className="w-3.5 h-3.5 text-pink-400 mr-2" />
               <span className="text-xs font-mono text-pink-300">Project Source</span>
-              {selectedFile && <span className="ml-auto text-[10px] text-pink-500 font-mono truncate max-w-[200px]">{selectedFile}</span>}
+              {selectedFiles.size > 0 && (
+                <span className="ml-auto text-[10px] text-pink-500 font-mono">{selectedFiles.size} selected</span>
+              )}
             </div>
             <ScrollArea className="flex-1 py-1">
               {PROJECT_TREE.map(node => (
-                <FileTreeNode key={node.path} node={node} selectedPath={selectedFile} onSelect={setSelectedFile} />
+                <FileTreeNode key={node.path} node={node} selectedFiles={selectedFiles} onToggle={toggleFile} />
               ))}
             </ScrollArea>
           </div>
