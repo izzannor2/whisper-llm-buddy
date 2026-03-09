@@ -20,61 +20,107 @@ Deno.serve(async (req) => {
 
     console.log('Web search query:', query);
 
-    // Use DuckDuckGo HTML search and parse results
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-    
-    const response = await fetch(searchUrl, {
+    // Use DuckDuckGo instant answer API (JSON)
+    const apiUrl = 'https://api.duckduckgo.com/?q=' + encodeURIComponent(query) + '&format=json&no_html=1&skip_disambig=1';
+
+    const response = await fetch(apiUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'LocalDevAI/1.0',
       },
     });
 
     if (!response.ok) {
-      throw new Error(`DuckDuckGo returned ${response.status}`);
+      throw new Error('DuckDuckGo API returned ' + response.status);
     }
 
-    const html = await response.text();
-
-    // Parse results from HTML
+    const data = await response.json();
     const results: { title: string; url: string; snippet: string }[] = [];
-    
-    // Match result blocks
-    const resultRegex = /<a[^>]*class=\\\"result__a\\\"[^>]*href=\\\"([^\\\"]*)\\\"[^>]*>([\\s\\S]*?)<\\/a>[\\s\\S]*?<a[^>]*class=\\\"result__snippet\\\"[^>]*>([\\s\\S]*?)<\\/a>/g;
-    let match;
-    
-    while ((match = resultRegex.exec(html)) !== null && results.length < count) {
-      const rawUrl = match[1];
-      const title = match[2].replace(/<[^>]*>/g, '').trim();
-      const snippet = match[3].replace(/<[^>]*>/g, '').trim();
-      
-      // Decode DDG redirect URL
-      let url = rawUrl;
-      try {
-        const urlObj = new URL(rawUrl, 'https://duckduckgo.com');
-        const uddg = urlObj.searchParams.get('uddg');
-        if (uddg) url = decodeURIComponent(uddg);
-      } catch {
-        // keep raw url
-      }
-      
-      if (title && snippet) {
-        results.push({ title, url, snippet });
-      }
+
+    // Abstract/answer
+    if (data.AbstractText && data.AbstractURL) {
+      results.push({
+        title: data.Heading || 'Answer',
+        url: data.AbstractURL,
+        snippet: data.AbstractText,
+      });
     }
 
-    // Fallback: try simpler regex if primary didn't match
-    if (results.length === 0) {
-      const simpleRegex = /<a[^>]*class=\\\"result__url\\\"[^>]*href=\\\"([^\\\"]*)\\\"[^>]*>[\\s\\S]*?<\\/a>[\\s\\S]*?<a[^>]*class=\\\"result__snippet\\\"[^>]*>([\\s\\S]*?)<\\/a>/g;
-      while ((match = simpleRegex.exec(html)) !== null && results.length < count) {
-        const url = match[1].replace(/<[^>]*>/g, '').trim();
-        const snippet = match[2].replace(/<[^>]*>/g, '').trim();
-        if (url && snippet) {
-          results.push({ title: url, url: url.startsWith('http') ? url : `https://${url}`, snippet });
+    // Related topics
+    if (data.RelatedTopics) {
+      for (const topic of data.RelatedTopics) {
+        if (results.length >= count) break;
+        if (topic.Text && topic.FirstURL) {
+          results.push({
+            title: topic.Text.split(' - ')[0] || topic.Text.substring(0, 80),
+            url: topic.FirstURL,
+            snippet: topic.Text,
+          });
+        }
+        // Nested topics
+        if (topic.Topics) {
+          for (const sub of topic.Topics) {
+            if (results.length >= count) break;
+            if (sub.Text && sub.FirstURL) {
+              results.push({
+                title: sub.Text.split(' - ')[0] || sub.Text.substring(0, 80),
+                url: sub.FirstURL,
+                snippet: sub.Text,
+              });
+            }
+          }
         }
       }
     }
 
-    console.log(`Found ${results.length} results`);
+    // If no results from instant API, try HTML search as fallback
+    if (results.length === 0) {
+      const htmlUrl = 'https://html.duckduckgo.com/html/?q=' + encodeURIComponent(query);
+      const htmlResp = await fetch(htmlUrl, {
+        headers: { 'User-Agent': 'LocalDevAI/1.0' },
+      });
+
+      if (htmlResp.ok) {
+        const html = await htmlResp.text();
+
+        // Extract snippets with simple string splitting
+        const snippetParts = html.split('class="result__snippet"');
+        for (let i = 1; i < snippetParts.length && results.length < count; i++) {
+          const part = snippetParts[i];
+          // Get snippet text (between > and </a>)
+          const textStart = part.indexOf('>');
+          const textEnd = part.indexOf('</a>');
+          if (textStart === -1 || textEnd === -1) continue;
+          const snippet = part.substring(textStart + 1, textEnd).replace(/<[^>]*>/g, '').trim();
+
+          // Get URL from the preceding result__a section
+          const urlPart = snippetParts[i - 1] || '';
+          const hrefMatch = urlPart.lastIndexOf('href="');
+          let url = '';
+          if (hrefMatch !== -1) {
+            const hrefEnd = urlPart.indexOf('"', hrefMatch + 6);
+            url = urlPart.substring(hrefMatch + 6, hrefEnd);
+            // Decode DDG redirect
+            if (url.includes('uddg=')) {
+              try {
+                const u = new URL(url, 'https://duckduckgo.com');
+                const uddg = u.searchParams.get('uddg');
+                if (uddg) url = decodeURIComponent(uddg);
+              } catch { /* keep raw */ }
+            }
+          }
+
+          if (snippet) {
+            results.push({
+              title: snippet.substring(0, 80),
+              url: url || 'https://duckduckgo.com/?q=' + encodeURIComponent(query),
+              snippet,
+            });
+          }
+        }
+      }
+    }
+
+    console.log('Found ' + results.length + ' results');
 
     return new Response(
       JSON.stringify({ success: true, results, query }),
