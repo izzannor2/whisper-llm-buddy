@@ -48,6 +48,7 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   const [activeTab, setActiveTab] = useState<'preview' | 'console'>('preview');
   const [isMaximized, setIsMaximized] = useState(false);
   const [deviceSize, setDeviceSize] = useState<DeviceSize>('desktop');
+  const [isLandscape, setIsLandscape] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
 
