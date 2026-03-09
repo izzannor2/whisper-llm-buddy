@@ -17,6 +17,7 @@ import { isOllamaRunning, ChatMessage } from '@/lib/ollama-client';
 import { sendChatMessage as sendChat, loadSettings as loadChatSettings } from '@/lib/chat-api';
 import { SystemCommand, parseCommandFromAIResponse, executeCommand as executeSystemCommand } from '@/lib/system-commands';
 import { downloadProjectAsZip, downloadStartupScript, generateDocumentation } from '@/lib/project-export';
+import { parseCodeBlocks, applyCodeBlocks, isBuildTrigger, getAppBuilderBuildPrompt, getAppBuilderPlanPrompt } from '@/lib/code-parser';
 import { checkAgentStatus, downloadAgentScript, startDevServer, stopDevServer, AgentStatus, onOutput } from '@/lib/local-backend-agent';
 import { initTTS, speakAIResponse, getTTSSettings } from '@/lib/tts-engine';
 import { speak, isTTSSupported } from '@/lib/tts';
