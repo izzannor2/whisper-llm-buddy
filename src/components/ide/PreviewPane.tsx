@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
-import { RefreshCw, ExternalLink, Terminal, Play, Square, Maximize2, Minimize2, Eye, Smartphone, Tablet, Monitor } from 'lucide-react';
+import { RefreshCw, ExternalLink, Terminal, Play, Square, Maximize2, Minimize2, Eye, Smartphone, Tablet, Monitor, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -48,6 +48,7 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   const [activeTab, setActiveTab] = useState<'preview' | 'console'>('preview');
   const [isMaximized, setIsMaximized] = useState(false);
   const [deviceSize, setDeviceSize] = useState<DeviceSize>('desktop');
+  const [isLandscape, setIsLandscape] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
 
@@ -66,7 +67,10 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
     onRefresh();
   };
 
-  const device = DEVICE_SIZES[deviceSize];
+  const baseDevice = DEVICE_SIZES[deviceSize];
+  const device = isLandscape && deviceSize !== 'desktop'
+    ? { width: baseDevice.height, height: baseDevice.width, label: `${baseDevice.height}×${baseDevice.width}` }
+    : baseDevice;
   const isResponsive = deviceSize !== 'desktop';
 
   return (
@@ -134,6 +138,22 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
               <TooltipContent side="bottom"><p>Desktop (full width)</p></TooltipContent>
             </Tooltip>
           </div>
+          {isResponsive && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className={cn(
+                    'h-7 w-7 flex items-center justify-center rounded-md border border-border transition-colors',
+                    isLandscape ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  )}
+                  onClick={() => setIsLandscape(!isLandscape)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p>{isLandscape ? 'Portrait' : 'Landscape'}</p></TooltipContent>
+            </Tooltip>
+          )}
 
           {onGeneratePreview && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onGeneratePreview} title="Generate Preview">
