@@ -102,3 +102,28 @@ export function getProjectSummary(): { name: string; fileCount: number; framewor
   const fileCount = flattenFiles(project.files).filter(f => !f.isDirectory).length;
   return { name: project.name, fileCount, framework: project.framework };
 }
+
+export interface ProjectFileDetail {
+  path: string;
+  name: string;
+  language: string;
+  size: number; // content length in chars
+  preview: string; // first N chars of content
+}
+
+/**
+ * Get detailed file list for the context preview UI.
+ */
+export function getProjectFilesDetail(previewLength = 200): ProjectFileDetail[] {
+  const project = getCurrentProject();
+  if (!project) return [];
+  return flattenFiles(project.files)
+    .filter(f => !f.isDirectory && f.content)
+    .map(f => ({
+      path: f.path,
+      name: f.name,
+      language: f.language,
+      size: f.content.length,
+      preview: f.content.slice(0, previewLength),
+    }));
+}
