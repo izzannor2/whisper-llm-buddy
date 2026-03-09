@@ -345,7 +345,7 @@ export default function ImproveWorkspace() {
                   <CodeBlock code={codeStr} language={match[1]} />
                   {matchedBlock && (
                     <button
-                      onClick={() => !isApplied && handleApplySingle(matchedBlock.filePath, matchedBlock.content)}
+                      onClick={() => !isApplied && setDiffPreview({ filePath: matchedBlock.filePath, content: matchedBlock.content })}
                       disabled={isApplied}
                       className={cn(
                         "absolute top-2 right-24 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono transition-colors z-10",
