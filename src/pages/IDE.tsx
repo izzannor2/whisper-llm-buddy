@@ -1,5 +1,5 @@
 // IDE workspace
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileTree } from '@/components/ide/FileTree';
@@ -126,6 +126,20 @@ export default function IDE() {
     else setRightPanelTab('preview');
   }, [settings.mode]);
 
+  // Auto-generate preview on project load and on every file change (debounced)
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!project || project.files.length === 0) return;
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(() => {
+      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+      const html = buildPreviewHTML(project.files);
+      const url = createPreviewBlobUrl(html);
+      setPreviewBlobUrl(url);
+    }, 600);
+    return () => { if (previewTimerRef.current) clearTimeout(previewTimerRef.current); };
+  }, [project?.updatedAt]);
+
   const handleSelectFile = useCallback((file: ProjectFile) => {
     if (!file.isDirectory) {
       setSelectedFile(file);
@@ -211,7 +225,8 @@ export default function IDE() {
       if (f.children) return { ...f, children: updateFile(f.children) };
       return f;
     });
-    const updatedProject = { ...project, files: updateFile(project.files), updatedAt: Date.now() };
+    const updatedFiles = updateFile(project.files);
+    const updatedProject = { ...project, files: updatedFiles, updatedAt: Date.now() };
     setProject(updatedProject);
     saveProject(updatedProject);
     setOpenFiles(prev => prev.map(f => f.path === path ? { ...f, content, isModified: true } : f));
