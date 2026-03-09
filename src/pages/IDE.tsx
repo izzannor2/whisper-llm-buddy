@@ -55,6 +55,7 @@ export default function IDE() {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins'>('preview');
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | undefined>();
 
   useEffect(() => {
     setSettings(getIDESettings());
