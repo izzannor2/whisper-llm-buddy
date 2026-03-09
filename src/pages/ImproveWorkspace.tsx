@@ -22,6 +22,7 @@ import ReactMarkdown from 'react-markdown';
 import { CodeBlock } from '@/components/CodeBlock';
 import { parseCodeBlocks, ParsedCodeBlock } from '@/lib/code-parser';
 import { writeFile } from '@/lib/file-system';
+import { DiffPreview } from '@/components/DiffPreview';
 
 interface FileNode { name: string; path: string; type: 'file' | 'directory'; children?: FileNode[]; }
 interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; }
@@ -122,6 +123,7 @@ export default function ImproveWorkspace() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [isApplying, setIsApplying] = useState(false);
   const [appliedFiles, setAppliedFiles] = useState<Set<string>>(new Set());
+  const [diffPreview, setDiffPreview] = useState<{ filePath: string; content: string } | null>(null);
 
   // Extract all code blocks with file paths from assistant messages
   const allCodeBlocks = useMemo(() => {
@@ -343,7 +345,7 @@ export default function ImproveWorkspace() {
                   <CodeBlock code={codeStr} language={match[1]} />
                   {matchedBlock && (
                     <button
-                      onClick={() => !isApplied && handleApplySingle(matchedBlock.filePath, matchedBlock.content)}
+                      onClick={() => !isApplied && setDiffPreview({ filePath: matchedBlock.filePath, content: matchedBlock.content })}
                       disabled={isApplied}
                       className={cn(
                         "absolute top-2 right-24 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono transition-colors z-10",
@@ -653,6 +655,16 @@ export default function ImproveWorkspace() {
         </ResizablePanel>
       </ResizablePanelGroup>
       </div>
+
+      {diffPreview && (
+        <DiffPreview
+          open={!!diffPreview}
+          onOpenChange={(open) => !open && setDiffPreview(null)}
+          filePath={diffPreview.filePath}
+          newContent={diffPreview.content}
+          onApply={() => handleApplySingle(diffPreview.filePath, diffPreview.content)}
+        />
+      )}
     </div>
   );
 }
