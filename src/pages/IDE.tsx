@@ -121,14 +121,24 @@ export default function IDE() {
       chatMessages.push({ role: 'user', content });
       
       const chatSettings = loadChatSettings();
-      
-      // Add planning prefix if plan mode
-      const planPrefix = isPlan
-        ? `You are in PLANNING MODE. Do NOT write code yet. Instead:\n1. Ask clarifying questions\n2. Outline architecture and file structure\n3. List technologies to use\n4. Break into implementation steps\n\n`
-        : '';
       const effectiveSettings = { ...chatSettings };
-      if (planPrefix) {
-        effectiveSettings.systemPrompt = planPrefix + (chatSettings.systemPrompt || '');
+
+      // Determine if this is a build trigger (user approved a plan)
+      const buildTrigger = isPlan === false && isBuildTrigger(content) && messages.length > 0;
+      
+      if (settings.mode === 'app-builder' || settings.mode === 'ai-improvement') {
+        if (isPlan) {
+          // Planning mode
+          effectiveSettings.systemPrompt = getAppBuilderPlanPrompt();
+        } else {
+          // Build mode — tell AI to output complete files
+          let buildPrompt = getAppBuilderBuildPrompt();
+          if (buildTrigger) {
+            // Include summary of the plan conversation for context
+            buildPrompt += '\n\nThe user has approved the plan above. Now implement everything discussed. Output ALL files needed.';
+          }
+          effectiveSettings.systemPrompt = buildPrompt;
+        }
       }
       
       let fullResponse = '';
@@ -138,7 +148,34 @@ export default function IDE() {
       setMessages(prev => [...prev, assistantMessage]);
       setStreamingContent('');
 
-      // TTS: use unified tts.ts
+      // Auto-apply code blocks from AI response to the project
+      if (project && (settings.mode === 'app-builder' || settings.mode === 'ai-improvement') && !isPlan) {
+        const codeBlocks = parseCodeBlocks(fullResponse);
+        if (codeBlocks.length > 0) {
+          const { files: updatedFiles, created, updated } = applyCodeBlocks(project.files, codeBlocks);
+          const updatedProject = { ...project, files: updatedFiles, updatedAt: Date.now() };
+          setProject(updatedProject);
+          saveProject(updatedProject);
+
+          // Auto-open the first created/updated file in the editor
+          const firstPath = [...created, ...updated][0];
+          if (firstPath) {
+            const fileToOpen = findFileByPath(updatedFiles, firstPath);
+            if (fileToOpen) {
+              setSelectedFile(fileToOpen);
+              setOpenFiles(prev => {
+                const exists = prev.find(f => f.path === fileToOpen.path);
+                return exists ? prev.map(f => f.path === fileToOpen.path ? fileToOpen : f) : [...prev, fileToOpen];
+              });
+            }
+          }
+
+          const totalChanges = created.length + updated.length;
+          toast.success(`Applied ${totalChanges} file${totalChanges > 1 ? 's' : ''}: ${created.length} created, ${updated.length} updated`);
+        }
+      }
+
+      // TTS
       const globalSettings = loadSettings();
       if (globalSettings.autoPlayTTS && isTTSSupported() && fullResponse) {
         speak(fullResponse, { voice: globalSettings.ttsVoice, rate: globalSettings.ttsRate });
@@ -158,7 +195,7 @@ export default function IDE() {
     } finally {
       setIsLoading(false);
     }
-  }, [messages, settings.mode]);
+  }, [messages, settings.mode, project]);
 
   const handleApproveCommand = (id: string) => setSystemCommands(prev => prev.map(c => c.id === id ? { ...c, status: 'approved' as const } : c));
   const handleRejectCommand = (id: string) => setSystemCommands(prev => prev.map(c => c.id === id ? { ...c, status: 'rejected' as const } : c));
