@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { 
   MessageSquare, X, Minimize2, Maximize2, Mic, MicOff, Volume2, VolumeX,
   Send, Loader2, Terminal, FileText, Zap, Settings, ArrowRight, Code2,
-  Wrench, Navigation, Hammer, RefreshCw,
+  Wrench, Navigation, Hammer, RefreshCw, ChevronDown, ChevronRight, FolderOpen, Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
