@@ -4,7 +4,7 @@ import {
   Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown,
   RefreshCw, Loader2, Lightbulb, Mic, MicOff, Send, Wand2, Zap,
   Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2, PanelLeftClose, PanelLeft,
-  CheckSquare, Square, X, CheckCheck, FileCode,
+  CheckSquare, Square, X, CheckCheck, FileCode, Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
