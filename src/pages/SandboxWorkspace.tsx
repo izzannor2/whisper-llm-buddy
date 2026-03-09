@@ -40,7 +40,7 @@ export default function SandboxWorkspace() {
     isDirectory: false,
   });
 
-  useState(() => { applyModeTheme('sandbox'); });
+  useEffect(() => { applyModeTheme('sandbox'); }, []);
 
   const handleFileChange = useCallback((_path: string, content: string) => {
     setSandboxFile(prev => ({ ...prev, content }));
