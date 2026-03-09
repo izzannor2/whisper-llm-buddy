@@ -146,6 +146,7 @@ export default function ImproveWorkspace() {
       try {
         await writeFile(block.filePath, block.content);
         applied++;
+        setAppliedFiles(prev => new Set(prev).add(block.filePath));
       } catch (err: any) {
         failed++;
         console.error(`Failed to write ${block.filePath}:`, err);
