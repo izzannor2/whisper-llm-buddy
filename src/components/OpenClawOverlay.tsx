@@ -367,7 +367,60 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
         </div>
       )}
 
-      {/* Privacy toggles */}
+      {/* Project Context Preview */}
+      {showContext && (
+        <div className="border-b border-sidebar-border no-drag">
+          <div className="flex items-center justify-between px-3 py-2 bg-sidebar-accent/60">
+            <div className="flex items-center gap-1.5">
+              <FolderOpen className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-xs font-semibold text-muted-foreground">
+                Project Context: {projectSummary?.name || 'Unknown'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleRefreshContext} title="Refresh">
+                <RefreshCw className="w-3 h-3" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowContext(false)} title="Close">
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+          <ScrollArea className="max-h-48">
+            <div className="px-2 py-1 space-y-0.5">
+              {contextFiles.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-2 px-1">No files loaded. Click Refresh to load project context.</p>
+              ) : (
+                contextFiles.map((file) => (
+                  <div key={file.path} className="rounded-md overflow-hidden">
+                    <button
+                      className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-sidebar-accent/80 rounded-md transition-colors"
+                      onClick={() => setExpandedFile(expandedFile === file.path ? null : file.path)}
+                    >
+                      {expandedFile === file.path ? (
+                        <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
+                      ) : (
+                        <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                      )}
+                      <FileText className="w-3 h-3 text-blue-400 shrink-0" />
+                      <span className="text-xs truncate flex-1">{file.path}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {file.size > 1000 ? `${(file.size / 1000).toFixed(1)}k` : `${file.size}`} chars
+                      </span>
+                    </button>
+                    {expandedFile === file.path && (
+                      <pre className="mx-2 mb-1.5 p-2 rounded bg-background/80 border border-sidebar-border text-[10px] leading-relaxed text-muted-foreground overflow-x-auto max-h-32 whitespace-pre-wrap break-all">
+                        {file.preview}{file.size > file.preview.length ? '\n// ...' : ''}
+                      </pre>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
+
       <div className="flex items-center justify-between px-4 py-2 bg-sidebar-accent/50 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           <Button variant={micEnabled ? "secondary" : "ghost"} size="sm" className="h-7 gap-1" onClick={() => setMicEnabled(!micEnabled)}>
