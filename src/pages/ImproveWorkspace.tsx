@@ -22,6 +22,7 @@ import ReactMarkdown from 'react-markdown';
 import { CodeBlock } from '@/components/CodeBlock';
 import { parseCodeBlocks, ParsedCodeBlock } from '@/lib/code-parser';
 import { writeFile } from '@/lib/file-system';
+import { DiffPreview } from '@/components/DiffPreview';
 
 interface FileNode { name: string; path: string; type: 'file' | 'directory'; children?: FileNode[]; }
 interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; }
