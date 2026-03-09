@@ -262,20 +262,22 @@ export function CodeBlock({ code, language, className, onAddToInput }: CodeBlock
       </div>
 
       {/* Code display */}
-      <SyntaxHighlighter
-        language={detectedLang}
-        style={oneDark}
-        customStyle={{
-          margin: 0,
-          padding: '1rem',
-          background: 'hsl(var(--muted))',
-          fontSize: '0.875rem',
-          borderRadius: 0,
-        }}
-        wrapLongLines
-      >
-        {code}
-      </SyntaxHighlighter>
+      <div className="max-h-[400px] overflow-auto">
+        <SyntaxHighlighter
+          language={detectedLang}
+          style={oneDark}
+          customStyle={{
+            margin: 0,
+            padding: '0.75rem',
+            background: 'hsl(var(--muted))',
+            fontSize: '0.8125rem',
+            borderRadius: 0,
+          }}
+          wrapLongLines
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
 
       {/* Output panel - Docket style */}
       {executionResult && (
