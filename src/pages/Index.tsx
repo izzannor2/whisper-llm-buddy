@@ -378,6 +378,8 @@ export default function Index() {
           modeKey={currentModeKey}
           planningMode={planningMode}
           onPlanningToggle={setPlanningMode}
+          webSearchEnabled={webSearchEnabled}
+          onWebSearchToggle={setWebSearchEnabled}
         />
       </div>
 
