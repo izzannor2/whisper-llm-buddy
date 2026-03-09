@@ -26,6 +26,7 @@ import {
 import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { onOpenClawEvent } from '@/lib/openclaw-bridge';
 import { cn } from '@/lib/utils';
+import { searchWeb, formatSearchContext } from '@/lib/web-search';
 
 export default function Index() {
   const navigate = useNavigate();
