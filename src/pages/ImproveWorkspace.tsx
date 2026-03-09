@@ -123,6 +123,7 @@ export default function ImproveWorkspace() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [isApplying, setIsApplying] = useState(false);
   const [appliedFiles, setAppliedFiles] = useState<Set<string>>(new Set());
+  const [diffPreview, setDiffPreview] = useState<{ filePath: string; content: string } | null>(null);
 
   // Extract all code blocks with file paths from assistant messages
   const allCodeBlocks = useMemo(() => {
