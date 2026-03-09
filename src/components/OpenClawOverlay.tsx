@@ -343,6 +343,9 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
             <Button variant="secondary" size="sm" className="h-8 text-xs gap-1.5 justify-start" onClick={handleEditFile}>
               <FileText className="w-3 h-3" /> Edit File
             </Button>
+            <Button variant="secondary" size="sm" className="h-8 text-xs gap-1.5 justify-start" onClick={handleRefreshContext}>
+              <RefreshCw className="w-3 h-3" /> Refresh Context
+            </Button>
           </div>
         </div>
       )}
