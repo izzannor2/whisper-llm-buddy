@@ -1,10 +1,10 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown,
   RefreshCw, Loader2, Lightbulb, Mic, MicOff, Send, Wand2, Zap,
   Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2, PanelLeftClose, PanelLeft,
-  CheckSquare, Square, X,
+  CheckSquare, Square, X, CheckCheck, FileCode,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -20,6 +20,8 @@ import { isWhisperLoaded, getDownloadedModels, transcribeAudio, loadWhisperModel
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock } from '@/components/CodeBlock';
+import { parseCodeBlocks, ParsedCodeBlock } from '@/lib/code-parser';
+import { writeFile } from '@/lib/file-system';
 
 interface FileNode { name: string; path: string; type: 'file' | 'directory'; children?: FileNode[]; }
 interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; }
@@ -118,6 +120,43 @@ export default function ImproveWorkspace() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [isApplying, setIsApplying] = useState(false);
+
+  // Extract all code blocks with file paths from assistant messages
+  const allCodeBlocks = useMemo(() => {
+    const blocks: ParsedCodeBlock[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'assistant') {
+        blocks.push(...parseCodeBlocks(msg.content));
+      }
+    }
+    return blocks;
+  }, [messages]);
+
+  const handleApplyAll = useCallback(async () => {
+    if (allCodeBlocks.length === 0) {
+      toast.info('No code blocks with file paths found to apply');
+      return;
+    }
+    setIsApplying(true);
+    let applied = 0;
+    let failed = 0;
+    for (const block of allCodeBlocks) {
+      try {
+        await writeFile(block.filePath, block.content);
+        applied++;
+      } catch (err: any) {
+        failed++;
+        console.error(`Failed to write ${block.filePath}:`, err);
+      }
+    }
+    setIsApplying(false);
+    if (failed === 0) {
+      toast.success(`Applied ${applied} file${applied > 1 ? 's' : ''} successfully`);
+    } else {
+      toast.warning(`Applied ${applied}, failed ${failed}. Make sure a project folder is open.`);
+    }
+  }, [allCodeBlocks]);
 
   useEffect(() => { applyModeTheme('ai-improvement'); }, []);
 
@@ -318,6 +357,17 @@ export default function ImproveWorkspace() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {allCodeBlocks.length > 0 && (
+            <Button
+              variant="ghost" size="sm"
+              className="h-7 text-xs gap-1 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 border border-emerald-500/20"
+              onClick={handleApplyAll}
+              disabled={isApplying}
+            >
+              {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
+              Apply All ({allCodeBlocks.length})
+            </Button>
+          )}
           <Button
             variant="ghost" size="sm"
             className={cn("h-7 text-xs gap-1", showHistory ? "bg-pink-500/20 text-pink-200" : "text-pink-400 hover:text-pink-200")}
