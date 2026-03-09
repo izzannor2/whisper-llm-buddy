@@ -186,4 +186,6 @@ export const PreviewPane = React.forwardRef<HTMLDivElement, PreviewPaneProps>(({
       </div>
     </div>
   );
-}
+});
+
+PreviewPane.displayName = 'PreviewPane';

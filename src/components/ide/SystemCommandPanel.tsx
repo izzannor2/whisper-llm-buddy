@@ -208,4 +208,6 @@ export const SystemCommandPanel = React.forwardRef<HTMLDivElement, SystemCommand
       </AlertDialog>
     </div>
   );
-}
+});
+
+SystemCommandPanel.displayName = 'SystemCommandPanel';
