@@ -23,6 +23,8 @@ interface ChatInputProps {
   modeKey?: string;
   planningMode?: boolean;
   onPlanningToggle?: (active: boolean) => void;
+  webSearchEnabled?: boolean;
+  onWebSearchToggle?: (enabled: boolean) => void;
 }
 
 export interface ChatInputRef {
