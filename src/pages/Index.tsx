@@ -58,6 +58,17 @@ export default function Index() {
   useEffect(() => {
     const init = async () => { await initDB(); setConversations(await getAllConversations()); };
     init();
+
+    // Listen for OpenClaw bridge events
+    const unsubscribe = onOpenClawEvent((event) => {
+      if (event.type === 'navigate' && event.payload.route) {
+        navigate(event.payload.route);
+      }
+      if (event.type === 'send-to-chat' && event.payload.message) {
+        handleSendMessage(event.payload.message);
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
