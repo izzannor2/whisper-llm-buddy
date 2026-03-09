@@ -313,7 +313,13 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
             {state.isActive ? 'Active' : 'Offline'}
           </Badge>
           {projectSummary && (
-            <Badge variant="outline" className="text-xs text-blue-400 border-blue-400/50" title={`Project: ${projectSummary.name} (${projectSummary.fileCount} files)`}>
+            <Badge 
+              variant="outline" 
+              className="text-xs text-blue-400 border-blue-400/50 cursor-pointer hover:bg-blue-400/10 no-drag transition-colors" 
+              title={`Click to ${showContext ? 'hide' : 'view'} project context`}
+              onClick={handleToggleContext}
+            >
+              <Eye className="w-3 h-3 mr-1" />
               {projectSummary.fileCount} files
             </Badge>
           )}
