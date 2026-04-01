@@ -208,7 +208,7 @@ async function sendOllamaMessage(
   settings: ChatSettings,
   onChunk?: (chunk: string) => void
 ): Promise<string> {
-  const response = await fetch(`${settings.ollamaUrl}/api/chat`, {
+  const response = await fetchWithRetry(`${settings.ollamaUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
