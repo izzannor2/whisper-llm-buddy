@@ -8,9 +8,8 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 BOLD='\033[1m'
 
 echo ""
@@ -53,18 +52,35 @@ else
 fi
 
 # ========================================
-# Step 3: Install dependencies
+# Step 3: Install dependencies (with retry)
 # ========================================
 echo -e "[3/6] Installing dependencies..."
+
+# Auto-repair: check if node_modules is corrupted
+if [ -d "node_modules" ] && [ ! -d "node_modules/react" ]; then
+    echo -e "      ${YELLOW}[!] node_modules appears corrupted, reinstalling...${NC}"
+    rm -rf node_modules
+fi
+
 if [ -d "node_modules" ]; then
     echo -e "      ${GREEN}[OK] Dependencies already installed${NC}"
     echo -e "      [*] Checking for updates..."
     $PKG_CMD install --silent 2>/dev/null || $PKG_CMD install
 else
-    echo "      [*] Running $PKG_CMD install (this may take a minute)..."
-    $PKG_CMD install
-    if [ $? -ne 0 ]; then
-        echo -e "      ${RED}[ERROR] Failed to install dependencies!${NC}"
+    INSTALL_SUCCESS=0
+    for attempt in 1 2 3; do
+        echo "      [*] Attempt $attempt/3: Running $PKG_CMD install..."
+        if $PKG_CMD install; then
+            INSTALL_SUCCESS=1
+            break
+        else
+            echo -e "      ${YELLOW}[!] Attempt $attempt failed, retrying in 3 seconds...${NC}"
+            sleep 3
+        fi
+    done
+    if [ $INSTALL_SUCCESS -eq 0 ]; then
+        echo -e "      ${RED}[ERROR] Failed to install dependencies after 3 attempts!${NC}"
+        echo "      Please check your internet connection and try again."
         exit 1
     fi
     echo -e "      ${GREEN}[OK] Dependencies installed successfully${NC}"
@@ -73,16 +89,12 @@ fi
 # ========================================
 # Step 4: Create models directory
 # ========================================
-echo -e "[4/6] Setting up models directory..."
-if [ ! -d "models/gguf" ]; then
-    mkdir -p "models/gguf"
-    echo -e "      ${GREEN}[OK] Created models/gguf/ folder${NC}"
-else
-    echo -e "      ${GREEN}[OK] models/gguf/ folder exists${NC}"
-fi
+echo -e "[4/6] Setting up directories..."
+mkdir -p "models/gguf" "models/ollama" "bin/llama" "bin/ollama"
+echo -e "      ${GREEN}[OK] Directory structure ready${NC}"
 
 # Check for existing GGUF models
-GGUF_COUNT=$(find models/gguf -name "*.gguf" -type f 2>/dev/null | wc -l)
+GGUF_COUNT=$(find models/gguf -name "*.gguf" -type f 2>/dev/null | wc -l | tr -d ' ')
 if [ "$GGUF_COUNT" -gt 0 ]; then
     echo -e "      ${GREEN}[OK] Found $GGUF_COUNT GGUF model(s) ready to use${NC}"
 else
@@ -94,19 +106,23 @@ fi
 # Step 5: Check Ollama (optional)
 # ========================================
 echo -e "[5/6] Checking Ollama (Local LLM)..."
-if command -v ollama &> /dev/null; then
+OLLAMA_CMD=""
+if [ -x "bin/ollama/ollama" ]; then
+    OLLAMA_CMD="./bin/ollama/ollama"
+    echo -e "      ${GREEN}[OK] Local Ollama found in bin/ollama/${NC}"
+elif command -v ollama &> /dev/null; then
+    OLLAMA_CMD="ollama"
     echo -e "      ${GREEN}[OK] Ollama found${NC}"
-    
-    # Try to start Ollama if not running
+fi
+
+if [ -n "$OLLAMA_CMD" ]; then
     if ! curl -s http://localhost:11434/api/tags &> /dev/null; then
         echo "      [*] Starting Ollama server..."
-        ollama serve &> /dev/null &
+        OLLAMA_HOST=127.0.0.1:11434 $OLLAMA_CMD serve &> /dev/null &
         sleep 2
     fi
-    
-    # Check for models
     echo "      [*] Checking for AI models..."
-    if ollama list 2>/dev/null | grep -qi "llama"; then
+    if $OLLAMA_CMD list 2>/dev/null | grep -qi "llama"; then
         echo -e "      ${GREEN}[OK] Llama model available${NC}"
     else
         echo -e "      ${YELLOW}[!] No Llama model found${NC}"
@@ -115,24 +131,21 @@ if command -v ollama &> /dev/null; then
 else
     echo -e "      ${YELLOW}[!] Ollama not found (optional)${NC}"
     echo "          Install from: https://ollama.ai"
-    echo "          Required for local AI features"
+    echo "          Or place ollama binary in bin/ollama/"
 fi
 
 # ========================================
 # Step 6: Check llama.cpp (optional)
 # ========================================
 echo -e "[6/6] Checking llama.cpp (GGUF models)..."
-if command -v llama-server &> /dev/null; then
-    echo -e "      ${GREEN}[OK] llama-server found${NC}"
-    if [ "$GGUF_COUNT" -gt 0 ]; then
-        echo -e "      ${GREEN}[OK] Will auto-launch with models from models/gguf/${NC}"
-    fi
-elif command -v llama-cli &> /dev/null; then
-    echo -e "      ${GREEN}[OK] llama-cli found${NC}"
+if [ -x "bin/llama/llama-server" ]; then
+    echo -e "      ${GREEN}[OK] llama-server found in bin/llama/${NC}"
+elif command -v llama-server &> /dev/null; then
+    echo -e "      ${GREEN}[OK] llama-server found in PATH${NC}"
 else
     echo -e "      ${YELLOW}[!] llama.cpp not found (optional)${NC}"
     echo "          Build from: https://github.com/ggerganov/llama.cpp"
-    echo "          Required for GGUF models in models/gguf/"
+    echo "          Or place llama-server in bin/llama/"
 fi
 
 # ========================================
@@ -153,11 +166,6 @@ echo "   - GGUF models: Place in models/gguf/"
 echo "   - Ollama: Run \"ollama pull llama3.2\""
 echo "   - Scripts auto-detect and launch models!"
 echo ""
-echo " Quick Tips:"
-echo "   - Drop any .gguf file in models/gguf/ folder"
-echo "   - ./start.sh will auto-launch llama-server"
-echo "   - Enable GPU acceleration in Settings"
-echo ""
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 echo ""
 
@@ -167,5 +175,5 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
     echo "Starting LocalDev AI..."
-    $PKG_CMD run dev
+    ./start.sh
 fi
