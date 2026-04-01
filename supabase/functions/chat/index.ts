@@ -5,13 +5,61 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Tool schemas for function calling
+const toolSchemas = [
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description: "Search the web for information",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "analyze_code",
+      description: "Analyze code for bugs, performance, or security issues",
+      parameters: {
+        type: "object",
+        properties: {
+          code: { type: "string", description: "Code to analyze" },
+          focus: { type: "string", enum: ["bugs", "performance", "security", "style", "all"] },
+        },
+        required: ["code"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "generate_code",
+      description: "Generate code from a description",
+      parameters: {
+        type: "object",
+        properties: {
+          description: { type: "string", description: "What to generate" },
+          language: { type: "string", description: "Target language" },
+        },
+        required: ["description"],
+      },
+    },
+  },
+];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages, model, temperature, top_p, max_tokens, stream } = await req.json();
+    const { messages, model, temperature, top_p, max_tokens, stream, enableTools, agentMode } = await req.json();
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -26,7 +74,22 @@ serve(async (req) => {
     
     const aiModel = modelMap[model] || 'google/gemini-2.5-flash';
 
-    console.log(`Chat request - Model: ${aiModel}, Stream: ${stream}, Messages: ${messages.length}`);
+    console.log(`Chat request - Model: ${aiModel}, Stream: ${stream}, Messages: ${messages.length}, Agent: ${agentMode || 'chat'}`);
+
+    const requestBody: Record<string, unknown> = {
+      model: aiModel,
+      messages,
+      temperature: temperature ?? 0.7,
+      top_p: top_p ?? 0.9,
+      max_tokens: max_tokens ?? 2048,
+      stream: stream ?? false,
+    };
+
+    // Add tools if agent mode is enabled
+    if (enableTools && agentMode !== 'chat') {
+      requestBody.tools = toolSchemas;
+      requestBody.tool_choice = "auto";
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -34,14 +97,7 @@ serve(async (req) => {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: aiModel,
-        messages,
-        temperature: temperature ?? 0.7,
-        top_p: top_p ?? 0.9,
-        max_tokens: max_tokens ?? 2048,
-        stream: stream ?? false,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -74,7 +130,7 @@ serve(async (req) => {
       });
     }
 
-    // For non-streaming, return JSON
+    // For non-streaming, return JSON (includes tool_calls if present)
     const data = await response.json();
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
