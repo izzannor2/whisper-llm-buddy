@@ -1,5 +1,43 @@
 // Chat API abstraction supporting cloud, local, and custom API providers
 
+// Retry helper with exponential backoff
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  timeoutMs = 15000
+): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      // Don't retry on 4xx client errors (except 429)
+      if (response.ok || (response.status >= 400 && response.status < 500 && response.status !== 429)) {
+        return response;
+      }
+      // Retry on 429 and 5xx
+      lastError = new Error(`HTTP ${response.status}`);
+      if (response.status === 429 && attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+        continue;
+      }
+      return response; // Return last response for proper error handling downstream
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      if (lastError.name === 'AbortError') {
+        lastError = new Error('Request timed out');
+      }
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+  throw lastError || new Error('Request failed after retries');
+}
+
 export interface APIKeys {
   openai: string;
   anthropic: string;
@@ -140,7 +178,7 @@ async function sendLocalMessage(
   settings: ChatSettings,
   onChunk?: (chunk: string) => void
 ): Promise<string> {
-  const response = await fetch(`${settings.localUrl}/v1/chat/completions`, {
+  const response = await fetchWithRetry(`${settings.localUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -170,7 +208,7 @@ async function sendOllamaMessage(
   settings: ChatSettings,
   onChunk?: (chunk: string) => void
 ): Promise<string> {
-  const response = await fetch(`${settings.ollamaUrl}/api/chat`, {
+  const response = await fetchWithRetry(`${settings.ollamaUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -241,7 +279,7 @@ async function sendCloudMessage(
     throw new Error('Cloud backend not configured. Please enable Lovable Cloud.');
   }
 
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+  const response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
