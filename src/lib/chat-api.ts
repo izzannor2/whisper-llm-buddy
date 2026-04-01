@@ -279,7 +279,7 @@ async function sendCloudMessage(
     throw new Error('Cloud backend not configured. Please enable Lovable Cloud.');
   }
 
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+  const response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
