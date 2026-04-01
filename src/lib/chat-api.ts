@@ -178,7 +178,7 @@ async function sendLocalMessage(
   settings: ChatSettings,
   onChunk?: (chunk: string) => void
 ): Promise<string> {
-  const response = await fetch(`${settings.localUrl}/v1/chat/completions`, {
+  const response = await fetchWithRetry(`${settings.localUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
