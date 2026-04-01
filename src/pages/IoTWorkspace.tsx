@@ -42,7 +42,7 @@ export default function IoTWorkspace() {
   const [isUploading, setIsUploading] = useState(false);
   const [convId] = useState(() => generateId());
 
-  useState(() => { applyModeTheme('embedded-iot'); });
+  useEffect(() => { applyModeTheme('embedded-iot'); }, []);
 
   const handleVerify = () => {
     setIsVerifying(true);
