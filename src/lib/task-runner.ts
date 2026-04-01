@@ -151,19 +151,19 @@ async function processQueue() {
 
     try {
       const result = await handler(next, (pct) => {
-        if (next.status === 'cancelled') return;
+        if ((next.status as TaskStatus) === 'cancelled') return;
         next.progress = pct;
         notify();
       });
 
-      if (next.status !== 'cancelled') {
+      if ((next.status as TaskStatus) !== 'cancelled') {
         next.status = 'completed';
         next.progress = 100;
         next.result = result;
         next.completedAt = Date.now();
       }
     } catch (e) {
-      if (next.status !== 'cancelled') {
+      if ((next.status as TaskStatus) !== 'cancelled') {
         next.status = 'failed';
         next.error = e instanceof Error ? e.message : String(e);
         next.completedAt = Date.now();
