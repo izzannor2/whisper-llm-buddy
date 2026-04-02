@@ -4,7 +4,7 @@ import {
   Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown,
   RefreshCw, Loader2, Lightbulb, Mic, MicOff, Send, Wand2, Zap,
   Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2,
-  CheckSquare, Square, X, CheckCheck, FileCode, Check, Upload, Eye,
+  CheckSquare, Square, X, CheckCheck, FileCode, Check, Upload, Eye, Phone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -25,6 +25,7 @@ import { parseCodeBlocks, ParsedCodeBlock } from '@/lib/code-parser';
 import { writeFile } from '@/lib/file-system';
 import { DiffPreview } from '@/components/DiffPreview';
 import { buildPreviewHTML } from '@/lib/preview-builder';
+import { VoiceCallMode } from '@/components/VoiceCallMode';
 
 interface FileNode { name: string; path: string; type: 'file' | 'directory'; children?: FileNode[]; }
 interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; }
@@ -252,6 +253,7 @@ export default function ImproveWorkspace() {
   const [isApplying, setIsApplying] = useState(false);
   const [appliedFiles, setAppliedFiles] = useState<Set<string>>(new Set());
   const [diffPreview, setDiffPreview] = useState<{ filePath: string; content: string } | null>(null);
+  const [showVoiceCall, setShowVoiceCall] = useState(false);
 
   const allCodeBlocks = useMemo(() => {
     const blocks: ParsedCodeBlock[] = [];
