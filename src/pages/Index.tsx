@@ -410,11 +410,14 @@ export default function Index() {
 
       {showVoiceCall && (
         <VoiceCallMode
-          onSendMessage={handleVoiceCallMessage}
+          onSendMessage={async (content, _screenshot) => handleVoiceCallMessage(content)}
           ttsVoice={settings.ttsVoice}
           ttsRate={settings.ttsRate}
           onEnd={() => setShowVoiceCall(false)}
           autoStart
+          existingMessages={currentConversation?.messages.map(m => ({
+            id: m.id, role: m.role, content: m.content, timestamp: m.timestamp,
+          })) || []}
         />
       )}
     </div>
