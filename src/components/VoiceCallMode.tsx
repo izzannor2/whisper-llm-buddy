@@ -71,6 +71,13 @@ export function VoiceCallMode({
     };
   }, []);
 
+  // Auto-start call when rendered with autoStart
+  useEffect(() => {
+    if (autoStart && !isInCall && canMakeCall) {
+      startCall();
+    }
+  }, [autoStart]);
+
   const detectSilence = useCallback((stream: MediaStream, onSilence: () => void) => {
     const audioContext = new AudioContext();
     audioContextRef.current = audioContext;
