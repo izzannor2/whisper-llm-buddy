@@ -17,8 +17,53 @@ echo ""
 # Step 1: Check Node.js
 echo "[1/5] Checking Node.js..."
 if ! command -v node &> /dev/null; then
-    echo -e "${RED}[ERROR] Node.js not found! Install from https://nodejs.org${NC}"
-    exit 1
+    echo -e "      ${YELLOW}[!] Node.js not found - attempting auto-install...${NC}"
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        if command -v brew &> /dev/null; then
+            echo "      [*] Installing Node.js via Homebrew..."
+            brew install node
+        else
+            echo "      [*] Installing Node.js via official installer..."
+            curl -fsSL https://nodejs.org/dist/v20.18.0/node-v20.18.0.pkg -o /tmp/nodejs.pkg
+            sudo installer -pkg /tmp/nodejs.pkg -target /
+            rm -f /tmp/nodejs.pkg
+        fi
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux
+        if command -v apt-get &> /dev/null; then
+            echo "      [*] Installing Node.js via NodeSource (apt)..."
+            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+        elif command -v dnf &> /dev/null; then
+            echo "      [*] Installing Node.js via dnf..."
+            sudo dnf install -y nodejs
+        elif command -v yum &> /dev/null; then
+            echo "      [*] Installing Node.js via yum..."
+            curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+            sudo yum install -y nodejs
+        elif command -v pacman &> /dev/null; then
+            echo "      [*] Installing Node.js via pacman..."
+            sudo pacman -Sy --noconfirm nodejs npm
+        else
+            echo -e "${RED}[ERROR] Could not auto-install Node.js! Install manually: https://nodejs.org${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${RED}[ERROR] Unsupported OS. Install Node.js manually: https://nodejs.org${NC}"
+        exit 1
+    fi
+
+    # Refresh PATH
+    export PATH="/usr/local/bin:/usr/bin:$PATH"
+    hash -r 2>/dev/null
+
+    if ! command -v node &> /dev/null; then
+        echo -e "${RED}[ERROR] Node.js install completed but 'node' not found. Restart your terminal or install manually: https://nodejs.org${NC}"
+        exit 1
+    fi
+    echo -e "      ${GREEN}[OK] Node.js installed successfully!${NC}"
 fi
 echo -e "      ${GREEN}[OK] Node.js $(node --version)${NC}"
 
