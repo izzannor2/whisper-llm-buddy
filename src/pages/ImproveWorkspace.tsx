@@ -954,11 +954,14 @@ export default function ImproveWorkspace() {
       )}
       {showVoiceCall && (
         <VoiceCallMode
-          onSendMessage={handleVoiceMessage}
+          onSendMessage={async (content, _screenshot) => handleVoiceMessage(content)}
           ttsVoice={loadSettings().ttsVoice}
           ttsRate={loadSettings().ttsRate}
           onEnd={() => setShowVoiceCall(false)}
           autoStart
+          existingMessages={messages.map(m => ({
+              id: m.id, role: m.role, content: m.content, timestamp: Date.now(),
+            }))}
         />
       )}
     </div>

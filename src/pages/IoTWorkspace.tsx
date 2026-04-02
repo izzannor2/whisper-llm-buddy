@@ -207,11 +207,16 @@ export default function IoTWorkspace() {
       </ResizablePanelGroup>
       {showVoiceCall && (
         <VoiceCallMode
-          onSendMessage={handleVoiceMessage}
+          onSendMessage={async (content, _screenshot) => handleVoiceMessage(content)}
           ttsVoice={loadSettings().ttsVoice}
           ttsRate={loadSettings().ttsRate}
           onEnd={() => setShowVoiceCall(false)}
           autoStart
+          existingMessages={messages
+            .filter(m => m.role !== 'system')
+            .map(m => ({
+              id: m.id, role: m.role as 'user' | 'assistant', content: m.content, timestamp: m.timestamp,
+            }))}
         />
       )}
     </div>

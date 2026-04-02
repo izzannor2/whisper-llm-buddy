@@ -76,9 +76,16 @@ serve(async (req) => {
 
     console.log(`Chat request - Model: ${aiModel}, Stream: ${stream}, Messages: ${messages.length}, Agent: ${agentMode || 'chat'}`);
 
+    // Process messages: support multimodal (image_url) content for vision models
+    const processedMessages = messages.map((msg: Record<string, unknown>) => {
+      // If content is already an array (multimodal), pass through
+      if (Array.isArray(msg.content)) return msg;
+      return msg;
+    });
+
     const requestBody: Record<string, unknown> = {
       model: aiModel,
-      messages,
+      messages: processedMessages,
       temperature: temperature ?? 0.7,
       top_p: top_p ?? 0.9,
       max_tokens: max_tokens ?? 2048,
