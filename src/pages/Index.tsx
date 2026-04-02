@@ -188,7 +188,17 @@ export default function Index() {
         ? `You are in PLANNING MODE. Do NOT write code yet. Instead:\n1. Ask clarifying questions about requirements\n2. Outline architecture and file structure\n3. List technologies and libraries to use\n4. Break the project into implementation steps\n5. Only when the user says "start building" should you switch to code generation.\n\n`
         : '';
 
-      // Web search: search before sending to AI, inject results as context
+      // Agent routing — classify intent
+      const routeResult = routeToAgent(content);
+      setCurrentAgent(routeResult.agent.type);
+      const agentStep: AgentStep = {
+        id: generateId(), agentType: routeResult.agent.type,
+        action: `${routeResult.agent.emoji} ${routeResult.agent.name}`,
+        status: 'running', detail: routeResult.reasoning, timestamp: Date.now(),
+      };
+      setAgentSteps(prev => [...prev.slice(-20), agentStep]);
+
+      // Web search
       let searchContext = '';
       if (webSearchEnabled) {
         try {
@@ -201,11 +211,23 @@ export default function Index() {
         }
       }
 
-      if (modePrompt || planningPrefix || searchContext) {
-        effectiveSettings.systemPrompt = planningPrefix + (modePrompt || '') + searchContext + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
+      // Memory injection
+      let memoryContext = '';
+      try {
+        memoryContext = await getRelevantMemories(content);
+      } catch { /* ignore */ }
+
+      const agentPrompt = routeResult.agent.systemPrompt || '';
+
+      if (modePrompt || planningPrefix || searchContext || memoryContext || agentPrompt) {
+        effectiveSettings.systemPrompt = planningPrefix + agentPrompt + (agentPrompt ? '\n\n' : '') + (modePrompt || '') + searchContext + memoryContext + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
       }
 
       await sendChatMessage(chatMessages, effectiveSettings, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
+
+      // Update agent step
+      setAgentSteps(prev => prev.map(s => s.id === agentStep.id ? { ...s, status: 'complete', duration: Date.now() - agentStep.timestamp } : s));
+      setCurrentAgent(undefined);
 
       const assistantMessage: Message = { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() };
       const updatedConv = { ...conv, messages: [...conv.messages, assistantMessage], updatedAt: Date.now() };
