@@ -959,10 +959,8 @@ export default function ImproveWorkspace() {
           ttsRate={loadSettings().ttsRate}
           onEnd={() => setShowVoiceCall(false)}
           autoStart
-          existingMessages={messages
-            .filter(m => m.role !== 'system')
-            .map(m => ({
-              id: m.id, role: m.role as 'user' | 'assistant', content: m.content, timestamp: Date.now(),
+          existingMessages={messages.map(m => ({
+              id: m.id, role: m.role, content: m.content, timestamp: Date.now(),
             }))}
         />
       )}
