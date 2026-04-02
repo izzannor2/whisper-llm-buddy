@@ -202,6 +202,15 @@ export default function IoTWorkspace() {
           </ResizablePanelGroup>
         </ResizablePanel>
       </ResizablePanelGroup>
+      {showVoiceCall && (
+        <VoiceCallMode
+          onSendMessage={handleVoiceMessage}
+          ttsVoice={loadSettings().ttsVoice}
+          ttsRate={loadSettings().ttsRate}
+          onEnd={() => setShowVoiceCall(false)}
+          autoStart
+        />
+      )}
     </div>
   );
 }
