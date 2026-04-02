@@ -37,6 +37,8 @@ interface ChatSidebarProps {
   onImport?: () => void;
   onOpenCodeLibrary?: () => void;
   onOpenModels?: () => void;
+  onOpenMemory?: () => void;
+  onOpenAutoBuild?: () => void;
   currentMode?: IDEMode;
   currentModeKey?: string;
   onModeChange?: (mode: IDEMode, key: string) => void;
@@ -75,6 +77,7 @@ const MODE_ICON_MAP: Record<string, { icon: any; color: string }> = {
 
 export function ChatSidebar({
   conversations, currentId, onSelect, onNew, onDelete, onOpenSettings,
+  onOpenMemory, onOpenAutoBuild,
   currentMode = 'app-builder', currentModeKey, onModeChange, onCollapse,
   isLocked, onToggleLock, isOfflineMode, onToggleOffline,
 }: ChatSidebarProps) {
@@ -251,6 +254,18 @@ export function ChatSidebar({
         <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={() => setFileSearchOpen(true)}>
           <FileSearch className="w-4 h-4 mr-3 text-blue-400" />File Search
         </Button>
+
+        {onOpenMemory && (
+          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenMemory}>
+            <Sparkles className="w-4 h-4 mr-3 text-pink-400" />AI Memory
+          </Button>
+        )}
+
+        {onOpenAutoBuild && (
+          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenAutoBuild}>
+            <Zap className="w-4 h-4 mr-3 text-amber-400" />Auto-Build
+          </Button>
+        )}
 
         <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" asChild>
           <Link to="/models">

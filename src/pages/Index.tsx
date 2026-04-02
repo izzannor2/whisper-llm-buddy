@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, X, Zap, OctagonX, Crown } from 'lucide-react';
+import { Menu, X, Zap, OctagonX, Crown, Brain, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
@@ -14,9 +14,14 @@ import { CodeLibrary } from '@/components/CodeLibrary';
 import { OpenClawOverlay } from '@/components/OpenClawOverlay';
 import { LockScreen } from '@/components/LockScreen';
 import { VoiceCallMode } from '@/components/VoiceCallMode';
+import { MemoryPanel } from '@/components/MemoryPanel';
+import { AgentActivityPanel, AgentStep } from '@/components/AgentActivityPanel';
+import { AutoBuildPanel } from '@/components/AutoBuildPanel';
 import { IDEMode } from '@/lib/ide-types';
 import { getIDESettings, saveIDESettings } from '@/lib/ide-store';
 import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
+import { routeToAgent, AgentType } from '@/lib/agent-router';
+import { getRelevantMemories } from '@/lib/memory-store';
 import {
   Conversation, Message, getAllConversations, getConversation,
   saveConversation, deleteConversation, generateId, initDB,
@@ -49,6 +54,10 @@ export default function Index() {
   const [planningMode, setPlanningMode] = useState(false);
   const [showVoiceCall, setShowVoiceCall] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [memoryPanelOpen, setMemoryPanelOpen] = useState(false);
+  const [autoBuildOpen, setAutoBuildOpen] = useState(false);
+  const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
+  const [currentAgent, setCurrentAgent] = useState<AgentType | undefined>();
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
   const [killSwitchActive, setKillSwitchActive] = useState(false);
@@ -179,7 +188,17 @@ export default function Index() {
         ? `You are in PLANNING MODE. Do NOT write code yet. Instead:\n1. Ask clarifying questions about requirements\n2. Outline architecture and file structure\n3. List technologies and libraries to use\n4. Break the project into implementation steps\n5. Only when the user says "start building" should you switch to code generation.\n\n`
         : '';
 
-      // Web search: search before sending to AI, inject results as context
+      // Agent routing — classify intent
+      const routeResult = routeToAgent(content);
+      setCurrentAgent(routeResult.agent.type);
+      const agentStep: AgentStep = {
+        id: generateId(), agentType: routeResult.agent.type,
+        action: `${routeResult.agent.emoji} ${routeResult.agent.name}`,
+        status: 'running', detail: routeResult.reasoning, timestamp: Date.now(),
+      };
+      setAgentSteps(prev => [...prev.slice(-20), agentStep]);
+
+      // Web search
       let searchContext = '';
       if (webSearchEnabled) {
         try {
@@ -192,11 +211,23 @@ export default function Index() {
         }
       }
 
-      if (modePrompt || planningPrefix || searchContext) {
-        effectiveSettings.systemPrompt = planningPrefix + (modePrompt || '') + searchContext + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
+      // Memory injection
+      let memoryContext = '';
+      try {
+        memoryContext = await getRelevantMemories(content);
+      } catch { /* ignore */ }
+
+      const agentPrompt = routeResult.agent.systemPrompt || '';
+
+      if (modePrompt || planningPrefix || searchContext || memoryContext || agentPrompt) {
+        effectiveSettings.systemPrompt = planningPrefix + agentPrompt + (agentPrompt ? '\n\n' : '') + (modePrompt || '') + searchContext + memoryContext + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
       }
 
       await sendChatMessage(chatMessages, effectiveSettings, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
+
+      // Update agent step
+      setAgentSteps(prev => prev.map(s => s.id === agentStep.id ? { ...s, status: 'complete', duration: Date.now() - agentStep.timestamp } : s));
+      setCurrentAgent(undefined);
 
       const assistantMessage: Message = { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() };
       const updatedConv = { ...conv, messages: [...conv.messages, assistantMessage], updatedAt: Date.now() };
@@ -293,6 +324,8 @@ export default function Index() {
           onNew={createNewConversation}
           onDelete={handleDeleteConversation}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenMemory={() => setMemoryPanelOpen(true)}
+          onOpenAutoBuild={() => setAutoBuildOpen(true)}
           currentMode={currentMode}
           currentModeKey={currentModeKey}
           onModeChange={handleModeChange}
@@ -364,6 +397,8 @@ export default function Index() {
                   />
                 )}
                 {isLoading && !streamingContent && <TypingIndicator />}
+                {/* Agent Activity */}
+                <AgentActivityPanel steps={agentSteps} currentAgent={currentAgent} isProcessing={isLoading} />
               </div>
             )}
           </div>
@@ -387,6 +422,8 @@ export default function Index() {
       </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onSave={handleSettingsSave} />
+      <MemoryPanel open={memoryPanelOpen} onOpenChange={setMemoryPanelOpen} />
+      <AutoBuildPanel open={autoBuildOpen} onOpenChange={setAutoBuildOpen} onSendMessage={handleSendMessage} />
       {codeLibraryOpen && <div className="fixed inset-y-0 right-0 w-80 z-50 shadow-xl"><CodeLibrary onClose={() => setCodeLibraryOpen(false)} /></div>}
 
       {settings.openClawEnabled && openClawOpen && (
