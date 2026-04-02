@@ -267,11 +267,13 @@ export default function ImproveWorkspace() {
   useEffect(() => {
     if (allCodeBlocks.length > 0) {
       try {
-        const files: Record<string, string> = {};
-        for (const block of allCodeBlocks) {
-          files[block.filePath] = block.content;
-        }
-        const html = buildPreviewHTML(files);
+        const projectFiles = allCodeBlocks.map(block => ({
+          name: block.filePath.split('/').pop() || block.filePath,
+          path: block.filePath,
+          content: block.content,
+          isDirectory: false,
+        }));
+        const html = buildPreviewHTML(projectFiles);
         setPreviewHtml(html);
       } catch {
         // Preview build failed, that's okay
