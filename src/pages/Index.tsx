@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { CodeLibrary } from '@/components/CodeLibrary';
 import { OpenClawOverlay } from '@/components/OpenClawOverlay';
 import { LockScreen } from '@/components/LockScreen';
+import { VoiceCallMode } from '@/components/VoiceCallMode';
 import { IDEMode } from '@/lib/ide-types';
 import { getIDESettings, saveIDESettings } from '@/lib/ide-store';
 import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
@@ -46,6 +47,7 @@ export default function Index() {
   const [modelLoaded, setModelLoaded] = useState(false);
   const [openClawOpen, setOpenClawOpen] = useState(false);
   const [planningMode, setPlanningMode] = useState(false);
+  const [showVoiceCall, setShowVoiceCall] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
@@ -380,6 +382,7 @@ export default function Index() {
           onPlanningToggle={setPlanningMode}
           webSearchEnabled={webSearchEnabled}
           onWebSearchToggle={setWebSearchEnabled}
+          onVoiceCall={() => setShowVoiceCall(true)}
         />
       </div>
 
@@ -403,6 +406,16 @@ export default function Index() {
         >
           <Zap className="h-5 w-5" />
         </Button>
+      )}
+
+      {showVoiceCall && (
+        <VoiceCallMode
+          onSendMessage={handleVoiceCallMessage}
+          ttsVoice={settings.ttsVoice}
+          ttsRate={settings.ttsRate}
+          onEnd={() => setShowVoiceCall(false)}
+          autoStart
+        />
       )}
     </div>
   );

@@ -4,7 +4,7 @@ import {
   Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown,
   RefreshCw, Loader2, Lightbulb, Mic, MicOff, Send, Wand2, Zap,
   Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2,
-  CheckSquare, Square, X, CheckCheck, FileCode, Check, Upload, Eye,
+  CheckSquare, Square, X, CheckCheck, FileCode, Check, Upload, Eye, Phone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -25,6 +25,7 @@ import { parseCodeBlocks, ParsedCodeBlock } from '@/lib/code-parser';
 import { writeFile } from '@/lib/file-system';
 import { DiffPreview } from '@/components/DiffPreview';
 import { buildPreviewHTML } from '@/lib/preview-builder';
+import { VoiceCallMode } from '@/components/VoiceCallMode';
 
 interface FileNode { name: string; path: string; type: 'file' | 'directory'; children?: FileNode[]; }
 interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; }
@@ -252,6 +253,7 @@ export default function ImproveWorkspace() {
   const [isApplying, setIsApplying] = useState(false);
   const [appliedFiles, setAppliedFiles] = useState<Set<string>>(new Set());
   const [diffPreview, setDiffPreview] = useState<{ filePath: string; content: string } | null>(null);
+  const [showVoiceCall, setShowVoiceCall] = useState(false);
 
   const allCodeBlocks = useMemo(() => {
     const blocks: ParsedCodeBlock[] = [];
@@ -432,6 +434,27 @@ export default function ImproveWorkspace() {
     }
   }, [input, messages, isLoading, selectedFiles, isPlanMode, convId]);
 
+  const handleVoiceMessage = useCallback(async (content: string): Promise<string> => {
+    const userMsg: ChatMsg = { id: generateId(), role: 'user', content };
+    const allMsgsBefore = [...messages, userMsg];
+    setMessages(allMsgsBefore);
+    setIsLoading(true);
+    try {
+      const settings = loadSettings();
+      const filesContext = selectedFiles.size > 0 ? `\nSelected files: ${[...selectedFiles].join(', ')}` : '';
+      const systemPrompt = `IMPORTANT: Output code with \`\`\`language:/path/to/file.ext format.\n\n` + getModeSystemPrompt('ai-improvement') + filesContext;
+      const chatMsgs = [
+        { role: 'system' as const, content: systemPrompt },
+        ...allMsgsBefore.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ];
+      let fullResponse = '';
+      await sendChatMessage(chatMsgs, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; });
+      setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse }]);
+      return fullResponse;
+    } catch { return ''; }
+    finally { setIsLoading(false); setStreamingContent(''); }
+  }, [messages, selectedFiles]);
+
   const toggleRecording = useCallback(async () => {
     if (isRecording && mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
@@ -584,6 +607,9 @@ export default function ImproveWorkspace() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-400 hover:text-green-300" onClick={() => setShowVoiceCall(true)} title="Voice call">
+            <Phone className="h-4 w-4" />
+          </Button>
           {allCodeBlocks.length > 0 && (
             <Button
               variant="ghost" size="sm"
@@ -924,6 +950,15 @@ export default function ImproveWorkspace() {
           filePath={diffPreview.filePath}
           newContent={diffPreview.content}
           onApply={() => handleApplySingle(diffPreview.filePath, diffPreview.content)}
+        />
+      )}
+      {showVoiceCall && (
+        <VoiceCallMode
+          onSendMessage={handleVoiceMessage}
+          ttsVoice={loadSettings().ttsVoice}
+          ttsRate={loadSettings().ttsRate}
+          onEnd={() => setShowVoiceCall(false)}
+          autoStart
         />
       )}
     </div>

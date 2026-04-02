@@ -19,6 +19,8 @@ interface VoiceCallModeProps {
   ttsVoice?: string;
   ttsRate?: number;
   disabled?: boolean;
+  onEnd?: () => void;
+  autoStart?: boolean;
 }
 
 type CallState = 'idle' | 'loading' | 'listening' | 'processing' | 'speaking' | 'waiting';
@@ -27,7 +29,9 @@ export function VoiceCallMode({
   onSendMessage, 
   ttsVoice, 
   ttsRate = 1.0,
-  disabled 
+  disabled,
+  onEnd,
+  autoStart = false,
 }: VoiceCallModeProps) {
   const [isInCall, setIsInCall] = useState(false);
   const [callState, setCallState] = useState<CallState>('idle');
@@ -66,6 +70,13 @@ export function VoiceCallMode({
       endCall();
     };
   }, []);
+
+  // Auto-start call when rendered with autoStart
+  useEffect(() => {
+    if (autoStart && !isInCall && canMakeCall) {
+      startCall();
+    }
+  }, [autoStart]);
 
   const detectSilence = useCallback((stream: MediaStream, onSilence: () => void) => {
     const audioContext = new AudioContext();
@@ -324,6 +335,7 @@ export function VoiceCallMode({
     setIsInCall(false);
     setCallState('idle');
     setTranscript('');
+    onEnd?.();
     setAiResponse('');
     setLoadingMessage('');
     

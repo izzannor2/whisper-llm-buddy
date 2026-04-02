@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2, Lightbulb, Globe } from 'lucide-react';
+import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2, Lightbulb, Globe, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -25,6 +25,7 @@ interface ChatInputProps {
   onPlanningToggle?: (active: boolean) => void;
   webSearchEnabled?: boolean;
   onWebSearchToggle?: (enabled: boolean) => void;
+  onVoiceCall?: () => void;
 }
 
 export interface ChatInputRef {
@@ -63,7 +64,7 @@ interface SpeechRecognition extends EventTarget {
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
   function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice, selectedModel = 'llama-3.2-1b',
     onModelChange, modelLoaded = false, modeKey = 'chat', planningMode = false, onPlanningToggle,
-    webSearchEnabled = false, onWebSearchToggle,
+    webSearchEnabled = false, onWebSearchToggle, onVoiceCall,
   }, ref) {
     const settings = loadSettings();
     const [message, setMessage] = useState('');
@@ -282,6 +283,19 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
               )}
 
               <div className="flex-1" />
+
+              {onVoiceCall && (
+                <Button
+                  variant="ghost" size="icon"
+                  className={cn('h-8 w-8 rounded-full transition-all',
+                    whisperAvailable ? 'text-green-500 hover:text-green-400 hover:bg-green-500/10' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  onClick={onVoiceCall}
+                  title="Start voice call"
+                >
+                  <Phone className="w-4 h-4" />
+                </Button>
+              )}
 
               <Button
                 variant="ghost" size="icon"

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Check, Upload, Cpu, Activity, Mic, MicOff, Loader2 } from 'lucide-react';
+import { Home, Check, Upload, Cpu, Activity, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -15,6 +15,7 @@ import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { saveConversation, Conversation } from '@/lib/db';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { VoiceCallMode } from '@/components/VoiceCallMode';
 
 interface Message {
   id: string;
@@ -41,7 +42,7 @@ export default function IoTWorkspace() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [convId] = useState(() => generateId());
-
+  const [showVoiceCall, setShowVoiceCall] = useState(false);
   useEffect(() => { applyModeTheme('embedded-iot'); }, []);
 
   const handleVerify = () => {
@@ -109,6 +110,26 @@ export default function IoTWorkspace() {
     }
   }, [messages, board]);
 
+  const handleVoiceMessage = useCallback(async (content: string): Promise<string> => {
+    const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    try {
+      const boardName = BOARD_TYPES.find(b => b.id === board)?.name || board;
+      const chatMessages: ChatMessage[] = [
+        { role: 'system', content: `You are an embedded systems expert for ${boardName}.` },
+        ...messages.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content },
+      ];
+      const settings = loadSettings();
+      let fullResponse = '';
+      await sendChatMessage(chatMessages, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; });
+      setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() }]);
+      return fullResponse;
+    } catch { return ''; }
+    finally { setIsLoading(false); }
+  }, [messages, board]);
+
   return (
     <div className="h-screen flex flex-col" style={{ background: 'hsl(160, 20%, 6%)' }}>
       <header className="h-12 flex items-center justify-between px-3 border-b" style={{
@@ -123,6 +144,9 @@ export default function IoTWorkspace() {
           <span className="text-xs text-teal-400/80 font-mono">{selectedFile.name}</span>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-400 hover:text-green-300" onClick={() => setShowVoiceCall(true)} title="Voice call">
+            <Phone className="h-4 w-4" />
+          </Button>
           <Button size="sm" className="h-8 gap-1.5 bg-teal-700 hover:bg-teal-600 text-white" onClick={handleVerify} disabled={isVerifying}>
             <Check className="w-3.5 h-3.5" />{isVerifying ? 'Verifying...' : 'Verify'}
           </Button>
@@ -181,6 +205,15 @@ export default function IoTWorkspace() {
           </ResizablePanelGroup>
         </ResizablePanel>
       </ResizablePanelGroup>
+      {showVoiceCall && (
+        <VoiceCallMode
+          onSendMessage={handleVoiceMessage}
+          ttsVoice={loadSettings().ttsVoice}
+          ttsRate={loadSettings().ttsRate}
+          onEnd={() => setShowVoiceCall(false)}
+          autoStart
+        />
+      )}
     </div>
   );
 }
