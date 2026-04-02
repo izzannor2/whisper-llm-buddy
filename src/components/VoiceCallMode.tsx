@@ -1,49 +1,94 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Phone, PhoneOff, Mic, Volume2, Loader2, MicOff, Hand } from 'lucide-react';
+import {
+  Phone, PhoneOff, Mic, Volume2, Loader2, MicOff, Hand,
+  Monitor, MonitorOff, MessageSquare, Send, ChevronDown,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { 
-  isWhisperLoaded, 
-  loadWhisperModel, 
-  transcribeAudio, 
-  getSelectedWhisperModel,
-  getDownloadedModels 
+import {
+  isWhisperLoaded, loadWhisperModel, transcribeAudio,
+  getSelectedWhisperModel, getDownloadedModels,
 } from '@/lib/local-stt';
 import { speak, stopSpeaking, isTTSSupported } from '@/lib/tts';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+export interface VoiceMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  isVoice?: boolean;
+  screenshot?: string; // base64
+}
 
 interface VoiceCallModeProps {
-  onSendMessage: (message: string) => Promise<string>;
+  onSendMessage: (message: string, screenshot?: string) => Promise<string>;
   ttsVoice?: string;
   ttsRate?: number;
   disabled?: boolean;
   onEnd?: () => void;
   autoStart?: boolean;
+  /** Existing conversation messages to display in the chat panel */
+  existingMessages?: VoiceMessage[];
+  /** Callback when a new voice message pair is created so parent can persist */
+  onNewMessages?: (userMsg: VoiceMessage, assistantMsg: VoiceMessage) => void;
 }
 
 type CallState = 'idle' | 'loading' | 'listening' | 'processing' | 'speaking' | 'waiting';
 
-export function VoiceCallMode({ 
-  onSendMessage, 
-  ttsVoice, 
+const MODEL_OPTIONS = [
+  { value: 'gemini-flash', label: 'Gemini Flash' },
+  { value: 'gemini-pro', label: 'Gemini Pro (Vision)' },
+];
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
+
+export function VoiceCallMode({
+  onSendMessage,
+  ttsVoice,
   ttsRate = 1.0,
   disabled,
   onEnd,
   autoStart = false,
+  existingMessages = [],
+  onNewMessages,
 }: VoiceCallModeProps) {
   const [isInCall, setIsInCall] = useState(false);
   const [callState, setCallState] = useState<CallState>('idle');
   const [transcript, setTranscript] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
   const [loadingMessage, setLoadingMessage] = useState('');
-  const [pushToTalk, setPushToTalk] = useState(() => {
-    const saved = localStorage.getItem('voice-push-to-talk');
-    return saved === 'true';
-  });
+  const [pushToTalk, setPushToTalk] = useState(() => localStorage.getItem('voice-push-to-talk') === 'true');
   const [isHoldingSpace, setIsHoldingSpace] = useState(false);
-  
+  const [isMuted, setIsMuted] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('gemini-flash');
+  const [textInput, setTextInput] = useState('');
+  const [showTextInput, setShowTextInput] = useState(false);
+
+  // Screen share state
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [screenPreview, setScreenPreview] = useState<string | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const screenCaptureIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const latestScreenshotRef = useRef<string | null>(null);
+
+  // Chat history for the call
+  const [callMessages, setCallMessages] = useState<VoiceMessage[]>(existingMessages);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Audio refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -52,32 +97,145 @@ export function VoiceCallMode({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const pushToTalkRef = useRef(pushToTalk);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animFrameRef = useRef<number>(0);
 
-  // Keep ref in sync with state
+  // Sync existing messages when they change
+  useEffect(() => {
+    if (existingMessages.length > 0) {
+      setCallMessages(existingMessages);
+    }
+  }, [existingMessages]);
+
   useEffect(() => {
     pushToTalkRef.current = pushToTalk;
     localStorage.setItem('voice-push-to-talk', String(pushToTalk));
   }, [pushToTalk]);
 
-  // Check if voice call is available (need Whisper model + TTS)
   const whisperReady = isWhisperLoaded() || getDownloadedModels().length > 0;
   const ttsReady = isTTSSupported();
   const canMakeCall = whisperReady && ttsReady;
 
+  // Scroll chat to bottom
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [callMessages]);
+
   // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      endCall();
-    };
+    return () => { endCall(); };
   }, []);
 
-  // Auto-start call when rendered with autoStart
+  // Auto-start
   useEffect(() => {
     if (autoStart && !isInCall && canMakeCall) {
       startCall();
     }
   }, [autoStart]);
 
+  /* ---------------------------------------------------------------- */
+  /*  Audio Waveform Visualization                                     */
+  /* ---------------------------------------------------------------- */
+  const drawWaveform = useCallback(() => {
+    const canvas = canvasRef.current;
+    const analyser = analyserRef.current;
+    if (!canvas || !analyser || !isCallActiveRef.current) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    analyser.getByteFrequencyData(dataArray);
+
+    const { width, height } = canvas;
+    ctx.clearRect(0, 0, width, height);
+
+    const barWidth = (width / bufferLength) * 2.5;
+    let x = 0;
+    for (let i = 0; i < bufferLength; i++) {
+      const barHeight = (dataArray[i] / 255) * height * 0.8;
+      const hue = callState === 'listening' ? 142 : callState === 'speaking' ? 262 : 220;
+      ctx.fillStyle = `hsla(${hue}, 80%, 60%, ${0.6 + (dataArray[i] / 255) * 0.4})`;
+      ctx.fillRect(x, height - barHeight, barWidth - 1, barHeight);
+      x += barWidth;
+    }
+    animFrameRef.current = requestAnimationFrame(drawWaveform);
+  }, [callState]);
+
+  useEffect(() => {
+    if (isInCall && analyserRef.current && (callState === 'listening' || callState === 'speaking')) {
+      drawWaveform();
+    }
+    return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
+  }, [isInCall, callState, drawWaveform]);
+
+  /* ---------------------------------------------------------------- */
+  /*  Screen Sharing                                                   */
+  /* ---------------------------------------------------------------- */
+  const startScreenShare = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      screenStreamRef.current = stream;
+      setIsScreenSharing(true);
+
+      // Create a hidden video element to capture frames
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.muted = true;
+      video.play();
+      screenVideoRef.current = video;
+
+      // Capture a frame every 8 seconds
+      const captureFrame = () => {
+        if (!video.videoWidth) return;
+        const c = document.createElement('canvas');
+        c.width = Math.min(video.videoWidth, 1280);
+        c.height = Math.min(video.videoHeight, 720);
+        const cx = c.getContext('2d');
+        if (cx) {
+          cx.drawImage(video, 0, 0, c.width, c.height);
+          const dataUrl = c.toDataURL('image/jpeg', 0.6);
+          latestScreenshotRef.current = dataUrl;
+          setScreenPreview(dataUrl);
+        }
+      };
+
+      // Initial capture after a small delay
+      setTimeout(captureFrame, 1000);
+      screenCaptureIntervalRef.current = setInterval(captureFrame, 8000);
+
+      stream.getVideoTracks()[0].addEventListener('ended', () => {
+        stopScreenShare();
+      });
+
+      toast.success('Screen sharing started');
+    } catch (err: any) {
+      if (err.name !== 'AbortError') toast.error('Failed to start screen sharing');
+    }
+  }, []);
+
+  const stopScreenShare = useCallback(() => {
+    if (screenCaptureIntervalRef.current) {
+      clearInterval(screenCaptureIntervalRef.current);
+      screenCaptureIntervalRef.current = null;
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(t => t.stop());
+      screenStreamRef.current = null;
+    }
+    if (screenVideoRef.current) {
+      screenVideoRef.current.pause();
+      screenVideoRef.current = null;
+    }
+    latestScreenshotRef.current = null;
+    setScreenPreview(null);
+    setIsScreenSharing(false);
+  }, []);
+
+  /* ---------------------------------------------------------------- */
+  /*  Silence Detection                                                */
+  /* ---------------------------------------------------------------- */
   const detectSilence = useCallback((stream: MediaStream, onSilence: () => void) => {
     const audioContext = new AudioContext();
     audioContextRef.current = audioContext;
@@ -85,306 +243,252 @@ export function VoiceCallMode({
     analyserRef.current = analyser;
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(analyser);
-    
     analyser.fftSize = 512;
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
-    
     let silenceStart = 0;
-    const SILENCE_THRESHOLD = 15; // Lower = more sensitive
-    const SILENCE_DURATION = 1500; // 1.5 seconds of silence to trigger stop
-    
+    const SILENCE_THRESHOLD = 15;
+    const SILENCE_DURATION = 1500;
+
     const checkAudio = () => {
       if (!isCallActiveRef.current) return;
-      
       analyser.getByteFrequencyData(dataArray);
       const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
-      
       if (average < SILENCE_THRESHOLD) {
         if (!silenceStart) silenceStart = Date.now();
-        if (Date.now() - silenceStart > SILENCE_DURATION) {
-          onSilence();
-          return;
-        }
-      } else {
-        silenceStart = 0;
-      }
-      
+        if (Date.now() - silenceStart > SILENCE_DURATION) { onSilence(); return; }
+      } else { silenceStart = 0; }
       requestAnimationFrame(checkAudio);
     };
-    
     checkAudio();
   }, []);
 
+  /* ---------------------------------------------------------------- */
+  /*  Core: Start Listening                                            */
+  /* ---------------------------------------------------------------- */
   const startListening = useCallback(async () => {
-    if (!isCallActiveRef.current) return;
-    
+    if (!isCallActiveRef.current || isMuted) return;
     setCallState('listening');
     setTranscript('');
-    
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
       streamRef.current = stream;
-      
-      // Try to get the best available format
+
       let mimeType = 'audio/webm';
-      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        mimeType = 'audio/webm;codecs=opus';
-      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-        mimeType = 'audio/mp4';
-      }
-      
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
+      else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       audioChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
 
       mediaRecorder.onstop = async () => {
         if (!isCallActiveRef.current) return;
-        
-        // Cleanup audio context
-        if (audioContextRef.current) {
-          audioContextRef.current.close();
-          audioContextRef.current = null;
-        }
-        
-        stream.getTracks().forEach(track => track.stop());
-        
+        if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+        stream.getTracks().forEach(t => t.stop());
+
         if (audioChunksRef.current.length === 0) {
-          if (isCallActiveRef.current && !pushToTalkRef.current) {
-            setTimeout(() => startListening(), 500);
-          } else if (isCallActiveRef.current && pushToTalkRef.current) {
-            setCallState('waiting');
-          }
+          if (isCallActiveRef.current && !pushToTalkRef.current) setTimeout(() => startListening(), 500);
+          else if (isCallActiveRef.current && pushToTalkRef.current) setCallState('waiting');
           return;
         }
 
         setCallState('processing');
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        
+
         try {
-          // Ensure Whisper is loaded
           if (!isWhisperLoaded()) {
             setLoadingMessage('Loading speech model...');
             setCallState('loading');
-            const success = await loadWhisperModel(getSelectedWhisperModel(), (progress) => {
-              if (progress.message) {
-                setLoadingMessage(progress.message);
-              }
-            });
-            if (!success) {
-              throw new Error('Failed to load Whisper model');
-            }
+            const success = await loadWhisperModel(getSelectedWhisperModel(), (p) => { if (p.message) setLoadingMessage(p.message); });
+            if (!success) throw new Error('Failed to load Whisper model');
             setCallState('processing');
           }
 
-          // Convert to audio data for Whisper
           const arrayBuffer = await audioBlob.arrayBuffer();
-          const audioContext = new AudioContext({ sampleRate: 16000 });
-          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-          const audioData = audioBuffer.getChannelData(0);
-          await audioContext.close();
+          const ac = new AudioContext({ sampleRate: 16000 });
+          const ab = await ac.decodeAudioData(arrayBuffer);
+          const audioData = ab.getChannelData(0);
+          await ac.close();
 
           const text = await transcribeAudio(audioData);
-          
+
           if (text.trim() && isCallActiveRef.current) {
             setTranscript(text.trim());
+            const screenshot = latestScreenshotRef.current || undefined;
             
-            // Send to AI
-            const response = await onSendMessage(text.trim());
-            
+            // Add user message to chat
+            const userMsg: VoiceMessage = {
+              id: crypto.randomUUID(), role: 'user', content: text.trim(),
+              timestamp: Date.now(), isVoice: true, screenshot,
+            };
+            setCallMessages(prev => [...prev, userMsg]);
+
+            const response = await onSendMessage(text.trim(), screenshot);
+
             if (response && isCallActiveRef.current) {
-              setAiResponse(response);
+              const assistantMsg: VoiceMessage = {
+                id: crypto.randomUUID(), role: 'assistant', content: response,
+                timestamp: Date.now(), isVoice: true,
+              };
+              setCallMessages(prev => [...prev, assistantMsg]);
+              onNewMessages?.(userMsg, assistantMsg);
+
               setCallState('speaking');
-              
-              // Speak the response
               speak(response, {
-                voice: ttsVoice,
-                rate: ttsRate,
+                voice: ttsVoice, rate: ttsRate,
                 onEnd: () => {
                   if (isCallActiveRef.current) {
-                    if (pushToTalkRef.current) {
-                      // In push-to-talk mode, wait for user to press space
-                      setCallState('waiting');
-                    } else {
-                      // Continue the conversation loop
-                      setTimeout(() => startListening(), 300);
-                    }
+                    if (pushToTalkRef.current) setCallState('waiting');
+                    else setTimeout(() => startListening(), 300);
                   }
                 },
               });
             } else if (isCallActiveRef.current) {
-              if (pushToTalkRef.current) {
-                setCallState('waiting');
-              } else {
-                setTimeout(() => startListening(), 500);
-              }
+              if (pushToTalkRef.current) setCallState('waiting');
+              else setTimeout(() => startListening(), 500);
             }
           } else if (isCallActiveRef.current) {
-            // No speech detected
-            if (pushToTalkRef.current) {
-              setCallState('waiting');
-            } else {
-              setTimeout(() => startListening(), 500);
-            }
+            if (pushToTalkRef.current) setCallState('waiting');
+            else setTimeout(() => startListening(), 500);
           }
         } catch (error) {
           console.error('Voice call error:', error);
           if (isCallActiveRef.current) {
             toast.error('Voice processing failed. Retrying...');
-            if (pushToTalkRef.current) {
-              setCallState('waiting');
-            } else {
-              setTimeout(() => startListening(), 1000);
-            }
+            if (pushToTalkRef.current) setCallState('waiting');
+            else setTimeout(() => startListening(), 1000);
           }
         }
       };
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
-      
-      // Only setup silence detection if NOT in push-to-talk mode
+
       if (!pushToTalkRef.current) {
-        detectSilence(stream, () => {
-          if (mediaRecorderRef.current?.state === 'recording') {
-            mediaRecorderRef.current.stop();
-          }
-        });
+        detectSilence(stream, () => { if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop(); });
       }
-      
-      // Safety timeout - stop after 30 seconds max (60s for push-to-talk)
+
       const maxDuration = pushToTalkRef.current ? 60000 : 30000;
       silenceTimeoutRef.current = setTimeout(() => {
-        if (mediaRecorderRef.current?.state === 'recording') {
-          mediaRecorderRef.current.stop();
-        }
+        if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
       }, maxDuration);
-      
     } catch (error) {
       console.error('Failed to start listening:', error);
       toast.error('Microphone access failed');
-      if (isCallActiveRef.current) {
-        setTimeout(() => startListening(), 1000);
-      }
+      if (isCallActiveRef.current) setTimeout(() => startListening(), 1000);
     }
-  }, [onSendMessage, ttsVoice, ttsRate, detectSilence]);
+  }, [onSendMessage, ttsVoice, ttsRate, detectSilence, isMuted, onNewMessages]);
 
+  /* ---------------------------------------------------------------- */
+  /*  Start / End Call                                                  */
+  /* ---------------------------------------------------------------- */
   const startCall = useCallback(async () => {
     if (!canMakeCall) {
       toast.error('Download a Whisper model in Settings → Voice Models to enable voice calls');
       return;
     }
-
-    // Request mic permission first
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
-    } catch {
-      toast.error('Microphone access required for voice calls');
-      return;
-    }
+      stream.getTracks().forEach(t => t.stop());
+    } catch { toast.error('Microphone access required for voice calls'); return; }
 
     isCallActiveRef.current = true;
     setIsInCall(true);
     setTranscript('');
-    setAiResponse('');
     setLoadingMessage('');
-    
-    // Pre-load Whisper model if needed
+
     if (!isWhisperLoaded()) {
       setCallState('loading');
       setLoadingMessage('Loading speech recognition...');
-      const success = await loadWhisperModel(getSelectedWhisperModel(), (progress) => {
-        if (progress.message) {
-          setLoadingMessage(progress.message);
-        }
-      });
+      const success = await loadWhisperModel(getSelectedWhisperModel(), (p) => { if (p.message) setLoadingMessage(p.message); });
       if (!success) {
         toast.error('Failed to load speech model');
-        isCallActiveRef.current = false;
-        setIsInCall(false);
-        setCallState('idle');
+        isCallActiveRef.current = false; setIsInCall(false); setCallState('idle');
         return;
       }
     }
-    
-    const modeText = pushToTalk ? 'Hold Space to talk' : 'Speak anytime';
-    toast.success(`Voice call started - ${modeText}`, { duration: 2000 });
-    
-    // Start listening immediately (or wait for push-to-talk)
-    if (pushToTalk) {
-      setCallState('waiting');
-    } else {
-      startListening();
-    }
-  }, [canMakeCall, startListening]);
+
+    toast.success(`Voice call started — ${pushToTalk ? 'Hold Space to talk' : 'Speak anytime'}`, { duration: 2000 });
+    if (pushToTalk) setCallState('waiting'); else startListening();
+  }, [canMakeCall, startListening, pushToTalk]);
 
   const endCall = useCallback(() => {
     isCallActiveRef.current = false;
     setIsInCall(false);
     setCallState('idle');
     setTranscript('');
+    stopScreenShare();
     onEnd?.();
-    setAiResponse('');
     setLoadingMessage('');
-    
-    // Clear timeouts
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
-    }
-    
-    // Stop any ongoing recording
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-    
-    // Stop audio stream
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    
-    // Close audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    
-    // Stop TTS
+
+    if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     stopSpeaking();
-  }, []);
+  }, [stopScreenShare, onEnd]);
 
   const stopListeningManually = useCallback(() => {
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-    }
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
+    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
   }, []);
 
+  /* ---------------------------------------------------------------- */
+  /*  Send Text Message During Call                                    */
+  /* ---------------------------------------------------------------- */
+  const handleSendText = useCallback(async () => {
+    const text = textInput.trim();
+    if (!text || !isCallActiveRef.current) return;
+    setTextInput('');
+
+    const screenshot = latestScreenshotRef.current || undefined;
+    const userMsg: VoiceMessage = {
+      id: crypto.randomUUID(), role: 'user', content: text,
+      timestamp: Date.now(), isVoice: false, screenshot,
+    };
+    setCallMessages(prev => [...prev, userMsg]);
+
+    setCallState('processing');
+    try {
+      const response = await onSendMessage(text, screenshot);
+      if (response && isCallActiveRef.current) {
+        const assistantMsg: VoiceMessage = {
+          id: crypto.randomUUID(), role: 'assistant', content: response,
+          timestamp: Date.now(), isVoice: false,
+        };
+        setCallMessages(prev => [...prev, assistantMsg]);
+        onNewMessages?.(userMsg, assistantMsg);
+
+        setCallState('speaking');
+        speak(response, {
+          voice: ttsVoice, rate: ttsRate,
+          onEnd: () => {
+            if (isCallActiveRef.current) {
+              if (pushToTalkRef.current) setCallState('waiting');
+              else setTimeout(() => startListening(), 300);
+            }
+          },
+        });
+      }
+    } catch { toast.error('Failed to send message'); }
+  }, [textInput, onSendMessage, ttsVoice, ttsRate, startListening, onNewMessages]);
+
+  /* ---------------------------------------------------------------- */
+  /*  Phone Button (idle)                                              */
+  /* ---------------------------------------------------------------- */
   const handlePhoneClick = () => {
     if (!canMakeCall) {
       toast.info('Download a voice model first', {
         description: 'Go to Settings → Voice Models to download Whisper for offline speech recognition.',
         action: {
           label: 'Open Settings',
-          onClick: () => {
-            // Dispatch a custom event that Index.tsx can listen for
-            window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } }));
-          }
+          onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })),
         },
         duration: 5000,
       });
@@ -393,229 +497,273 @@ export function VoiceCallMode({
     startCall();
   };
 
-  // Keyboard shortcuts for voice call
+  /* ---------------------------------------------------------------- */
+  /*  Keyboard Shortcuts                                               */
+  /* ---------------------------------------------------------------- */
   useEffect(() => {
     if (!isInCall) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      // Spacebar behavior
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.code === 'Space') {
         e.preventDefault();
-        
         if (pushToTalkRef.current) {
-          // Push-to-talk mode: start recording on keydown
-          if (callState === 'waiting' && !isHoldingSpace) {
-            setIsHoldingSpace(true);
-            startListening();
-          } else if (callState === 'speaking') {
-            // Interrupt TTS and start listening
-            stopSpeaking();
-            setIsHoldingSpace(true);
-            startListening();
-          }
+          if (callState === 'waiting' && !isHoldingSpace) { setIsHoldingSpace(true); startListening(); }
+          else if (callState === 'speaking') { stopSpeaking(); setIsHoldingSpace(true); startListening(); }
         } else {
-          // Auto-detect mode: toggle recording
-          if (callState === 'listening') {
-            stopListeningManually();
-          } else if (callState === 'speaking') {
-            stopSpeaking();
-            startListening();
-          }
+          if (callState === 'listening') stopListeningManually();
+          else if (callState === 'speaking') { stopSpeaking(); startListening(); }
         }
       }
-
-      // Escape to end call
-      if (e.code === 'Escape') {
-        e.preventDefault();
-        endCall();
-      }
+      if (e.code === 'Escape') { e.preventDefault(); endCall(); }
     };
-
     const handleKeyUp = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      // Push-to-talk: stop recording on key release
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.code === 'Space' && pushToTalkRef.current && isHoldingSpace) {
-        e.preventDefault();
-        setIsHoldingSpace(false);
-        if (callState === 'listening') {
-          stopListeningManually();
-        }
+        e.preventDefault(); setIsHoldingSpace(false);
+        if (callState === 'listening') stopListeningManually();
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
+    return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
   }, [isInCall, callState, isHoldingSpace, stopListeningManually, startListening, endCall]);
 
+  /* ---------------------------------------------------------------- */
+  /*  Render: Idle (just the phone button)                             */
+  /* ---------------------------------------------------------------- */
   if (!isInCall) {
     return (
       <Button
-        variant="ghost"
-        size="icon"
-        className={cn(
-          'rounded-full transition-all',
-          canMakeCall ? 'text-green-500 hover:text-green-400 hover:bg-green-500/10' : 'text-muted-foreground hover:text-foreground'
-        )}
-        onClick={handlePhoneClick}
-        disabled={disabled}
-        title={canMakeCall ? 'Start voice call (offline)' : 'Setup required - click to learn more'}
+        variant="ghost" size="icon"
+        className={cn('rounded-full transition-all', canMakeCall ? 'text-green-500 hover:text-green-400 hover:bg-green-500/10' : 'text-muted-foreground hover:text-foreground')}
+        onClick={handlePhoneClick} disabled={disabled}
+        title={canMakeCall ? 'Start voice call (offline)' : 'Setup required — click to learn more'}
       >
         <Phone className="w-5 h-5" />
       </Button>
     );
   }
 
+  /* ---------------------------------------------------------------- */
+  /*  Render: Active Call — Split Screen                               */
+  /* ---------------------------------------------------------------- */
+  const stateColor = callState === 'listening' ? 'from-green-500/20 to-green-600/10'
+    : callState === 'speaking' ? 'from-purple-500/20 to-purple-600/10'
+    : callState === 'processing' ? 'from-yellow-500/20 to-yellow-600/10'
+    : 'from-muted/20 to-muted/10';
+
   return (
-    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center p-6">
-      {/* Mode toggle */}
-      <div className="absolute top-6 right-6 flex items-center gap-3 bg-muted/50 rounded-full px-4 py-2 border border-border">
-        <Label htmlFor="push-to-talk" className="text-sm text-muted-foreground cursor-pointer flex items-center gap-2">
-          <Hand className="w-4 h-4" />
-          Push to Talk
-        </Label>
-        <Switch
-          id="push-to-talk"
-          checked={pushToTalk}
-          onCheckedChange={setPushToTalk}
-        />
+    <div className="fixed inset-0 z-50 flex flex-col bg-background/98 backdrop-blur-md">
+      {/* ── Top Toolbar ── */}
+      <div className="h-12 flex items-center justify-between px-4 border-b border-border/50 bg-background/80 backdrop-blur shrink-0">
+        <div className="flex items-center gap-3">
+          <div className={cn('w-2 h-2 rounded-full', callState === 'listening' ? 'bg-green-500 animate-pulse' : callState === 'speaking' ? 'bg-purple-500 animate-pulse' : callState === 'processing' ? 'bg-yellow-500 animate-pulse' : 'bg-muted-foreground')} />
+          <span className="text-sm font-medium text-foreground">
+            {callState === 'loading' ? 'Connecting...' : callState === 'listening' ? 'Listening' : callState === 'processing' ? 'Thinking' : callState === 'speaking' ? 'Speaking' : 'Ready'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Model selector */}
+          <Select value={selectedModel} onValueChange={setSelectedModel}>
+            <SelectTrigger className="w-36 h-8 text-xs bg-muted/30 border-border/50">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MODEL_OPTIONS.map(m => (
+                <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Screen share */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={isScreenSharing ? 'default' : 'ghost'} size="icon"
+                className={cn('h-8 w-8', isScreenSharing && 'bg-blue-600 hover:bg-blue-500 text-white')}
+                onClick={isScreenSharing ? stopScreenShare : startScreenShare}
+              >
+                {isScreenSharing ? <MonitorOff className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{isScreenSharing ? 'Stop screen share' : 'Share screen (vision models)'}</TooltipContent>
+          </Tooltip>
+
+          {/* Text input toggle */}
+          <Button variant={showTextInput ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
+            onClick={() => setShowTextInput(!showTextInput)}>
+            <MessageSquare className="w-4 h-4" />
+          </Button>
+
+          {/* Mute */}
+          <Button
+            variant={isMuted ? 'destructive' : 'ghost'} size="icon" className="h-8 w-8"
+            onClick={() => setIsMuted(!isMuted)}
+          >
+            {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </Button>
+
+          {/* Push-to-talk */}
+          <div className="flex items-center gap-1.5 bg-muted/30 rounded-full px-3 py-1 border border-border/30">
+            <Hand className="w-3 h-3 text-muted-foreground" />
+            <Label htmlFor="ptt-toggle" className="text-xs text-muted-foreground cursor-pointer">PTT</Label>
+            <Switch id="ptt-toggle" checked={pushToTalk} onCheckedChange={setPushToTalk} className="scale-75" />
+          </div>
+
+          {/* End call */}
+          <Button variant="destructive" size="sm" className="h-8 gap-1.5 rounded-full px-4" onClick={endCall}>
+            <PhoneOff className="w-4 h-4" /> End
+          </Button>
+        </div>
       </div>
 
-      {/* Call status indicator */}
-      <div className="text-center mb-8">
-        <div className={cn(
-          'w-32 h-32 rounded-full flex items-center justify-center mb-4 mx-auto transition-all shadow-lg',
-          callState === 'loading' && 'bg-blue-500/20',
-          callState === 'listening' && 'bg-green-500/20 animate-pulse ring-4 ring-green-500/30',
-          callState === 'processing' && 'bg-yellow-500/20',
-          callState === 'speaking' && 'bg-primary/20 animate-pulse ring-4 ring-primary/30',
-          callState === 'waiting' && 'bg-muted/50 border-2 border-dashed border-muted-foreground/30'
-        )}>
-          {callState === 'loading' && <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />}
-          {callState === 'listening' && <Mic className="w-12 h-12 text-green-500" />}
-          {callState === 'processing' && <Loader2 className="w-12 h-12 text-yellow-500 animate-spin" />}
-          {callState === 'speaking' && <Volume2 className="w-12 h-12 text-primary" />}
-          {callState === 'waiting' && <Hand className="w-12 h-12 text-muted-foreground" />}
+      {/* ── Main Split Layout ── */}
+      <div className="flex-1 flex min-h-0">
+        {/* Left: Chat History (60%) */}
+        <div className="w-[60%] flex flex-col border-r border-border/30">
+          <ScrollArea className="flex-1">
+            <div className="p-4 space-y-3">
+              {callMessages.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Phone className="w-8 h-8 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm">Start speaking — your conversation will appear here</p>
+                </div>
+              )}
+              {callMessages.map((msg) => (
+                <div key={msg.id} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                  <div className={cn(
+                    'max-w-[80%] rounded-2xl px-4 py-2.5 text-sm',
+                    msg.role === 'user'
+                      ? 'bg-primary text-primary-foreground rounded-br-md'
+                      : 'bg-muted text-foreground rounded-bl-md'
+                  )}>
+                    {msg.isVoice && (
+                      <span className="inline-flex items-center gap-1 text-[10px] opacity-60 mb-1">
+                        <Mic className="w-2.5 h-2.5" /> voice
+                      </span>
+                    )}
+                    {msg.screenshot && (
+                      <div className="mb-2">
+                        <img src={msg.screenshot} alt="Screen capture" className="rounded-lg max-h-32 w-auto border border-border/20" />
+                      </div>
+                    )}
+                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  </div>
+                </div>
+              ))}
+              {callState === 'processing' && (
+                <div className="flex justify-start">
+                  <div className="bg-muted text-foreground rounded-2xl rounded-bl-md px-4 py-3">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={chatBottomRef} />
+            </div>
+          </ScrollArea>
+
+          {/* Text input (optional) */}
+          {showTextInput && (
+            <div className="p-3 border-t border-border/30">
+              <form onSubmit={(e) => { e.preventDefault(); handleSendText(); }} className="flex gap-2">
+                <Input
+                  value={textInput} onChange={(e) => setTextInput(e.target.value)}
+                  placeholder="Type a message..."
+                  className="flex-1 h-9 text-sm bg-muted/30 border-border/50"
+                />
+                <Button type="submit" size="icon" className="h-9 w-9" disabled={!textInput.trim()}>
+                  <Send className="w-4 h-4" />
+                </Button>
+              </form>
+            </div>
+          )}
         </div>
-        
-        <p className="text-xl font-medium mb-2">
-          {callState === 'loading' && 'Getting Ready...'}
-          {callState === 'listening' && (pushToTalk ? 'Recording...' : 'Listening...')}
-          {callState === 'processing' && 'Thinking...'}
-          {callState === 'speaking' && 'Speaking...'}
-          {callState === 'waiting' && 'Ready'}
-        </p>
-        
-        <p className="text-sm text-muted-foreground">
-          {callState === 'loading' && loadingMessage}
-          {callState === 'listening' && (pushToTalk ? 'Release Space when done' : 'Speak now - Press Space to send early')}
-          {callState === 'processing' && 'Processing your voice...'}
-          {callState === 'speaking' && 'Press Space to interrupt • Esc to end call'}
-          {callState === 'waiting' && 'Hold Space to speak'}
-        </p>
+
+        {/* Right: Controls (40%) */}
+        <div className={cn('w-[40%] flex flex-col items-center justify-center p-6 bg-gradient-to-b', stateColor)}>
+          {/* Waveform canvas */}
+          <canvas ref={canvasRef} width={280} height={80}
+            className="mb-6 rounded-xl opacity-80" />
+
+          {/* Status orb */}
+          <div className={cn(
+            'w-28 h-28 rounded-full flex items-center justify-center mb-6 transition-all shadow-2xl',
+            callState === 'loading' && 'bg-blue-500/20 border-2 border-blue-500/30',
+            callState === 'listening' && 'bg-green-500/20 ring-4 ring-green-500/30 animate-pulse',
+            callState === 'processing' && 'bg-yellow-500/20 border-2 border-yellow-500/30',
+            callState === 'speaking' && 'bg-purple-500/20 ring-4 ring-purple-500/30 animate-pulse',
+            callState === 'waiting' && 'bg-muted/50 border-2 border-dashed border-muted-foreground/30',
+          )}>
+            {callState === 'loading' && <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />}
+            {callState === 'listening' && <Mic className="w-10 h-10 text-green-500" />}
+            {callState === 'processing' && <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />}
+            {callState === 'speaking' && <Volume2 className="w-10 h-10 text-purple-500" />}
+            {callState === 'waiting' && <Hand className="w-10 h-10 text-muted-foreground" />}
+          </div>
+
+          {/* Status text */}
+          <p className="text-lg font-medium mb-1">
+            {callState === 'loading' ? 'Getting Ready...' : callState === 'listening' ? (pushToTalk ? 'Recording...' : 'Listening...') : callState === 'processing' ? 'Thinking...' : callState === 'speaking' ? 'Speaking...' : 'Ready'}
+          </p>
+          <p className="text-xs text-muted-foreground text-center mb-6">
+            {callState === 'loading' && loadingMessage}
+            {callState === 'listening' && (pushToTalk ? 'Release Space when done' : 'Speak now — Space to send early')}
+            {callState === 'processing' && 'Processing your voice...'}
+            {callState === 'speaking' && 'Space to interrupt • Esc to end'}
+            {callState === 'waiting' && (isMuted ? 'Mic is muted' : 'Hold Space to speak')}
+          </p>
+
+          {/* Current transcript */}
+          {transcript && (
+            <div className="max-w-xs w-full mb-4 p-3 rounded-xl bg-muted/40 border border-border/30 backdrop-blur">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">You said</p>
+              <p className="text-sm text-foreground">{transcript}</p>
+            </div>
+          )}
+
+          {/* Screen share preview */}
+          {isScreenSharing && screenPreview && (
+            <div className="max-w-xs w-full mb-4">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Screen Preview</p>
+              <img src={screenPreview} alt="Screen" className="rounded-lg border border-border/30 w-full" />
+            </div>
+          )}
+
+          {/* Call action buttons */}
+          <div className="flex gap-3 mt-2">
+            {callState === 'listening' && !pushToTalk && (
+              <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5" onClick={stopListeningManually}>
+                <MicOff className="w-4 h-4" /> Done Speaking
+              </Button>
+            )}
+            {callState === 'waiting' && pushToTalk && !isMuted && (
+              <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5"
+                onMouseDown={() => { setIsHoldingSpace(true); startListening(); }}
+                onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}
+                onMouseLeave={() => { if (isHoldingSpace) { setIsHoldingSpace(false); stopListeningManually(); } }}>
+                <Mic className="w-4 h-4" /> Hold to Talk
+              </Button>
+            )}
+            {callState === 'listening' && pushToTalk && (
+              <Button variant="default" size="sm" className="rounded-full px-5 gap-1.5 bg-green-600 hover:bg-green-700"
+                onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}>
+                <Mic className="w-4 h-4 animate-pulse" /> Recording...
+              </Button>
+            )}
+          </div>
+
+          {/* Footer */}
+          <p className="mt-auto pt-4 text-[10px] text-muted-foreground/60 text-center">
+            🔒 Offline STT (Whisper) + Browser TTS<br />
+            {pushToTalk ? 'Hold Space: record • Esc: end' : 'Space: toggle • Esc: end'}
+          </p>
+        </div>
       </div>
-
-      {/* Transcript display */}
-      {transcript && (
-        <div className="max-w-md w-full mb-4 p-4 rounded-xl bg-muted/50 border border-border">
-          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">You said:</p>
-          <p className="text-foreground">{transcript}</p>
-        </div>
-      )}
-
-      {/* AI response display */}
-      {aiResponse && (
-        <div className="max-w-md w-full mb-8 p-4 rounded-xl bg-primary/10 border border-primary/20">
-          <p className="text-xs font-medium text-primary mb-1 uppercase tracking-wide">Assistant:</p>
-          <p className="text-foreground line-clamp-6">{aiResponse}</p>
-        </div>
-      )}
-
-      {/* Call controls */}
-      <div className="flex gap-4">
-        {callState === 'listening' && !pushToTalk && (
-          <Button
-            variant="secondary"
-            size="lg"
-            className="rounded-full px-6"
-            onClick={stopListeningManually}
-          >
-            <MicOff className="w-5 h-5 mr-2" />
-            Done Speaking
-          </Button>
-        )}
-        
-        {callState === 'waiting' && pushToTalk && (
-          <Button
-            variant="secondary"
-            size="lg"
-            className="rounded-full px-6"
-            onMouseDown={() => {
-              setIsHoldingSpace(true);
-              startListening();
-            }}
-            onMouseUp={() => {
-              setIsHoldingSpace(false);
-              stopListeningManually();
-            }}
-            onMouseLeave={() => {
-              if (isHoldingSpace) {
-                setIsHoldingSpace(false);
-                stopListeningManually();
-              }
-            }}
-          >
-            <Mic className="w-5 h-5 mr-2" />
-            Hold to Talk
-          </Button>
-        )}
-        
-        {callState === 'listening' && pushToTalk && (
-          <Button
-            variant="default"
-            size="lg"
-            className="rounded-full px-6 bg-green-600 hover:bg-green-700"
-            onMouseUp={() => {
-              setIsHoldingSpace(false);
-              stopListeningManually();
-            }}
-          >
-            <Mic className="w-5 h-5 mr-2 animate-pulse" />
-            Recording...
-          </Button>
-        )}
-        
-        <Button
-          variant="destructive"
-          size="lg"
-          className="rounded-full px-8"
-          onClick={endCall}
-        >
-          <PhoneOff className="w-5 h-5 mr-2" />
-          End Call
-        </Button>
-      </div>
-
-      {/* Status info */}
-      <p className="mt-8 text-xs text-muted-foreground text-center">
-        🔒 100% offline • Local Whisper STT + Browser TTS
-        <br />
-        <span className="opacity-70">
-          {pushToTalk ? 'Hold Space: record • Esc: end call' : 'Space: toggle • Esc: end call'}
-        </span>
-      </p>
     </div>
   );
 }
