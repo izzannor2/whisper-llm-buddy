@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Check, Upload, Cpu, Activity, Mic, MicOff, Loader2 } from 'lucide-react';
+import { Home, Check, Upload, Cpu, Activity, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -15,6 +15,7 @@ import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { saveConversation, Conversation } from '@/lib/db';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { VoiceCallMode } from '@/components/VoiceCallMode';
 
 interface Message {
   id: string;
@@ -41,7 +42,7 @@ export default function IoTWorkspace() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [convId] = useState(() => generateId());
-
+  const [showVoiceCall, setShowVoiceCall] = useState(false);
   useEffect(() => { applyModeTheme('embedded-iot'); }, []);
 
   const handleVerify = () => {

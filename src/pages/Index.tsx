@@ -413,6 +413,8 @@ export default function Index() {
           onSendMessage={handleVoiceCallMessage}
           ttsVoice={settings.ttsVoice}
           ttsRate={settings.ttsRate}
+          onEnd={() => setShowVoiceCall(false)}
+          autoStart
         />
       )}
     </div>
