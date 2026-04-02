@@ -395,6 +395,8 @@ export default function Index() {
                   />
                 )}
                 {isLoading && !streamingContent && <TypingIndicator />}
+                {/* Agent Activity */}
+                <AgentActivityPanel steps={agentSteps} currentAgent={currentAgent} isProcessing={isLoading} />
               </div>
             )}
           </div>
@@ -418,6 +420,8 @@ export default function Index() {
       </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onSave={handleSettingsSave} />
+      <MemoryPanel open={memoryPanelOpen} onOpenChange={setMemoryPanelOpen} />
+      <AutoBuildPanel open={autoBuildOpen} onOpenChange={setAutoBuildOpen} onSendMessage={handleSendMessage} />
       {codeLibraryOpen && <div className="fixed inset-y-0 right-0 w-80 z-50 shadow-xl"><CodeLibrary onClose={() => setCodeLibraryOpen(false)} /></div>}
 
       {settings.openClawEnabled && openClawOpen && (
