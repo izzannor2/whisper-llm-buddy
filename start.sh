@@ -187,12 +187,13 @@ elif [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
     echo "      [*] No local LLM found - using Cloud backend"
 fi
 
-# Step 5: Start dev server
-echo "[5/5] Starting development server..."
+# Step 6: Start dev server
+echo "[6/6] Starting development server..."
 echo ""
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 echo " App: http://localhost:8080"
 [ -n "$GGUF_MODEL" ] && echo " LLM: llama-server (port 8081)"
+[ -n "$OLLAMA_CMD" ] && echo " Ollama: http://localhost:11434"
 echo " Press Ctrl+C to stop"
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 echo ""
