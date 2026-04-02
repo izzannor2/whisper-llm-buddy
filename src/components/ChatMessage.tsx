@@ -1,11 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, Check, Pencil, Trash2, User, Bot, Volume2, VolumeX, ExternalLink } from 'lucide-react';
+import { Copy, Check, Pencil, Trash2, User, Bot, Volume2, VolumeX, ExternalLink, Brain, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Message } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import { speak, stopSpeaking, isTTSSupported } from '@/lib/tts';
+import { storeMemory } from '@/lib/memory-store';
+import { addFeedback, getFeedback } from '@/lib/feedback-tracker';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock } from '@/components/CodeBlock';
 
