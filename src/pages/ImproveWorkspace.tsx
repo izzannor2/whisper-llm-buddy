@@ -434,6 +434,27 @@ export default function ImproveWorkspace() {
     }
   }, [input, messages, isLoading, selectedFiles, isPlanMode, convId]);
 
+  const handleVoiceMessage = useCallback(async (content: string): Promise<string> => {
+    const userMsg: ChatMsg = { id: generateId(), role: 'user', content };
+    const allMsgsBefore = [...messages, userMsg];
+    setMessages(allMsgsBefore);
+    setIsLoading(true);
+    try {
+      const settings = loadSettings();
+      const filesContext = selectedFiles.size > 0 ? `\nSelected files: ${[...selectedFiles].join(', ')}` : '';
+      const systemPrompt = `IMPORTANT: Output code with \`\`\`language:/path/to/file.ext format.\n\n` + getModeSystemPrompt('ai-improvement') + filesContext;
+      const chatMsgs = [
+        { role: 'system' as const, content: systemPrompt },
+        ...allMsgsBefore.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ];
+      let fullResponse = '';
+      await sendChatMessage(chatMsgs, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; });
+      setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse }]);
+      return fullResponse;
+    } catch { return ''; }
+    finally { setIsLoading(false); setStreamingContent(''); }
+  }, [messages, selectedFiles]);
+
   const toggleRecording = useCallback(async () => {
     if (isRecording && mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
