@@ -51,6 +51,8 @@ export function ChatMessage({ message, onEdit, onDelete, onAddToInput }: ChatMes
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [remembered, setRemembered] = useState(false);
+  const [feedbackState, setFeedbackState] = useState<'up' | 'down' | null>(() => getFeedback(message.id)?.rating || null);
 
   const isUser = message.role === 'user';
   const ttsSupported = isTTSSupported();
@@ -116,7 +118,7 @@ export function ChatMessage({ message, onEdit, onDelete, onAddToInput }: ChatMes
           </div>
         )}
 
-        {/* Actions - speaker always visible on assistant messages */}
+        {/* Actions */}
         {!isEditing && (
           <div className={cn('flex gap-1 mt-1 transition-opacity', isUser ? 'flex-row-reverse opacity-0 group-hover:opacity-100' : 'opacity-100')}>
             <Button variant="ghost" size="icon" className="w-7 h-7" onClick={handleCopy}>
@@ -127,6 +129,25 @@ export function ChatMessage({ message, onEdit, onDelete, onAddToInput }: ChatMes
                 title={isSpeaking ? 'Stop speaking' : 'Read aloud'}>
                 {isSpeaking ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
               </Button>
+            )}
+            {!isUser && (
+              <Button variant="ghost" size="icon" className={cn('w-7 h-7', remembered && 'text-primary')}
+                onClick={async () => { await storeMemory(message.content, ['chat']); setRemembered(true); }}
+                title="Remember this">
+                <Brain className={cn("w-3 h-3", remembered && "fill-current")} />
+              </Button>
+            )}
+            {!isUser && (
+              <>
+                <Button variant="ghost" size="icon" className={cn('w-7 h-7', feedbackState === 'up' && 'text-green-500')}
+                  onClick={() => { addFeedback(message.id, 'up'); setFeedbackState('up'); }} title="Good response">
+                  <ThumbsUp className={cn("w-3 h-3", feedbackState === 'up' && "fill-current")} />
+                </Button>
+                <Button variant="ghost" size="icon" className={cn('w-7 h-7', feedbackState === 'down' && 'text-destructive')}
+                  onClick={() => { addFeedback(message.id, 'down'); setFeedbackState('down'); }} title="Bad response">
+                  <ThumbsDown className={cn("w-3 h-3", feedbackState === 'down' && "fill-current")} />
+                </Button>
+              </>
             )}
             {isUser && onEdit && (
               <Button variant="ghost" size="icon" className="w-7 h-7 opacity-0 group-hover:opacity-100" onClick={() => setIsEditing(true)}>
