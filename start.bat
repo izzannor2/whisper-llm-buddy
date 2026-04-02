@@ -15,13 +15,55 @@ echo.
 echo [1/5] Checking Node.js...
 node --version >nul 2>&1
 if errorlevel 1 (
+    echo       [!] Node.js not found - attempting auto-install...
     echo.
-    echo  [ERROR] Node.js is not installed!
-    echo  Please install from: https://nodejs.org
+
+    :: Try winget first
+    where winget >nul 2>&1
+    if not errorlevel 1 (
+        echo       [*] Installing Node.js via winget...
+        winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+        goto :refresh_path
+    )
+
+    :: Fallback: download MSI via curl
+    where curl >nul 2>&1
+    if not errorlevel 1 (
+        echo       [*] Downloading Node.js installer...
+        curl -L -o "%TEMP%\nodejs_install.msi" "https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi"
+        if exist "%TEMP%\nodejs_install.msi" (
+            echo       [*] Installing Node.js silently...
+            msiexec /i "%TEMP%\nodejs_install.msi" /quiet /qn /norestart
+            del "%TEMP%\nodejs_install.msi" 2>nul
+            goto :refresh_path
+        )
+    )
+
+    echo.
+    echo  [ERROR] Could not auto-install Node.js!
+    echo  Please install manually from: https://nodejs.org
     echo.
     pause
     exit /b 1
 )
+goto :node_ok
+
+:refresh_path
+:: Refresh PATH to pick up newly installed Node.js
+set "PATH=%ProgramFiles%\nodejs;%LOCALAPPDATA%\Programs\nodejs;%PATH%"
+for /f "delims=" %%P in ('where node 2^>nul') do set "PATH=%%~dpP;%PATH%"
+node --version >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo  [ERROR] Node.js install completed but 'node' not found in PATH.
+    echo  Please restart your terminal or install manually: https://nodejs.org
+    echo.
+    pause
+    exit /b 1
+)
+echo       [OK] Node.js installed successfully!
+
+:node_ok
 for /f "tokens=*" %%i in ('node --version') do echo       [OK] Node.js %%i
 
 :: ========================================
