@@ -324,6 +324,8 @@ export default function Index() {
           onNew={createNewConversation}
           onDelete={handleDeleteConversation}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenMemory={() => setMemoryPanelOpen(true)}
+          onOpenAutoBuild={() => setAutoBuildOpen(true)}
           currentMode={currentMode}
           currentModeKey={currentModeKey}
           onModeChange={handleModeChange}
