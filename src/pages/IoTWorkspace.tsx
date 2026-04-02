@@ -110,6 +110,26 @@ export default function IoTWorkspace() {
     }
   }, [messages, board]);
 
+  const handleVoiceMessage = useCallback(async (content: string): Promise<string> => {
+    const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    try {
+      const boardName = BOARD_TYPES.find(b => b.id === board)?.name || board;
+      const chatMessages: ChatMessage[] = [
+        { role: 'system', content: `You are an embedded systems expert for ${boardName}.` },
+        ...messages.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content },
+      ];
+      const settings = loadSettings();
+      let fullResponse = '';
+      await sendChatMessage(chatMessages, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; });
+      setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() }]);
+      return fullResponse;
+    } catch { return ''; }
+    finally { setIsLoading(false); }
+  }, [messages, board]);
+
   return (
     <div className="h-screen flex flex-col" style={{ background: 'hsl(160, 20%, 6%)' }}>
       <header className="h-12 flex items-center justify-between px-3 border-b" style={{
