@@ -144,6 +144,9 @@ export default function IoTWorkspace() {
           <span className="text-xs text-teal-400/80 font-mono">{selectedFile.name}</span>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-400 hover:text-green-300" onClick={() => setShowVoiceCall(true)} title="Voice call">
+            <Phone className="h-4 w-4" />
+          </Button>
           <Button size="sm" className="h-8 gap-1.5 bg-teal-700 hover:bg-teal-600 text-white" onClick={handleVerify} disabled={isVerifying}>
             <Check className="w-3.5 h-3.5" />{isVerifying ? 'Verifying...' : 'Verify'}
           </Button>
