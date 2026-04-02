@@ -317,8 +317,12 @@ export function VoiceCallMode({
 
           const text = await transcribeAudio(audioData);
 
-          if (text.trim() && isCallActiveRef.current) {
-            setTranscript(text.trim());
+          // Filter out noise transcriptions from Whisper
+          const NOISE_PATTERNS = /^\s*(\[.*?\]|\(.*?\)|\*.*?\*|music|laughter|applause|silence|noise|background)\s*$/i;
+          const cleanText = text.trim();
+          
+          if (cleanText && !NOISE_PATTERNS.test(cleanText) && cleanText.length > 1 && isCallActiveRef.current) {
+            setTranscript(cleanText);
             const screenshot = latestScreenshotRef.current || undefined;
             
             // Add user message to chat
