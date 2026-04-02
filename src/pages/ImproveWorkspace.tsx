@@ -267,14 +267,15 @@ export default function ImproveWorkspace() {
   useEffect(() => {
     if (allCodeBlocks.length > 0) {
       try {
-        const projectFiles = allCodeBlocks.map(block => ({
+        const projectFiles = allCodeBlocks.map((block, i) => ({
+          id: `preview-${i}`,
           name: block.filePath.split('/').pop() || block.filePath,
           path: block.filePath,
           content: block.content,
           isDirectory: false,
+          language: block.language || 'typescript',
         }));
         const html = buildPreviewHTML(projectFiles);
-        setPreviewHtml(html);
       } catch {
         // Preview build failed, that's okay
       }
