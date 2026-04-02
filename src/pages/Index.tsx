@@ -54,6 +54,10 @@ export default function Index() {
   const [planningMode, setPlanningMode] = useState(false);
   const [showVoiceCall, setShowVoiceCall] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [memoryPanelOpen, setMemoryPanelOpen] = useState(false);
+  const [autoBuildOpen, setAutoBuildOpen] = useState(false);
+  const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
+  const [currentAgent, setCurrentAgent] = useState<AgentType | undefined>();
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
   const [killSwitchActive, setKillSwitchActive] = useState(false);
