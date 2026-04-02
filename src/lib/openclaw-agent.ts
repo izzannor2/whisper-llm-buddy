@@ -6,7 +6,7 @@ import { readFile, writeFile, listFiles, getCurrentDirectory, fileExists } from 
 import { logAction, recordHabit, getHabitSuggestions, createBackup, getActionLogs } from './openclaw-store';
 import { getIDESettings } from './ide-store';
 import { getProjectContext } from './project-context';
-import { TOOL_SCHEMAS, type ToolName } from './agent-tools';
+import { AGENT_TOOLS } from './agent-tools';
 
 export interface OpenClawConfig {
   model: string;
