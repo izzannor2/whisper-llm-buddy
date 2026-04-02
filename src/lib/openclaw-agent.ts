@@ -147,14 +147,15 @@ async function executeTool(tool: string, params: Record<string, string>): Promis
         return `✅ Written ${content.length} bytes to ${params.path}`;
       }
       case 'list_files': {
-        const files = await listFiles();
-        return `Files in project:\n${files.join('\n')}`;
+        const entries = await listFiles();
+        return `Files in project:\n${entries.map(e => e.path).join('\n')}`;
       }
       case 'search_code': {
         const query = params.query || '';
-        const files = await listFiles();
+        const entries = await listFiles();
         const results: string[] = [];
-        for (const file of files.slice(0, 50)) {
+        const fileNames = entries.filter(e => !e.isDirectory).map(e => e.path);
+        for (const file of fileNames.slice(0, 50)) {
           try {
             const content = await readFile(file);
             if (content.toLowerCase().includes(query.toLowerCase())) {
