@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, X, Zap, OctagonX, Crown } from 'lucide-react';
+import { Menu, X, Zap, OctagonX, Crown, Brain, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
@@ -14,9 +14,14 @@ import { CodeLibrary } from '@/components/CodeLibrary';
 import { OpenClawOverlay } from '@/components/OpenClawOverlay';
 import { LockScreen } from '@/components/LockScreen';
 import { VoiceCallMode } from '@/components/VoiceCallMode';
+import { MemoryPanel } from '@/components/MemoryPanel';
+import { AgentActivityPanel, AgentStep } from '@/components/AgentActivityPanel';
+import { AutoBuildPanel } from '@/components/AutoBuildPanel';
 import { IDEMode } from '@/lib/ide-types';
 import { getIDESettings, saveIDESettings } from '@/lib/ide-store';
 import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
+import { routeToAgent, AgentType } from '@/lib/agent-router';
+import { getRelevantMemories } from '@/lib/memory-store';
 import {
   Conversation, Message, getAllConversations, getConversation,
   saveConversation, deleteConversation, generateId, initDB,
