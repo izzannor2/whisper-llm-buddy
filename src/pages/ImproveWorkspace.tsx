@@ -607,6 +607,9 @@ export default function ImproveWorkspace() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-400 hover:text-green-300" onClick={() => setShowVoiceCall(true)} title="Voice call">
+            <Phone className="h-4 w-4" />
+          </Button>
           {allCodeBlocks.length > 0 && (
             <Button
               variant="ghost" size="sm"
@@ -947,6 +950,15 @@ export default function ImproveWorkspace() {
           filePath={diffPreview.filePath}
           newContent={diffPreview.content}
           onApply={() => handleApplySingle(diffPreview.filePath, diffPreview.content)}
+        />
+      )}
+      {showVoiceCall && (
+        <VoiceCallMode
+          onSendMessage={handleVoiceMessage}
+          ttsVoice={loadSettings().ttsVoice}
+          ttsRate={loadSettings().ttsRate}
+          onEnd={() => setShowVoiceCall(false)}
+          autoStart
         />
       )}
     </div>
