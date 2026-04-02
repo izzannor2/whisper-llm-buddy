@@ -19,6 +19,8 @@ interface VoiceCallModeProps {
   ttsVoice?: string;
   ttsRate?: number;
   disabled?: boolean;
+  onEnd?: () => void;
+  autoStart?: boolean;
 }
 
 type CallState = 'idle' | 'loading' | 'listening' | 'processing' | 'speaking' | 'waiting';
@@ -27,7 +29,9 @@ export function VoiceCallMode({
   onSendMessage, 
   ttsVoice, 
   ttsRate = 1.0,
-  disabled 
+  disabled,
+  onEnd,
+  autoStart = false,
 }: VoiceCallModeProps) {
   const [isInCall, setIsInCall] = useState(false);
   const [callState, setCallState] = useState<CallState>('idle');
@@ -324,6 +328,7 @@ export function VoiceCallMode({
     setIsInCall(false);
     setCallState('idle');
     setTranscript('');
+    onEnd?.();
     setAiResponse('');
     setLoadingMessage('');
     
