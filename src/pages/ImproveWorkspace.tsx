@@ -3,13 +3,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Sparkles, FileText, FolderOpen, ChevronRight, ChevronDown,
   RefreshCw, Loader2, Lightbulb, Mic, MicOff, Send, Wand2, Zap,
-  Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2, PanelLeftClose, PanelLeft,
-  CheckSquare, Square, X, CheckCheck, FileCode, Check,
+  Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2,
+  CheckSquare, Square, X, CheckCheck, FileCode, Check, Upload, Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
 import { sendChatMessage, loadSettings } from '@/lib/chat-api';
 import { speak, isTTSSupported } from '@/lib/tts';
@@ -23,11 +24,12 @@ import { CodeBlock } from '@/components/CodeBlock';
 import { parseCodeBlocks, ParsedCodeBlock } from '@/lib/code-parser';
 import { writeFile } from '@/lib/file-system';
 import { DiffPreview } from '@/components/DiffPreview';
+import { buildPreviewHTML } from '@/lib/preview-builder';
 
 interface FileNode { name: string; path: string; type: 'file' | 'directory'; children?: FileNode[]; }
 interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; }
 
-const PROJECT_TREE: FileNode[] = [
+const DEFAULT_PROJECT_TREE: FileNode[] = [
   { name: 'src', path: 'src', type: 'directory', children: [
     { name: 'pages', path: 'src/pages', type: 'directory', children: [
       { name: 'Index.tsx', path: 'src/pages/Index.tsx', type: 'file' },
@@ -62,20 +64,118 @@ const QUICK_SUGGESTIONS = [
   { icon: Wand2, label: 'Refactor', prompt: 'Identify areas in the selected files that need refactoring. Focus on code duplication, complexity, and maintainability. Output the COMPLETE refactored file for each change using ```language:/path/to/file.ext format.' },
 ];
 
-function FileTreeNode({ node, depth = 0, selectedFiles, onToggle }: {
-  node: FileNode; depth?: number; selectedFiles: Set<string>; onToggle: (path: string) => void;
+// Collect all file paths from tree
+function collectAllFiles(nodes: FileNode[]): string[] {
+  const paths: string[] = [];
+  for (const node of nodes) {
+    if (node.type === 'file') paths.push(node.path);
+    if (node.children) paths.push(...collectAllFiles(node.children));
+  }
+  return paths;
+}
+
+// Collect file paths under a directory node
+function collectChildFiles(node: FileNode): string[] {
+  if (node.type === 'file') return [node.path];
+  return node.children?.flatMap(collectChildFiles) ?? [];
+}
+
+// Check if all children of a directory are selected
+function areAllChildrenSelected(node: FileNode, selectedFiles: Set<string>): boolean {
+  const childPaths = collectChildFiles(node);
+  return childPaths.length > 0 && childPaths.every(p => selectedFiles.has(p));
+}
+
+// Scan a directory handle into FileNode tree
+async function scanDirectoryHandle(dirHandle: FileSystemDirectoryHandle, basePath = ''): Promise<FileNode[]> {
+  const nodes: FileNode[] = [];
+  const skipDirs = new Set(['node_modules', '.git', 'dist', 'build', '.next', '.cache', '__pycache__']);
+  
+  for await (const entry of (dirHandle as any).values()) {
+    const entryPath = basePath ? `${basePath}/${entry.name}` : entry.name;
+    if (entry.kind === 'directory') {
+      if (skipDirs.has(entry.name)) continue;
+      const children = await scanDirectoryHandle(entry, entryPath);
+      nodes.push({ name: entry.name, path: entryPath, type: 'directory', children });
+    } else {
+      nodes.push({ name: entry.name, path: entryPath, type: 'file' });
+    }
+  }
+  return nodes.sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+// Build tree from uploaded file list
+function buildTreeFromFileList(files: FileList): FileNode[] {
+  const root: Record<string, any> = {};
+  
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const path = (file as any).webkitRelativePath || file.name;
+    const parts = path.split('/');
+    let current = root;
+    for (let j = 0; j < parts.length; j++) {
+      const part = parts[j];
+      if (j === parts.length - 1) {
+        current[part] = { __file: true, __path: path };
+      } else {
+        if (!current[part]) current[part] = {};
+        current = current[part];
+      }
+    }
+  }
+  
+  function toNodes(obj: Record<string, any>, basePath = ''): FileNode[] {
+    return Object.entries(obj)
+      .filter(([k]) => !k.startsWith('__'))
+      .map(([name, val]) => {
+        const path = basePath ? `${basePath}/${name}` : name;
+        if (val.__file) {
+          return { name, path: val.__path, type: 'file' as const };
+        }
+        return { name, path, type: 'directory' as const, children: toNodes(val, path) };
+      })
+      .sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+  }
+  
+  const nodes = toNodes(root);
+  // If there's a single root directory, unwrap it
+  if (nodes.length === 1 && nodes[0].type === 'directory' && nodes[0].children) {
+    return nodes[0].children;
+  }
+  return nodes;
+}
+
+function FileTreeNode({ node, depth = 0, selectedFiles, onToggle, onToggleDir }: {
+  node: FileNode; depth?: number; selectedFiles: Set<string>; onToggle: (path: string) => void; onToggleDir: (node: FileNode) => void;
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
   if (node.type === 'directory') {
+    const allSelected = areAllChildrenSelected(node, selectedFiles);
+    const someSelected = !allSelected && collectChildFiles(node).some(p => selectedFiles.has(p));
     return (
       <div>
-        <button className="flex items-center gap-1 w-full px-2 py-1 hover:bg-pink-500/10 text-xs text-pink-200/80"
-          style={{ paddingLeft: `${depth * 12 + 8}px` }} onClick={() => setExpanded(!expanded)}>
-          {expanded ? <ChevronDown className="w-3 h-3 text-pink-400" /> : <ChevronRight className="w-3 h-3 text-pink-400" />}
-          <FolderOpen className="w-3 h-3 text-pink-400/70" /><span>{node.name}</span>
-        </button>
+        <div className="flex items-center gap-0.5 w-full px-1 hover:bg-pink-500/10 text-xs text-pink-200/80"
+          style={{ paddingLeft: `${depth * 12 + 4}px` }}>
+          <button className="p-0.5" onClick={() => onToggleDir(node)} title={allSelected ? 'Deselect all' : 'Select all'}>
+            {allSelected
+              ? <CheckSquare className="w-3 h-3 text-pink-400" />
+              : someSelected
+                ? <CheckSquare className="w-3 h-3 text-pink-400/40" />
+                : <Square className="w-3 h-3 text-pink-500/30" />}
+          </button>
+          <button className="flex items-center gap-1 flex-1 py-1" onClick={() => setExpanded(!expanded)}>
+            {expanded ? <ChevronDown className="w-3 h-3 text-pink-400" /> : <ChevronRight className="w-3 h-3 text-pink-400" />}
+            <FolderOpen className="w-3 h-3 text-pink-400/70" /><span>{node.name}</span>
+          </button>
+        </div>
         {expanded && node.children?.map(child => (
-          <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedFiles={selectedFiles} onToggle={onToggle} />
+          <FileTreeNode key={child.path} node={child} depth={depth + 1} selectedFiles={selectedFiles} onToggle={onToggle} onToggleDir={onToggleDir} />
         ))}
       </div>
     );
@@ -102,6 +202,12 @@ export default function ImproveWorkspace() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [projectTree, setProjectTree] = useState<FileNode[]>(DEFAULT_PROJECT_TREE);
+  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [rightTab, setRightTab] = useState<'files' | 'preview'>('files');
+  const [previewHtml, setPreviewHtml] = useState('');
+  const uploadRef = useRef<HTMLInputElement>(null);
+
   const toggleFile = useCallback((path: string) => {
     setSelectedFiles(prev => {
       const next = new Set(prev);
@@ -109,12 +215,34 @@ export default function ImproveWorkspace() {
       return next;
     });
   }, []);
+
+  const toggleDir = useCallback((node: FileNode) => {
+    const childPaths = collectChildFiles(node);
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+      const allSelected = childPaths.every(p => next.has(p));
+      if (allSelected) {
+        childPaths.forEach(p => next.delete(p));
+      } else {
+        childPaths.forEach(p => next.add(p));
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    const allPaths = collectAllFiles(projectTree);
+    setSelectedFiles(prev => {
+      if (prev.size === allPaths.length) return new Set();
+      return new Set(allPaths);
+    });
+  }, [projectTree]);
+
   const [streamingContent, setStreamingContent] = useState('');
   const [isPlanMode, setIsPlanMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [convId, setConvId] = useState(() => generateId());
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -125,7 +253,6 @@ export default function ImproveWorkspace() {
   const [appliedFiles, setAppliedFiles] = useState<Set<string>>(new Set());
   const [diffPreview, setDiffPreview] = useState<{ filePath: string; content: string } | null>(null);
 
-  // Extract all code blocks with file paths from assistant messages
   const allCodeBlocks = useMemo(() => {
     const blocks: ParsedCodeBlock[] = [];
     for (const msg of messages) {
@@ -135,6 +262,25 @@ export default function ImproveWorkspace() {
     }
     return blocks;
   }, [messages]);
+
+  // Update live preview when code blocks change
+  useEffect(() => {
+    if (allCodeBlocks.length > 0) {
+      try {
+        const projectFiles = allCodeBlocks.map((block, i) => ({
+          id: `preview-${i}`,
+          name: block.filePath.split('/').pop() || block.filePath,
+          path: block.filePath,
+          content: block.content,
+          isDirectory: false,
+          language: block.language || 'typescript',
+        }));
+        const html = buildPreviewHTML(projectFiles);
+      } catch {
+        // Preview build failed, that's okay
+      }
+    }
+  }, [allCodeBlocks]);
 
   const handleApplyAll = useCallback(async () => {
     if (allCodeBlocks.length === 0) {
@@ -149,9 +295,8 @@ export default function ImproveWorkspace() {
         await writeFile(block.filePath, block.content);
         applied++;
         setAppliedFiles(prev => new Set(prev).add(block.filePath));
-      } catch (err: any) {
+      } catch {
         failed++;
-        console.error(`Failed to write ${block.filePath}:`, err);
       }
     }
     setIsApplying(false);
@@ -164,7 +309,6 @@ export default function ImproveWorkspace() {
 
   useEffect(() => { applyModeTheme('ai-improvement'); }, []);
 
-  // Load history on mount and after saves
   const loadHistory = useCallback(async () => {
     const all = await getAllConversations();
     setHistory(all.filter(c => c.modeKey === 'ai-improvement'));
@@ -199,6 +343,35 @@ export default function ImproveWorkspace() {
     setActiveConvId(null);
     setStreamingContent('');
     setAppliedFiles(new Set());
+  }, []);
+
+  // Open Folder via File System Access API
+  const handleOpenFolder = useCallback(async () => {
+    if (!('showDirectoryPicker' in window)) {
+      toast.error('Your browser does not support folder access. Use the Upload button instead.');
+      return;
+    }
+    try {
+      const handle = await (window as any).showDirectoryPicker({ mode: 'read' });
+      setDirHandle(handle);
+      toast.loading('Scanning folder...', { id: 'folder-scan' });
+      const tree = await scanDirectoryHandle(handle);
+      setProjectTree(tree);
+      setSelectedFiles(new Set());
+      toast.success(`Loaded ${collectAllFiles(tree).length} files from "${handle.name}"`, { id: 'folder-scan' });
+    } catch (err: any) {
+      if (err.name !== 'AbortError') toast.error('Failed to open folder');
+    }
+  }, []);
+
+  // Upload folder fallback
+  const handleUploadFolder = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const tree = buildTreeFromFileList(files);
+    setProjectTree(tree);
+    setSelectedFiles(new Set());
+    toast.success(`Loaded ${files.length} files`);
   }, []);
 
   const whisperAvailable = isWhisperLoaded() || getDownloadedModels().length > 0;
@@ -260,18 +433,15 @@ export default function ImproveWorkspace() {
   }, [input, messages, isLoading, selectedFiles, isPlanMode, convId]);
 
   const toggleRecording = useCallback(async () => {
-    // If already recording, stop it
     if (isRecording && mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       return;
     }
-
     if (!whisperAvailable) {
       toast.info('Download a Whisper model in Settings → Voice Models');
       return;
     }
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -290,7 +460,6 @@ export default function ImproveWorkspace() {
           const buf = await ctx.decodeAudioData(ab);
           const text = await transcribeAudio(buf.getChannelData(0));
           if (text.trim()) {
-            // Auto-send after voice transcription for hands-free experience
             toast.success(`Heard: "${text.trim().slice(0, 50)}${text.trim().length > 50 ? '…' : ''}"`, { duration: 2000 });
             handleSend(text.trim());
           } else {
@@ -302,7 +471,6 @@ export default function ImproveWorkspace() {
       mediaRecorder.start();
       setIsRecording(true);
       toast('🎙️ Listening… tap again to stop', { duration: 2000 });
-      // Auto-stop after 30 seconds
       setTimeout(() => {
         if (mediaRecorder.state === 'recording') { mediaRecorder.stop(); setIsRecording(false); }
       }, 30000);
@@ -324,9 +492,7 @@ export default function ImproveWorkspace() {
   }, []);
 
   const renderMarkdown = (content: string) => {
-    // Pre-parse code blocks with file paths from this message
     const parsed = parseCodeBlocks(content);
-
     return (
       <ReactMarkdown
         components={{
@@ -334,7 +500,6 @@ export default function ImproveWorkspace() {
             const match = /language-(\w+)/.exec(className || '');
             const codeStr = String(children).replace(/\n$/, '');
             if (match) {
-              // Try to find a matching parsed block for this code
               const matchedBlock = parsed.find(b => b.content.trim() === codeStr.trim());
               const isApplied = matchedBlock ? appliedFiles.has(matchedBlock.filePath) : false;
               return (
@@ -387,8 +552,20 @@ export default function ImproveWorkspace() {
     );
   };
 
+  const allFiles = useMemo(() => collectAllFiles(projectTree), [projectTree]);
+  const allSelected = allFiles.length > 0 && selectedFiles.size === allFiles.length;
+
   return (
     <div className="h-screen flex flex-col" style={{ background: 'hsl(330, 20%, 6%)' }}>
+      {/* Hidden upload input */}
+      <input
+        ref={uploadRef}
+        type="file"
+        className="hidden"
+        {...({ webkitdirectory: '', directory: '', multiple: true } as any)}
+        onChange={handleUploadFolder}
+      />
+
       {/* Header */}
       <header className="h-12 flex items-center justify-between px-3 border-b shrink-0" style={{
         background: 'linear-gradient(180deg, hsl(330, 40%, 14%) 0%, hsl(330, 40%, 9%) 100%)',
@@ -426,13 +603,8 @@ export default function ImproveWorkspace() {
             <History className="w-3 h-3" />
             History
           </Button>
-          <Button
-            variant="ghost" size="sm"
-            className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
-            onClick={handleNewSession}
-          >
-            <Plus className="w-3 h-3" />
-            New
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200" onClick={handleNewSession}>
+            <Plus className="w-3 h-3" /> New
           </Button>
           <Button
             variant="ghost" size="sm"
@@ -442,16 +614,13 @@ export default function ImproveWorkspace() {
             <Lightbulb className="w-3 h-3" />
             {isPlanMode ? 'Planning' : 'Plan'}
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-pink-400 hover:text-pink-200 gap-1">
-            <RefreshCw className="w-3 h-3" />Rescan
-          </Button>
         </div>
       </header>
 
       <div className="flex flex-1 min-h-0">
         {/* History Sidebar */}
         {showHistory && (
-          <div className="w-64 shrink-0 border-r flex flex-col" style={{
+          <div className="w-56 shrink-0 border-r flex flex-col" style={{
             background: 'hsl(330, 25%, 7%)',
             borderColor: 'hsl(330, 30%, 16%)',
           }}>
@@ -469,9 +638,7 @@ export default function ImproveWorkspace() {
                       key={conv.id}
                       className={cn(
                         "group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors",
-                        activeConvId === conv.id
-                          ? "bg-pink-500/15 text-pink-200"
-                          : "text-pink-300/60 hover:bg-pink-500/8 hover:text-pink-200"
+                        activeConvId === conv.id ? "bg-pink-500/15 text-pink-200" : "text-pink-300/60 hover:bg-pink-500/8 hover:text-pink-200"
                       )}
                       onClick={() => handleResumeSession(conv)}
                     >
@@ -502,7 +669,6 @@ export default function ImproveWorkspace() {
           <div className="h-full flex flex-col">
             <ScrollArea className="flex-1" ref={scrollRef}>
               <div className="p-4 space-y-4">
-                {/* Empty State */}
                 {messages.length === 0 && !isLoading && (
                   <div className="flex flex-col items-center justify-center py-8">
                     <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500/20 to-rose-600/20 flex items-center justify-center mb-4 border border-pink-500/20">
@@ -512,8 +678,6 @@ export default function ImproveWorkspace() {
                     <p className="text-sm text-pink-400/50 mb-6 text-center max-w-sm">
                       Just tell me what to fix — or tap the mic and talk. I'll analyze your code and suggest changes.
                     </p>
-
-                    {/* Quick Actions Grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full max-w-lg">
                       {QUICK_SUGGESTIONS.map(({ icon: Icon, label, prompt }) => (
                         <button
@@ -528,8 +692,6 @@ export default function ImproveWorkspace() {
                         </button>
                       ))}
                     </div>
-
-                    {/* Voice hint */}
                     <div className="mt-6 flex items-center gap-2 text-[11px] text-pink-500/40">
                       <Mic className="w-3 h-3" />
                       <span>Or hold the mic button and describe what to improve</span>
@@ -537,7 +699,6 @@ export default function ImproveWorkspace() {
                   </div>
                 )}
 
-                {/* Messages */}
                 {messages.map(msg => (
                   <div key={msg.id} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
                     <div className={cn(
@@ -557,7 +718,6 @@ export default function ImproveWorkspace() {
                   </div>
                 ))}
 
-                {/* Streaming response */}
                 {streamingContent && (
                   <div className="flex justify-start">
                     <div className="max-w-[88%] rounded-2xl rounded-bl-md px-4 py-3 text-sm bg-pink-950/40 border border-pink-800/25 text-pink-100">
@@ -568,7 +728,6 @@ export default function ImproveWorkspace() {
                   </div>
                 )}
 
-                {/* Loading indicator */}
                 {isLoading && !streamingContent && (
                   <div className="flex justify-start">
                     <div className="bg-pink-950/40 border border-pink-800/25 rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-2">
@@ -578,7 +737,6 @@ export default function ImproveWorkspace() {
                   </div>
                 )}
 
-                {/* Fixes Summary Bar — shows after AI responds with code blocks */}
                 {!isLoading && !streamingContent && allCodeBlocks.length > 0 && (
                   <div className="rounded-xl border overflow-hidden" style={{
                     background: 'hsl(330, 25%, 8%)',
@@ -606,7 +764,7 @@ export default function ImproveWorkspace() {
                     </div>
                     <div className="divide-y" style={{ borderColor: 'hsl(330, 30%, 14%)' }}>
                       {allCodeBlocks.map((block, idx) => {
-                        const isApplied = appliedFiles.has(block.filePath);
+                        const isBlockApplied = appliedFiles.has(block.filePath);
                         return (
                           <div key={idx} className="flex items-center justify-between px-4 py-2 hover:bg-pink-500/5 transition-colors">
                             <div className="flex items-center gap-2 min-w-0">
@@ -616,26 +774,23 @@ export default function ImproveWorkspace() {
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0 ml-2">
                               <Button
-                                variant="ghost"
-                                size="sm"
+                                variant="ghost" size="sm"
                                 className="h-6 text-[10px] px-2 text-pink-300 hover:text-pink-100 hover:bg-pink-500/15"
                                 onClick={() => setDiffPreview({ filePath: block.filePath, content: block.content })}
-                                disabled={isApplied}
-                              >
-                                Diff
-                              </Button>
+                                disabled={isBlockApplied}
+                              >Diff</Button>
                               <Button
                                 size="sm"
                                 className={cn(
                                   "h-6 text-[10px] px-2.5 gap-1",
-                                  isApplied
+                                  isBlockApplied
                                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default hover:bg-emerald-500/20"
                                     : "bg-emerald-600 hover:bg-emerald-500 text-white"
                                 )}
-                                onClick={() => !isApplied && handleApplySingle(block.filePath, block.content)}
-                                disabled={isApplied}
+                                onClick={() => !isBlockApplied && handleApplySingle(block.filePath, block.content)}
+                                disabled={isBlockApplied}
                               >
-                                {isApplied ? <><Check className="w-3 h-3" /> Done</> : 'Apply'}
+                                {isBlockApplied ? <><Check className="w-3 h-3" /> Done</> : 'Apply'}
                               </Button>
                             </div>
                           </div>
@@ -669,19 +824,15 @@ export default function ImproveWorkspace() {
                   className="min-h-[42px] max-h-[120px] resize-none flex-1 bg-pink-950/30 border-pink-800/30 text-pink-100 placeholder:text-pink-500/40 rounded-xl"
                   rows={1}
                 />
-                {/* Voice button */}
                 <Button
                   onClick={toggleRecording}
                   size="icon"
                   variant="ghost"
                   className={cn(
                     "shrink-0 h-[42px] w-[42px] rounded-xl transition-all",
-                    isRecording
-                      ? "bg-red-500/20 text-red-400 animate-pulse border border-red-500/30"
-                      : isTranscribing
-                        ? "text-pink-400"
-                        : whisperAvailable
-                          ? "text-pink-400 hover:bg-pink-500/10 hover:text-pink-300"
+                    isRecording ? "bg-red-500/20 text-red-400 animate-pulse border border-red-500/30"
+                      : isTranscribing ? "text-pink-400"
+                        : whisperAvailable ? "text-pink-400 hover:bg-pink-500/10 hover:text-pink-300"
                           : "text-pink-600 hover:text-pink-500"
                   )}
                   disabled={isTranscribing}
@@ -689,7 +840,6 @@ export default function ImproveWorkspace() {
                 >
                   {isTranscribing ? <Loader2 className="w-4 h-4 animate-spin" /> : isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 </Button>
-                {/* Send button */}
                 <Button
                   onClick={() => handleSend()}
                   disabled={!input.trim() || isLoading}
@@ -705,21 +855,63 @@ export default function ImproveWorkspace() {
 
         <ResizableHandle withHandle />
 
-        {/* File Tree Panel */}
+        {/* Right Panel: Files + Preview Tabs */}
         <ResizablePanel defaultSize={45} minSize={20}>
           <div className="h-full flex flex-col" style={{ background: 'hsl(330, 20%, 5%)' }}>
-            <div className="h-9 flex items-center px-3 border-b shrink-0" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
-              <FolderOpen className="w-3.5 h-3.5 text-pink-400 mr-2" />
-              <span className="text-xs font-mono text-pink-300">Project Source</span>
-              {selectedFiles.size > 0 && (
-                <span className="ml-auto text-[10px] text-pink-500 font-mono">{selectedFiles.size} selected</span>
-              )}
-            </div>
-            <ScrollArea className="flex-1 py-1">
-              {PROJECT_TREE.map(node => (
-                <FileTreeNode key={node.path} node={node} selectedFiles={selectedFiles} onToggle={toggleFile} />
-              ))}
-            </ScrollArea>
+            <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as 'files' | 'preview')} className="flex flex-col h-full">
+              <div className="flex items-center border-b shrink-0" style={{ borderColor: 'hsl(330, 30%, 16%)' }}>
+                <TabsList className="h-9 bg-transparent border-0 p-0 gap-0">
+                  <TabsTrigger value="files" className="h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-pink-500 data-[state=active]:bg-transparent text-xs px-3 text-pink-300 data-[state=active]:text-pink-200">
+                    <FolderOpen className="w-3 h-3 mr-1.5" /> Files
+                  </TabsTrigger>
+                  <TabsTrigger value="preview" className="h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-pink-500 data-[state=active]:bg-transparent text-xs px-3 text-pink-300 data-[state=active]:text-pink-200">
+                    <Eye className="w-3 h-3 mr-1.5" /> Preview
+                  </TabsTrigger>
+                </TabsList>
+                <div className="ml-auto flex items-center gap-1 pr-2">
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-pink-400 hover:text-pink-200" onClick={handleOpenFolder} title="Open folder (File System Access API)">
+                    <FolderOpen className="w-3 h-3 mr-1" /> Open
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-pink-400 hover:text-pink-200" onClick={() => uploadRef.current?.click()} title="Upload folder">
+                    <Upload className="w-3 h-3 mr-1" /> Upload
+                  </Button>
+                </div>
+              </div>
+
+              <TabsContent value="files" className="flex-1 m-0 overflow-hidden flex flex-col">
+                {/* Select All bar */}
+                <div className="flex items-center justify-between px-3 py-1.5 border-b shrink-0" style={{ borderColor: 'hsl(330, 30%, 14%)' }}>
+                  <button className="flex items-center gap-1.5 text-xs text-pink-300 hover:text-pink-100 transition-colors" onClick={toggleSelectAll}>
+                    {allSelected
+                      ? <CheckSquare className="w-3.5 h-3.5 text-pink-400" />
+                      : <Square className="w-3.5 h-3.5 text-pink-500/40" />}
+                    <span>{allSelected ? 'Deselect All' : 'Select All'}</span>
+                  </button>
+                  <span className="text-[10px] text-pink-500/50 font-mono">{selectedFiles.size}/{allFiles.length}</span>
+                </div>
+                <ScrollArea className="flex-1 py-1">
+                  {projectTree.map(node => (
+                    <FileTreeNode key={node.path} node={node} selectedFiles={selectedFiles} onToggle={toggleFile} onToggleDir={toggleDir} />
+                  ))}
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="preview" className="flex-1 m-0 overflow-hidden">
+                {previewHtml ? (
+                  <iframe
+                    srcDoc={previewHtml}
+                    className="w-full h-full border-0"
+                    sandbox="allow-scripts"
+                    title="Live Preview"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-pink-500/40">
+                    <Eye className="w-8 h-8 mb-2 opacity-40" />
+                    <p className="text-xs">Preview will appear when the AI generates code changes</p>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

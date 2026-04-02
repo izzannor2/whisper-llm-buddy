@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 title LocalDev AI - Development Server
 color 0A
 
@@ -8,159 +9,179 @@ echo  ║         LocalDev AI - Quick Start        ║
 echo  ╚══════════════════════════════════════════╝
 echo.
 
-:: Check if node_modules exists
-if not exist "node_modules" (
-    echo [!] Dependencies not installed. Running setup first...
+:: ========================================
+:: Step 1: Check Node.js
+:: ========================================
+echo [1/5] Checking Node.js...
+node --version >nul 2>&1
+if errorlevel 1 (
     echo.
-    :: Try bun first, fall back to npm
-    where bun >nul 2>&1
-    if not errorlevel 1 (
-        bun install
-    ) else (
-        call npm install
+    echo  [ERROR] Node.js is not installed!
+    echo  Please install from: https://nodejs.org
+    echo.
+    pause
+    exit /b 1
+)
+for /f "tokens=*" %%i in ('node --version') do echo       [OK] Node.js %%i
+
+:: ========================================
+:: Step 2: Detect package manager
+:: ========================================
+set PKG_CMD=npm
+where bun >nul 2>&1
+if not errorlevel 1 (
+    set PKG_CMD=bun
+    echo [2/5] [OK] Using Bun
+) else (
+    echo [2/5] [OK] Using npm
+)
+
+:: ========================================
+:: Step 3: Install dependencies (with retry + auto-repair)
+:: ========================================
+echo [3/5] Checking dependencies...
+
+:: Auto-repair corrupted node_modules
+if exist "node_modules" (
+    if not exist "node_modules\react" (
+        echo       [!] node_modules appears corrupted, reinstalling...
+        rmdir /s /q node_modules 2>nul
     )
-    if errorlevel 1 (
+)
+
+if not exist "node_modules" (
+    set INSTALL_SUCCESS=0
+    for /l %%A in (1,1,3) do (
+        if !INSTALL_SUCCESS!==0 (
+            echo       [*] Attempt %%A/3: !PKG_CMD! install...
+            !PKG_CMD! install
+            if not errorlevel 1 (
+                set INSTALL_SUCCESS=1
+            ) else (
+                echo       [!] Attempt %%A failed, retrying in 3s...
+                timeout /t 3 /nobreak >nul
+            )
+        )
+    )
+    if !INSTALL_SUCCESS!==0 (
         echo.
-        echo [ERROR] Failed to install dependencies!
-        echo Please run setup.bat first or check your Node.js installation.
+        echo  [ERROR] Failed to install dependencies after 3 attempts!
         pause
         exit /b 1
     )
-    echo.
-    echo [OK] Dependencies installed successfully!
-    echo.
+    echo       [OK] Dependencies installed
+) else (
+    echo       [OK] Dependencies already installed
 )
 
 :: ========================================
-:: Detect local binaries in bin/ folder
+:: Step 4: Setup directories + detect models
 :: ========================================
+echo [4/5] Setting up environment...
+if not exist "models\gguf" mkdir "models\gguf" 2>nul
+if not exist "bin\llama" mkdir "bin\llama" 2>nul
+if not exist "bin\ollama" mkdir "bin\ollama" 2>nul
+
 set LLAMA_SERVER_CMD=
 set OLLAMA_CMD=
-
-:: Check for local llama-server first
-if exist "bin\llama\llama-server.exe" (
-    set "LLAMA_SERVER_CMD=bin\llama\llama-server.exe"
-    echo [OK] Found local llama-server in bin\llama\
-) else (
-    where llama-server >nul 2>&1
-    if not errorlevel 1 (
-        set "LLAMA_SERVER_CMD=llama-server"
-    )
-)
-
-:: Check for local Ollama first
-if exist "bin\ollama\ollama.exe" (
-    set "OLLAMA_CMD=bin\ollama\ollama.exe"
-    echo [OK] Found local Ollama in bin\ollama\
-) else (
-    where ollama >nul 2>&1
-    if not errorlevel 1 (
-        set "OLLAMA_CMD=ollama"
-    )
-)
-
-:: ========================================
-:: Check for GGUF models in models/gguf/
-:: ========================================
-set GGUF_MODEL=
 set LLAMA_SERVER_RUNNING=0
 
+:: Check llama-server
+if exist "bin\llama\llama-server.exe" (
+    set "LLAMA_SERVER_CMD=bin\llama\llama-server.exe"
+    echo       [OK] Found local llama-server
+) else (
+    where llama-server >nul 2>&1
+    if not errorlevel 1 set "LLAMA_SERVER_CMD=llama-server"
+)
+
+:: Check Ollama
+if exist "bin\ollama\ollama.exe" (
+    set "OLLAMA_CMD=bin\ollama\ollama.exe"
+    echo       [OK] Found local Ollama
+) else (
+    where ollama >nul 2>&1
+    if not errorlevel 1 set "OLLAMA_CMD=ollama"
+)
+
+:: Check for GGUF models
+set GGUF_MODEL=
 if exist "models\gguf" (
     for %%f in (models\gguf\*.gguf) do (
-        if not defined GGUF_MODEL (
-            set "GGUF_MODEL=%%f"
-        )
+        if not defined GGUF_MODEL set "GGUF_MODEL=%%f"
     )
 )
 
+:: Start llama-server if model found
 if defined GGUF_MODEL (
-    echo [*] Found GGUF model: %GGUF_MODEL%
-    
+    echo       [*] Found model: !GGUF_MODEL!
     if defined LLAMA_SERVER_CMD (
-        :: Check if llama-server is already running
         curl -s http://localhost:8081/health >nul 2>&1
         if errorlevel 1 (
-            echo [*] Starting llama-server with detected model...
-            start /B "LlamaServer" %LLAMA_SERVER_CMD% -m "%GGUF_MODEL%" --port 8081 --host 0.0.0.0 -ngl 99 >nul 2>&1
-            set LLAMA_SERVER_RUNNING=1
-            timeout /t 3 /nobreak >nul
-            echo [OK] llama-server started on port 8081
-        ) else (
-            echo [OK] llama-server already running on port 8081
-            set LLAMA_SERVER_RUNNING=1
-        )
-    ) else (
-        echo [!] llama-server not found
-        echo     Place llama-server.exe in bin\llama\ or install to PATH
-        echo     Build from: https://github.com/ggerganov/llama.cpp
-    )
-) else (
-    echo [*] No GGUF models found in models\gguf\
-    echo     Add .gguf files there for auto-detection
-)
-
-:: ========================================
-:: Check if Ollama is running (fallback)
-:: ========================================
-if %LLAMA_SERVER_RUNNING%==0 (
-    echo [*] Checking Ollama status...
-    curl -s http://localhost:11434/api/tags >nul 2>&1
-    if errorlevel 1 (
-        echo [!] Ollama not detected at localhost:11434
-        if defined OLLAMA_CMD (
-            echo     Starting Ollama in background...
-            :: Set correct host to avoid config issues
-            set "OLLAMA_HOST=127.0.0.1:11434"
-            start "" /B cmd /c "set OLLAMA_HOST=127.0.0.1:11434 && "%OLLAMA_CMD%" serve"
-            echo     Waiting for Ollama to initialize...
-            timeout /t 5 /nobreak >nul
-            :: Verify Ollama started
-            curl -s http://localhost:11434/api/tags >nul 2>&1
-            if errorlevel 1 (
-                echo     [!] Ollama failed to start. Check if another instance is running.
-                echo     [!] Try running manually: %OLLAMA_CMD% serve
-            ) else (
-                echo     [OK] Ollama started successfully!
+            echo       [*] Starting llama-server...
+            start /B "LlamaServer" !LLAMA_SERVER_CMD! -m "!GGUF_MODEL!" --port 8081 --host 0.0.0.0 -ngl 99 >nul 2>&1
+            :: Health check with retry
+            for /l %%i in (1,1,10) do (
+                curl -s http://localhost:8081/health >nul 2>&1
+                if not errorlevel 1 (
+                    echo       [OK] llama-server ready on port 8081
+                    set LLAMA_SERVER_RUNNING=1
+                    goto :llama_done
+                )
+                timeout /t 1 /nobreak >nul
             )
+            echo       [!] llama-server may still be loading...
+            set LLAMA_SERVER_RUNNING=1
         ) else (
-            echo [!] Ollama not found - AI features will use Cloud backend
-            echo     Place ollama.exe in bin\ollama\ or install from: https://ollama.ai
+            echo       [OK] llama-server already running
+            set LLAMA_SERVER_RUNNING=1
         )
-    ) else (
-        echo [OK] Ollama is running
     )
 )
+:llama_done
+
+:: Start Ollama if no llama-server
+if !LLAMA_SERVER_RUNNING!==0 (
+    if defined OLLAMA_CMD (
+        curl -s http://localhost:11434/api/tags >nul 2>&1
+        if errorlevel 1 (
+            echo       [*] Starting Ollama...
+            set "OLLAMA_HOST=127.0.0.1:11434"
+            start "" /B cmd /c "set OLLAMA_HOST=127.0.0.1:11434 && "!OLLAMA_CMD!" serve"
+            for /l %%i in (1,1,10) do (
+                curl -s http://localhost:11434/api/tags >nul 2>&1
+                if not errorlevel 1 (
+                    echo       [OK] Ollama ready
+                    goto :ollama_done
+                )
+                timeout /t 1 /nobreak >nul
+            )
+            echo       [!] Ollama may still be loading
+        ) else (
+            echo       [OK] Ollama running
+        )
+    ) else (
+        echo       [*] No local LLM found - using Cloud backend
+    )
+)
+:ollama_done
 
 :: ========================================
-:: Check port 8080 availability
+:: Step 5: Start dev server
 :: ========================================
-netstat -an 2>nul | findstr ":8080 " | findstr "LISTENING" >nul 2>&1
-if not errorlevel 1 (
-    echo.
-    echo [!] Port 8080 is already in use.
-    echo     The dev server will try to use the next available port.
-    echo.
-)
-
+echo [5/5] Starting development server...
 echo.
 echo ══════════════════════════════════════════
-echo  Starting development server...
-echo  App will open at: http://localhost:8080
+echo  App: http://localhost:8080
+if defined GGUF_MODEL echo  LLM: llama-server ^(port 8081^)
+echo  Press Ctrl+C to stop
 echo ══════════════════════════════════════════
 echo.
-if defined GGUF_MODEL (
-    echo  Local LLM: llama-server ^(port 8081^)
-)
-echo  Press Ctrl+C to stop the server
-echo.
 
-:: Open browser after a short delay
+:: Open browser
 start /B cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:8080"
 
-:: Start the dev server (try bun first)
-where bun >nul 2>&1
-if not errorlevel 1 (
-    bun run dev
-) else (
-    npm run dev
-)
+:: Start dev server
+!PKG_CMD! run dev
+
+endlocal

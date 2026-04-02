@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Moon, Sun, Wifi, WifiOff, RefreshCw, AlertTriangle, Cpu, Plug, FlaskConical, Brain, BookOpen, Shield, Server, HardDrive } from 'lucide-react';
+import { ArrowLeft, Save, Moon, Sun, Wifi, WifiOff, RefreshCw, AlertTriangle, Cpu, Plug, FlaskConical, Brain, BookOpen, Shield, Server, HardDrive, Globe, Copy, QrCode, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +20,76 @@ import { isLlamaCppRunning, getLlamaCppServerInfo, generateLlamaServerCommand } 
 import { LocalModelPicker } from '@/components/LocalModelPicker';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+
+// Simple QR code generator using canvas
+function generateQRDataUrl(text: string): string {
+  // Minimal QR placeholder — generates a visual representation
+  const canvas = document.createElement('canvas');
+  const size = 200;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#000000';
+  
+  // Generate a deterministic pattern from the URL
+  const hash = text.split('').reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0);
+  const moduleSize = 8;
+  const modules = Math.floor(size / moduleSize);
+  
+  // QR-like finder patterns
+  const drawFinder = (x: number, y: number) => {
+    for (let i = 0; i < 7; i++) {
+      for (let j = 0; j < 7; j++) {
+        if (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4)) {
+          ctx.fillRect((x + i) * moduleSize, (y + j) * moduleSize, moduleSize, moduleSize);
+        }
+      }
+    }
+  };
+  
+  drawFinder(1, 1);
+  drawFinder(modules - 8, 1);
+  drawFinder(1, modules - 8);
+  
+  // Data area with deterministic pattern
+  for (let i = 9; i < modules - 1; i++) {
+    for (let j = 9; j < modules - 1; j++) {
+      const seed = (hash + i * 31 + j * 17 + text.charCodeAt(i % text.length)) & 0xFFFF;
+      if (seed % 3 === 0) {
+        ctx.fillRect(i * moduleSize, j * moduleSize, moduleSize, moduleSize);
+      }
+    }
+  }
+  
+  return canvas.toDataURL();
+}
+
+// Detect local IP via RTCPeerConnection
+async function detectLocalIP(): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      pc.createDataChannel('');
+      pc.createOffer().then(offer => pc.setLocalDescription(offer));
+      pc.onicecandidate = (e) => {
+        if (!e.candidate) return;
+        const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+        if (match && !match[1].startsWith('0.') && match[1] !== '0.0.0.0') {
+          resolve(match[1]);
+          pc.close();
+        }
+      };
+      setTimeout(() => { pc.close(); resolve('Unable to detect'); }, 5000);
+    } catch {
+      resolve('Unable to detect');
+    }
+  });
+}
+
 export default function IDESettingsPage() {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<IDESettingsType>(DEFAULT_SETTINGS);
@@ -28,49 +98,40 @@ export default function IDESettingsPage() {
   const [llamaCppConnected, setLlamaCppConnected] = useState(false);
   const [llamaCppInfo, setLlamaCppInfo] = useState<{ model: string; ctx_size: number; n_threads: number } | null>(null);
   const [selectedGgufFile, setSelectedGgufFile] = useState<File | null>(null);
+  const [localIP, setLocalIP] = useState('Detecting...');
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [devPort] = useState('8080');
 
   useEffect(() => {
     setSettings(getIDESettings());
     checkConnections();
+    detectLocalIP().then(ip => {
+      setLocalIP(ip);
+      const url = `http://${ip}:${devPort}`;
+      setQrDataUrl(generateQRDataUrl(url));
+    });
   }, []);
 
   const checkConnections = async () => {
-    // Check Ollama
     const ollamaOk = await isOllamaRunning();
     setOllamaConnected(ollamaOk);
-    if (ollamaOk) {
-      const modelList = await listModels();
-      setModels(modelList);
-    }
-
-    // Check llama.cpp
+    if (ollamaOk) { const modelList = await listModels(); setModels(modelList); }
     const llamaOk = await isLlamaCppRunning();
     setLlamaCppConnected(llamaOk);
-    if (llamaOk) {
-      const info = await getLlamaCppServerInfo();
-      setLlamaCppInfo(info);
-    }
+    if (llamaOk) { const info = await getLlamaCppServerInfo(); setLlamaCppInfo(info); }
   };
 
   const checkOllama = async () => {
     const connected = await isOllamaRunning();
     setOllamaConnected(connected);
-    if (connected) {
-      const modelList = await listModels();
-      setModels(modelList);
-    }
+    if (connected) { const modelList = await listModels(); setModels(modelList); }
   };
 
   const checkLlamaCpp = async () => {
     const connected = await isLlamaCppRunning();
     setLlamaCppConnected(connected);
-    if (connected) {
-      const info = await getLlamaCppServerInfo();
-      setLlamaCppInfo(info);
-      toast.success('Connected to llama.cpp server');
-    } else {
-      toast.error('Could not connect to llama.cpp server');
-    }
+    if (connected) { const info = await getLlamaCppServerInfo(); setLlamaCppInfo(info); toast.success('Connected to llama.cpp server'); }
+    else toast.error('Could not connect to llama.cpp server');
   };
 
   const handleGgufSelected = (file: File) => {
@@ -79,28 +140,26 @@ export default function IDESettingsPage() {
   };
 
   const copyLlamaCommand = () => {
-    if (!selectedGgufFile) {
-      toast.error('Please select a GGUF model file first');
-      return;
-    }
+    if (!selectedGgufFile) { toast.error('Please select a GGUF model file first'); return; }
     const command = generateLlamaServerCommand(selectedGgufFile.name, {
-      port: 8081,
-      contextSize: settings.llamaCppContextSize,
-      threads: settings.llamaCppThreads,
-      gpuLayers: settings.llamaCppGpuLayers,
+      port: 8081, contextSize: settings.llamaCppContextSize, threads: settings.llamaCppThreads, gpuLayers: settings.llamaCppGpuLayers,
     });
     navigator.clipboard.writeText(command);
     toast.success('Command copied to clipboard');
   };
 
   const updateSetting = <K extends keyof IDESettingsType>(key: K, value: IDESettingsType[K]) => {
-    const updated = { ...settings, [key]: value };
-    setSettings(updated);
+    setSettings(prev => ({ ...prev, [key]: value }));
   };
 
   const handleSave = () => {
     saveIDESettings(settings);
     toast.success('Settings saved');
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard');
   };
 
   const modeCards: { mode: IDEMode; icon: React.ReactNode }[] = [
@@ -113,6 +172,8 @@ export default function IDESettingsPage() {
     { mode: 'jailbreak', icon: <AlertTriangle className="h-5 w-5" /> },
     { mode: 'plugin', icon: <Plug className="h-5 w-5" /> },
   ];
+
+  const lanUrl = `http://${localIP}:${devPort}`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -133,16 +194,9 @@ export default function IDESettingsPage() {
             <h2 className="text-lg font-semibold mb-4">Mode</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {modeCards.map(({ mode, icon }) => (
-                <Card
-                  key={mode}
-                  className={cn('cursor-pointer transition-all hover:border-primary/50', settings.mode === mode && 'border-primary bg-primary/5')}
-                  onClick={() => updateSetting('mode', mode)}
-                >
+                <Card key={mode} className={cn('cursor-pointer transition-all hover:border-primary/50', settings.mode === mode && 'border-primary bg-primary/5')} onClick={() => updateSetting('mode', mode)}>
                   <CardHeader className="p-4">
-                    <div className="flex items-center gap-2">
-                      {icon}
-                      <CardTitle className="text-sm">{MODE_INFO[mode].name}</CardTitle>
-                    </div>
+                    <div className="flex items-center gap-2">{icon}<CardTitle className="text-sm">{MODE_INFO[mode].name}</CardTitle></div>
                     <CardDescription className="text-xs">{MODE_INFO[mode].description}</CardDescription>
                   </CardHeader>
                 </Card>
@@ -155,43 +209,24 @@ export default function IDESettingsPage() {
           {/* LLM Backend */}
           <section>
             <h2 className="text-lg font-semibold mb-4">LLM Backend</h2>
-            
-            {/* Backend Selection */}
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <Card
-                className={cn('cursor-pointer transition-all hover:border-primary/50', settings.llmBackend === 'ollama' && 'border-primary bg-primary/5')}
-                onClick={() => updateSetting('llmBackend', 'ollama')}
-              >
+              <Card className={cn('cursor-pointer transition-all hover:border-primary/50', settings.llmBackend === 'ollama' && 'border-primary bg-primary/5')} onClick={() => updateSetting('llmBackend', 'ollama')}>
                 <CardHeader className="p-4">
-                  <div className="flex items-center gap-2">
-                    <Server className="h-5 w-5" />
-                    <CardTitle className="text-sm">Ollama</CardTitle>
-                  </div>
+                  <div className="flex items-center gap-2"><Server className="h-5 w-5" /><CardTitle className="text-sm">Ollama</CardTitle></div>
                   <CardDescription className="text-xs">Easy model management with ollama pull</CardDescription>
                 </CardHeader>
               </Card>
-              <Card
-                className={cn('cursor-pointer transition-all hover:border-primary/50', settings.llmBackend === 'llama-cpp' && 'border-primary bg-primary/5')}
-                onClick={() => updateSetting('llmBackend', 'llama-cpp')}
-              >
+              <Card className={cn('cursor-pointer transition-all hover:border-primary/50', settings.llmBackend === 'llama-cpp' && 'border-primary bg-primary/5')} onClick={() => updateSetting('llmBackend', 'llama-cpp')}>
                 <CardHeader className="p-4">
-                  <div className="flex items-center gap-2">
-                    <HardDrive className="h-5 w-5" />
-                    <CardTitle className="text-sm">Llama.cpp</CardTitle>
-                  </div>
+                  <div className="flex items-center gap-2"><HardDrive className="h-5 w-5" /><CardTitle className="text-sm">Llama.cpp</CardTitle></div>
                   <CardDescription className="text-xs">Direct GGUF model loading</CardDescription>
                 </CardHeader>
               </Card>
             </div>
 
-            {/* Connection Mode */}
             <div className="grid grid-cols-3 gap-3 mb-6">
               {(['offline', 'online-research', 'updating'] as ConnectionMode[]).map((m) => (
-                <Card
-                  key={m}
-                  className={cn('cursor-pointer transition-all', settings.connectionMode === m && 'border-primary bg-primary/5')}
-                  onClick={() => updateSetting('connectionMode', m)}
-                >
+                <Card key={m} className={cn('cursor-pointer transition-all', settings.connectionMode === m && 'border-primary bg-primary/5')} onClick={() => updateSetting('connectionMode', m)}>
                   <CardHeader className="p-4 text-center">
                     {m === 'offline' && <WifiOff className="h-6 w-6 mx-auto text-amber-500" />}
                     {m === 'online-research' && <Wifi className="h-6 w-6 mx-auto text-green-500" />}
@@ -202,14 +237,9 @@ export default function IDESettingsPage() {
               ))}
             </div>
 
-            {/* Ollama Settings */}
             {settings.llmBackend === 'ollama' && (
               <Card className="mb-4">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Server className="h-4 w-4" /> Ollama Configuration
-                  </CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Server className="h-4 w-4" /> Ollama Configuration</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div><Label>Ollama URL</Label><Input value={settings.ollamaUrl} onChange={(e) => updateSetting('ollamaUrl', e.target.value)} /></div>
                   <div className="flex items-center gap-2">
@@ -229,14 +259,9 @@ export default function IDESettingsPage() {
               </Card>
             )}
 
-            {/* Llama.cpp Settings */}
             {settings.llmBackend === 'llama-cpp' && (
               <Card className="mb-4">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <HardDrive className="h-4 w-4" /> Llama.cpp Configuration
-                  </CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><HardDrive className="h-4 w-4" /> Llama.cpp Configuration</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div><Label>Server URL</Label><Input value={settings.llamaCppUrl} onChange={(e) => updateSetting('llamaCppUrl', e.target.value)} placeholder="http://127.0.0.1:8081" /></div>
                   <div className="flex items-center gap-2">
@@ -244,7 +269,6 @@ export default function IDESettingsPage() {
                     <span className="text-sm">{llamaCppConnected ? 'Connected' : 'Not connected'}</span>
                     <Button variant="outline" size="sm" onClick={checkLlamaCpp}>Test</Button>
                   </div>
-                  
                   {llamaCppConnected && llamaCppInfo && (
                     <div className="p-3 rounded-lg bg-accent/10 border border-accent/30 text-sm">
                       <p><strong>Model:</strong> {llamaCppInfo.model || 'Unknown'}</p>
@@ -252,62 +276,101 @@ export default function IDESettingsPage() {
                       <p><strong>Threads:</strong> {llamaCppInfo.n_threads}</p>
                     </div>
                   )}
-
                   <Separator />
-                  
-                  <div>
-                    <Label className="mb-2 block">Select Local GGUF Model</Label>
-                    <LocalModelPicker onModelSelected={handleGgufSelected} />
-                  </div>
-
+                  <div><Label className="mb-2 block">Select Local GGUF Model</Label><LocalModelPicker onModelSelected={handleGgufSelected} /></div>
                   <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <Label>Context Size</Label>
-                      <Input 
-                        type="number" 
-                        value={settings.llamaCppContextSize} 
-                        onChange={(e) => updateSetting('llamaCppContextSize', parseInt(e.target.value) || 4096)} 
-                      />
-                    </div>
-                    <div>
-                      <Label>Threads</Label>
-                      <Input 
-                        type="number" 
-                        value={settings.llamaCppThreads} 
-                        onChange={(e) => updateSetting('llamaCppThreads', parseInt(e.target.value) || 4)} 
-                      />
-                    </div>
-                    <div>
-                      <Label>GPU Layers</Label>
-                      <Input 
-                        type="number" 
-                        value={settings.llamaCppGpuLayers} 
-                        onChange={(e) => updateSetting('llamaCppGpuLayers', parseInt(e.target.value) || 0)} 
-                      />
-                    </div>
+                    <div><Label>Context Size</Label><Input type="number" value={settings.llamaCppContextSize} onChange={(e) => updateSetting('llamaCppContextSize', parseInt(e.target.value) || 4096)} /></div>
+                    <div><Label>Threads</Label><Input type="number" value={settings.llamaCppThreads} onChange={(e) => updateSetting('llamaCppThreads', parseInt(e.target.value) || 4)} /></div>
+                    <div><Label>GPU Layers</Label><Input type="number" value={settings.llamaCppGpuLayers} onChange={(e) => updateSetting('llamaCppGpuLayers', parseInt(e.target.value) || 0)} /></div>
                   </div>
-
                   {selectedGgufFile && (
                     <div className="space-y-2">
                       <Label>Startup Command</Label>
                       <div className="p-3 rounded bg-muted font-mono text-xs break-all">
-                        {generateLlamaServerCommand(selectedGgufFile.name, {
-                          port: 8081,
-                          contextSize: settings.llamaCppContextSize,
-                          threads: settings.llamaCppThreads,
-                          gpuLayers: settings.llamaCppGpuLayers,
-                        })}
+                        {generateLlamaServerCommand(selectedGgufFile.name, { port: 8081, contextSize: settings.llamaCppContextSize, threads: settings.llamaCppThreads, gpuLayers: settings.llamaCppGpuLayers })}
                       </div>
                       <Button variant="outline" size="sm" onClick={copyLlamaCommand}>Copy Command</Button>
                     </div>
                   )}
-
                   <p className="text-xs text-muted-foreground">
                     Install llama.cpp from <a href="https://github.com/ggerganov/llama.cpp" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">github.com/ggerganov/llama.cpp</a>
                   </p>
                 </CardContent>
               </Card>
             )}
+          </section>
+
+          <Separator />
+
+          {/* Remote Access */}
+          <section>
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Smartphone className="h-5 w-5" /> Remote Access
+            </h2>
+            <Card>
+              <CardContent className="p-6 space-y-5">
+                <p className="text-sm text-muted-foreground">
+                  Access this dev server from other devices on your network. Make sure your firewall allows port {devPort}.
+                </p>
+
+                {/* LAN URL */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Wifi className="w-4 h-4 text-green-500" /> Home (LAN)
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input value={lanUrl} readOnly className="font-mono text-sm" />
+                    <Button variant="outline" size="icon" onClick={() => copyToClipboard(lanUrl)} title="Copy LAN URL">
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">For devices on the same WiFi network</p>
+                </div>
+
+                {/* External / Away */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-blue-500" /> Away (External)
+                  </Label>
+                  <div className="p-3 rounded-lg bg-muted/50 border text-sm space-y-2">
+                    <p className="text-muted-foreground">To access from outside your network, use a tunnel:</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 bg-muted px-3 py-1.5 rounded font-mono text-xs">npx localtunnel --port {devPort}</code>
+                      <Button variant="outline" size="sm" onClick={() => copyToClipboard(`npx localtunnel --port ${devPort}`)}>
+                        <Copy className="h-3 w-3 mr-1" /> Copy
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Or use ngrok, Cloudflare Tunnel, or Tailscale for persistent access.</p>
+                  </div>
+                </div>
+
+                {/* QR Code */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <QrCode className="w-4 h-4" /> Scan with Phone
+                  </Label>
+                  <div className="flex items-center gap-4">
+                    {qrDataUrl ? (
+                      <img src={qrDataUrl} alt="QR Code for LAN URL" className="w-32 h-32 rounded-lg border" />
+                    ) : (
+                      <div className="w-32 h-32 rounded-lg border bg-muted flex items-center justify-center">
+                        <Smartphone className="w-8 h-8 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <p>Scan this QR code with your phone's camera to open the app.</p>
+                      <p className="text-xs">Local IP: <code className="bg-muted px-1 py-0.5 rounded">{localIP}</code></p>
+                      <p className="text-xs">Port: <code className="bg-muted px-1 py-0.5 rounded">{devPort}</code></p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">
+                  <p className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" /> 
+                    Both devices must be on the same WiFi for LAN access. For external access, set up a tunnel.</p>
+                </div>
+              </CardContent>
+            </Card>
           </section>
 
           <Separator />

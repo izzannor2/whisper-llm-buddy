@@ -1,7 +1,6 @@
 #!/bin/bash
-# LocalDev AI - Quick Start Script for Linux/macOS
+# LocalDev AI - All-in-One Start Script
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -15,147 +14,131 @@ echo -e "${CYAN}║       ${BOLD}LocalDev AI - Quick Start${NC}${CYAN}          
 echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
-# Detect package manager
+# Step 1: Check Node.js
+echo "[1/5] Checking Node.js..."
+if ! command -v node &> /dev/null; then
+    echo -e "${RED}[ERROR] Node.js not found! Install from https://nodejs.org${NC}"
+    exit 1
+fi
+echo -e "      ${GREEN}[OK] Node.js $(node --version)${NC}"
+
+# Step 2: Package manager
 PKG_CMD="npm"
 if command -v bun &> /dev/null; then
     PKG_CMD="bun"
-    echo -e "${GREEN}[OK] Using Bun as package manager${NC}"
+    echo -e "[2/5] ${GREEN}[OK] Using Bun${NC}"
+else
+    echo "[2/5] [OK] Using npm"
 fi
 
-# Check if node_modules exists
+# Step 3: Dependencies with retry + auto-repair
+echo "[3/5] Checking dependencies..."
+
+if [ -d "node_modules" ] && [ ! -d "node_modules/react" ]; then
+    echo -e "      ${YELLOW}[!] node_modules corrupted, reinstalling...${NC}"
+    rm -rf node_modules
+fi
+
 if [ ! -d "node_modules" ]; then
-    echo -e "${YELLOW}[!] Dependencies not installed. Running setup first...${NC}"
-    echo ""
-    $PKG_CMD install
-    if [ $? -ne 0 ]; then
-        echo ""
-        echo -e "${RED}[ERROR] Failed to install dependencies!${NC}"
-        echo "Please run ./setup.sh first or check your Node.js installation."
-        exit 1
-    fi
-    echo ""
-    echo -e "${GREEN}[OK] Dependencies installed successfully!${NC}"
-    echo ""
+    for attempt in 1 2 3; do
+        echo "      [*] Attempt $attempt/3: $PKG_CMD install..."
+        if $PKG_CMD install; then
+            echo -e "      ${GREEN}[OK] Dependencies installed${NC}"
+            break
+        fi
+        if [ $attempt -eq 3 ]; then
+            echo -e "${RED}[ERROR] Failed after 3 attempts!${NC}"
+            exit 1
+        fi
+        echo "      [!] Retrying in 3s..."
+        sleep 3
+    done
+else
+    echo -e "      ${GREEN}[OK] Dependencies installed${NC}"
 fi
 
-# ========================================
-# Detect local binaries in bin/ folder
-# ========================================
+# Step 4: Environment setup
+echo "[4/5] Setting up environment..."
+mkdir -p models/gguf bin/llama bin/ollama
+
 LLAMA_SERVER_CMD=""
 OLLAMA_CMD=""
+LLAMA_SERVER_RUNNING=0
 
-# Check for local llama-server first
+# Detect llama-server
 if [ -x "bin/llama/llama-server" ]; then
     LLAMA_SERVER_CMD="./bin/llama/llama-server"
-    echo -e "${GREEN}[OK] Found local llama-server in bin/llama/${NC}"
+    echo -e "      ${GREEN}[OK] Found local llama-server${NC}"
 elif command -v llama-server &> /dev/null; then
     LLAMA_SERVER_CMD="llama-server"
 fi
 
-# Check for local Ollama first
+# Detect Ollama
 if [ -x "bin/ollama/ollama" ]; then
     OLLAMA_CMD="./bin/ollama/ollama"
-    echo -e "${GREEN}[OK] Found local Ollama in bin/ollama/${NC}"
+    echo -e "      ${GREEN}[OK] Found local Ollama${NC}"
 elif command -v ollama &> /dev/null; then
     OLLAMA_CMD="ollama"
 fi
 
-# ========================================
-# Check for GGUF models in models/gguf/
-# ========================================
+# Check GGUF models
 GGUF_MODEL=""
-LLAMA_SERVER_RUNNING=0
-
 if [ -d "models/gguf" ]; then
     GGUF_MODEL=$(find models/gguf -name "*.gguf" -type f | head -n 1)
 fi
 
 if [ -n "$GGUF_MODEL" ]; then
-    echo "[*] Found GGUF model: $GGUF_MODEL"
-    
+    echo "      [*] Found model: $GGUF_MODEL"
     if [ -n "$LLAMA_SERVER_CMD" ]; then
-        # Check if llama-server is already running
         if ! curl -s http://localhost:8081/health &> /dev/null; then
-            echo "[*] Starting llama-server with detected model..."
+            echo "      [*] Starting llama-server..."
             $LLAMA_SERVER_CMD -m "$GGUF_MODEL" --port 8081 --host 0.0.0.0 -ngl 99 &> /dev/null &
-            LLAMA_SERVER_RUNNING=1
-            sleep 3
-            echo -e "${GREEN}[OK] llama-server started on port 8081${NC}"
+            for i in $(seq 1 10); do
+                if curl -s http://localhost:8081/health &> /dev/null; then
+                    echo -e "      ${GREEN}[OK] llama-server ready on port 8081${NC}"
+                    LLAMA_SERVER_RUNNING=1
+                    break
+                fi
+                sleep 1
+            done
+            [ $LLAMA_SERVER_RUNNING -eq 0 ] && echo "      [!] llama-server may still be loading..." && LLAMA_SERVER_RUNNING=1
         else
-            echo -e "${GREEN}[OK] llama-server already running on port 8081${NC}"
+            echo -e "      ${GREEN}[OK] llama-server already running${NC}"
             LLAMA_SERVER_RUNNING=1
         fi
-    else
-        echo -e "${YELLOW}[!] llama-server not found${NC}"
-        echo "    Place llama-server in bin/llama/ or install to PATH"
-        echo "    Build from: https://github.com/ggerganov/llama.cpp"
     fi
-else
-    echo "[*] No GGUF models found in models/gguf/"
-    echo "    Add .gguf files there for auto-detection"
 fi
 
-# ========================================
-# Check if Ollama is running (fallback)
-# ========================================
-if [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
-    echo "[*] Checking Ollama status..."
-    if curl -s http://localhost:11434/api/tags &> /dev/null; then
-        echo -e "${GREEN}[OK] Ollama is running${NC}"
-    else
-        echo -e "${YELLOW}[!] Ollama not detected at localhost:11434${NC}"
-        if [ -n "$OLLAMA_CMD" ]; then
-            echo "    Starting Ollama in background..."
-            OLLAMA_HOST=127.0.0.1:11434 $OLLAMA_CMD serve &> /dev/null &
-            echo "    Waiting for Ollama to initialize..."
-            sleep 4
-            # Verify Ollama started
+# Start Ollama if no llama-server
+if [ $LLAMA_SERVER_RUNNING -eq 0 ] && [ -n "$OLLAMA_CMD" ]; then
+    if ! curl -s http://localhost:11434/api/tags &> /dev/null; then
+        echo "      [*] Starting Ollama..."
+        OLLAMA_HOST=127.0.0.1:11434 $OLLAMA_CMD serve &> /dev/null &
+        for i in $(seq 1 10); do
             if curl -s http://localhost:11434/api/tags &> /dev/null; then
-                echo -e "${GREEN}    [OK] Ollama started successfully!${NC}"
-            else
-                echo "    [!] Ollama failed to start. Check if another instance is running."
-                echo "    [!] Try running manually: $OLLAMA_CMD serve"
+                echo -e "      ${GREEN}[OK] Ollama ready${NC}"
+                break
             fi
-        else
-            echo "    Ollama not found - AI features will use Cloud backend"
-            echo "    Place ollama in bin/ollama/ or install from: https://ollama.ai"
-        fi
+            sleep 1
+        done
+    else
+        echo -e "      ${GREEN}[OK] Ollama running${NC}"
     fi
+elif [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
+    echo "      [*] No local LLM found - using Cloud backend"
 fi
 
-# ========================================
-# Check port 8080 availability
-# ========================================
-if command -v lsof &> /dev/null; then
-    if lsof -i :8080 &> /dev/null; then
-        echo ""
-        echo -e "${YELLOW}[!] Port 8080 is already in use.${NC}"
-        echo "    The dev server will try to use the next available port."
-        echo ""
-    fi
-elif command -v ss &> /dev/null; then
-    if ss -tlnp | grep -q ':8080 '; then
-        echo ""
-        echo -e "${YELLOW}[!] Port 8080 is already in use.${NC}"
-        echo "    The dev server will try to use the next available port."
-        echo ""
-    fi
-fi
-
+# Step 5: Start dev server
+echo "[5/5] Starting development server..."
 echo ""
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
-echo " Starting development server..."
-echo " App will open at: http://localhost:8080"
+echo " App: http://localhost:8080"
+[ -n "$GGUF_MODEL" ] && echo " LLM: llama-server (port 8081)"
+echo " Press Ctrl+C to stop"
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 echo ""
-if [ -n "$GGUF_MODEL" ]; then
-    echo " Local LLM: llama-server (port 8081)"
-fi
-echo " Press Ctrl+C to stop the server"
-echo ""
 
-# Open browser after delay (works on Linux and macOS)
-(sleep 3 && (xdg-open http://localhost:8080 2>/dev/null || open http://localhost:8080 2>/dev/null || echo "Open http://localhost:8080 in your browser")) &
+# Open browser
+(sleep 3 && (xdg-open http://localhost:8080 2>/dev/null || open http://localhost:8080 2>/dev/null || true)) &
 
-# Start the dev server
 $PKG_CMD run dev
