@@ -1,259 +1,96 @@
 
 
-# LocalDev AI → Production-Grade AI Control Center
+# Round 2: Multi-Feature Upgrade
 
-## Current State
-The project is a multi-mode AI development environment with Chat, IDE, IoT, Sandbox, AI Improvement workspaces, plus OpenClaw agent. It has cloud (Lovable AI Gateway), Ollama, llama.cpp, and direct API key backends. There's a known crash bug in IoTWorkspace (line 45: `useState(() => { applyModeTheme(...) })`), and a hardcoded file tree in ImproveWorkspace.
-
----
-
-## Phase 1: Fix All Crashes & Bugs (CRITICAL)
-
-**1a. Fix IoTWorkspace useState crash**
-- `src/pages/IoTWorkspace.tsx` line 45: Replace `useState(() => { applyModeTheme('embedded-iot'); })` with `useEffect(() => { applyModeTheme('embedded-iot'); }, [])`
-- This is the same bug that was fixed in SandboxWorkspace
-
-**1b. Audit all workspaces for similar patterns**
-- Scan every page/component for `useState` used for side effects
-- Verify all modes load without blank screens: Chat (/), IDE (/ide), IoT (/iot), Sandbox (/sandbox), Improve (/improve), Models (/models), Settings (/settings)
-
-**1c. Wrap all async operations with error boundaries**
-- Add a global React ErrorBoundary component wrapping routes
-- Add try/catch to every `fetch` call that doesn't have one
-- Prevent crashes from missing backends (Ollama, llama.cpp, local agent)
+This covers all requests: testing modes, AI Improvement UX upgrades, consolidating scripts, OpenClaw agent improvements, live preview, and remote access settings.
 
 ---
 
-## Phase 2: Bulletproof Setup Scripts
+## 1. Fix & Verify All Modes Load
 
-**2a. Upgrade `setup.bat` / `setup.sh`**
-- Add retry logic (3 attempts) for `npm install` / `bun install`
-- Add portable Node.js detection and download fallback (nvm-windows / nvm for Linux)
-- Remove hard Bun dependency — use it if available, otherwise npm
-- Add clear progress output with step numbers and status icons
-- Add auto-repair: if `node_modules` exists but is corrupted (missing key packages), delete and reinstall
-
-**2b. Upgrade `start.bat` / `start.sh`**
-- Add health checks after starting llama-server and Ollama (retry curl up to 10 times with 1s delay)
-- Detect GPU availability and auto-set `-ngl` layers
-- Add colored status summary before launching dev server
-
-**2c. Add loading splash page**
-- Create `public/loading.html` — a static HTML file shown at startup
-- Shows "Installing dependencies..." with a progress bar
-- The dev server naturally replaces this once Vite starts
+All pages already use `useEffect` for theme application (IoT was fixed). No remaining `useState` side-effect bugs. The ErrorBoundary is already wrapping routes. All modes should load cleanly.
 
 ---
 
-## Phase 3: Real Backend Layer (Edge Functions)
+## 2. AI Improvement Mode — Select All & File Upload
 
-Since this is a Lovable Cloud project, we use Edge Functions instead of Express.
+**File: `src/pages/ImproveWorkspace.tsx`**
 
-**3a. Upgrade existing `chat` edge function**
-- Add tool-calling support (function calling via Lovable AI Gateway)
-- Add multi-step agent loop: AI can call tools, get results, and continue
-- Support both streaming and non-streaming
-
-**3b. Create `run-tool` edge function**
-- Accepts tool name + parameters
-- Built-in tools: `web_search`, `generate_code`, `analyze_code`, `summarize`
-- Returns structured results
-
-**3c. Create `plugins` edge function**
-- List registered plugins
-- Execute plugin actions
-- Store plugin registry in Supabase table
-
-**3d. Create `models` edge function**
-- Proxy model status checks for Ollama/llama.cpp when running locally
-- Return available cloud models
-- Model health status aggregation
-
-**Database migrations needed:**
-- `plugins` table (id, name, description, manifest, enabled, created_at)
-- `task_queue` table (id, type, status, payload, result, progress, created_at, updated_at)
-- `agent_memory` table (id, user_id, key, value, context, created_at)
+- Add a **"Select All / Deselect All"** toggle button at the top of the file tree panel header (next to "Project Source")
+- Add per-directory "Select All" — clicking a directory checkbox selects/deselects all children recursively
+- Add an **"Open Folder"** button that uses the File System Access API (`window.showDirectoryPicker()`) to let users browse their actual source code folder
+  - On folder selection, recursively scan the directory and build a dynamic `FileNode[]` tree replacing the hardcoded `PROJECT_TREE`
+  - Read file contents on demand when the AI needs context
+- Add an **"Upload Files"** button as fallback (for browsers without File System Access API) using `<input type="file" webkitdirectory>` to upload a whole folder
 
 ---
 
-## Phase 4: Turn AI Into an Agent
+## 3. Consolidate Setup Scripts → Single `start.bat` / `start.sh`
 
-**4a. Tool calling system**
-- Define tool schemas in `src/lib/agent-tools.ts`
-- Tools: `read_file`, `write_file`, `search_code`, `run_command`, `web_search`, `create_plan`
-- Each tool returns structured output that feeds back into the conversation
-
-**4b. Multi-step execution loop**
-- In `src/lib/agent-executor.ts`: send message → check if response contains tool calls → execute tools → feed results back → repeat until done or max iterations (10)
-- Show each step in the chat UI with collapsible "thinking" sections
-
-**4c. Agent modes**
-- Chat Mode: normal conversation (existing behavior)
-- Task Mode: AI breaks down request into steps, executes them sequentially with progress updates
-- Tool Mode: user manually selects and triggers tools from a toolbar
-
-**4d. Memory system**
-- Short-term: conversation history (already exists)
-- Long-term: save key facts to `agent_memory` table via edge function
-- AI can query its own memory for context
+- Merge `setup.bat` into `start.bat` — the start script already checks for `node_modules` and installs if missing. Enhance it to include ALL setup logic (retry, auto-repair, health checks) so `setup.bat` is no longer needed
+- Remove `run.bat` (it's just an alias for `start.bat`)
+- Same for `start.sh` — make it self-contained with full setup logic
+- Remove `setup.sh` as a separate file
+- Keep the scripts robust with retry logic, colored output, auto-detect GPU, etc.
 
 ---
 
-## Phase 5: Real Plugin System
+## 4. OpenClaw — Real AI Assistant
 
-**5a. Plugin architecture**
-- `src/lib/plugin-system.ts`: plugin loader, registry, and lifecycle
-- Each plugin: `manifest.json` + handler function + optional React component
-- Plugins stored in IndexedDB (browser-side) and optionally synced to Supabase
+**File: `src/lib/openclaw-agent.ts`**
 
-**5b. Three built-in plugins:**
-1. **File Manager** — move/rename/copy/extract files using File System Access API
-2. **System Monitor** — display CPU cores, memory estimate, WebGPU status, network connectivity, battery level (Navigator API)
-3. **Macro Runner** — record and replay sequences of actions (click coordinates, keystrokes, delays)
+- Upgrade `chatWithOpenClaw` to parse AI responses for tool-call markers (e.g., `[TOOL:read_file path="..."]`) and execute them automatically
+- Add an agentic loop: after tool execution, feed results back to the AI and continue until it produces a final answer (max 10 iterations)
+- Integrate with the existing `agent-tools.ts` and `agent-executor.ts` created in Round 1
 
-**5c. Plugin UI in IDE**
-- Upgrade existing `PluginManager.tsx` to load plugins dynamically
-- Show plugin panels in the right sidebar of IDE
-- AI can invoke plugins via tool calling
+**File: `src/components/OpenClawOverlay.tsx`**
+
+- Show tool execution steps in the chat (collapsible "Thinking..." sections)
+- Add status indicator: "Idle", "Thinking", "Executing tool...", "Writing file..."
+- Make OpenClaw capable of: reading/writing files, running commands, searching code, and applying fixes — all through the chat interface
 
 ---
 
-## Phase 6: Model Management System
+## 5. AI Improvement — Live Preview Panel
 
-**6a. Upgrade `/models` page**
-- Auto-scan Ollama and llama.cpp on page load (already partially done)
-- Add download progress bars using `ReadableStream` for GGUF downloads from HuggingFace
-- Show model status: loaded / unloaded / downloading / error
-- Add "Set as Default" per-model
+**File: `src/pages/ImproveWorkspace.tsx`**
 
-**6b. Auto-start and fallback**
-- On app load, if selected model is unavailable, try next available model
-- Priority: local GGUF → Ollama → Cloud
-- Show toast notification when falling back
+- Replace the static file tree right panel with a **split view**: file tree on top, live preview iframe on bottom
+- When a code block is hovered or selected, show a live preview of the changed file in an iframe (for HTML/React) or a syntax-highlighted diff view (for non-visual files)
+- Add a "Preview" tab next to the file tree that renders the current state of applied changes
+- Use `preview-builder.ts` (already exists) to generate preview HTML from code blocks
 
 ---
 
-## Phase 7: UI Enhancements
+## 6. Remote Access Settings
 
-**7a. Real streaming with progress indicators**
-- Add token count display during streaming
-- Add elapsed time indicator
-- Add status badges: "AI thinking...", "Running tool...", "Generating code..."
+**File: `src/pages/IDESettings.tsx`**
 
-**7b. Toast notification system upgrade**
-- Already using sonner — add persistent toasts for long operations
-- Add success/error/warning toasts for all async operations
+Add a new **"Remote Access"** tab/section:
 
-**7c. DebugPanel → real logs**
-- Connect to actual console.log output
-- Show network request history
-- Show model load/unload events
-- Add export logs button
-
-**7d. ChatSidebar → enhanced history**
-- Add search/filter for conversations
-- Add mode-based grouping tabs
-- Show conversation preview snippets
-
-**7e. CodeLibrary → allow execution**
-- Add "Run" button to saved snippets (JS/Python only)
-- Show output inline
-
-**7f. ImproveWorkspace → dynamic file tree**
-- Replace hardcoded `PROJECT_TREE` with actual filesystem scan using File System Access API
-- Add "Open Folder" button to select project directory
-- Auto-populate tree from opened directory
+- Show the machine's local IP address (detected via `RTCPeerConnection` trick or WebRTC) with the dev server port (8080)
+- Display two connection URLs:
+  - **Home (LAN)**: `http://192.168.x.x:8080` — for devices on the same WiFi
+  - **Away (External)**: Show instructions to use a tunnel (e.g., `npx localtunnel --port 8080`) or display the external IP if detectable
+- Add a "Copy URL" button for each
+- Show QR code for the LAN URL (generate using a simple canvas-based QR renderer) so users can scan with their phone
+- Add a note: "Make sure your firewall allows port 8080 for LAN access"
 
 ---
-
-## Phase 8: Automation Engine
-
-**8a. Task queue system**
-- `src/lib/task-runner.ts`: queue-based task execution
-- Tasks: file processing, script execution, code generation, batch operations
-- Store queue in Supabase `task_queue` table
-
-**8b. Background processing UI**
-- Task queue panel in sidebar or bottom bar
-- Show: task name, status, progress %, estimated time
-- Cancel/pause/resume controls
-
-**8c. Macro system**
-- Record sequences of user actions
-- Replay with configurable delay
-- Save macros to IndexedDB
-
----
-
-## Phase 9: Performance & Reliability
-
-**9a. Global error handling**
-- React ErrorBoundary at route level with "Retry" button
-- Wrap all `fetch` calls with timeout (10s default) and retry (3 attempts)
-- Add `window.onerror` handler for uncaught exceptions
-
-**9b. Retry logic everywhere**
-- API calls: exponential backoff (1s, 2s, 4s)
-- Model loading: 3 attempts
-- File operations: 2 attempts
-
-**9c. Graceful degradation**
-- If Ollama is down: show warning, fall back to cloud
-- If cloud is down: show offline indicator, offer local-only mode
-- If file system API unavailable: disable file operations, show message
-
----
-
-## Phase 10: "Wow" Features
-
-**10a. Floating overlay widget**
-- Mini control panel accessible from any page
-- Quick access: send message, run macro, check status
-- Draggable, minimizable (OpenClaw overlay already provides this — enhance it)
-
-**10b. Offline mode with local AI**
-- Already partially implemented — make it robust
-- Cache last-used model info
-- Show clear offline indicator in header
-- Queue messages when offline, send when reconnected
-
----
-
-## Implementation Order
-
-Will be executed across multiple implementation rounds:
-
-1. **Round 1**: Phase 1 (crashes) + IoT fix + error boundaries
-2. **Round 2**: Phase 3 (edge functions) + Phase 4 (agent) database setup
-3. **Round 3**: Phase 4 (agent tools & executor) + Phase 7a-d (UI)
-4. **Round 4**: Phase 5 (plugins) + Phase 6 (models)
-5. **Round 5**: Phase 2 (setup scripts) + Phase 7e-f (code library & file tree)
-6. **Round 6**: Phase 8 (automation) + Phase 9 (reliability)
-7. **Round 7**: Phase 10 (wow features) + final polish
 
 ## Files to Create
-- `src/lib/agent-tools.ts` — tool definitions
-- `src/lib/agent-executor.ts` — multi-step execution loop
-- `src/lib/plugin-system.ts` — plugin loader
-- `src/lib/task-runner.ts` — task queue
-- `src/components/ErrorBoundary.tsx` — global error boundary
-- `src/components/TaskQueue.tsx` — task queue UI
-- `src/components/AgentStatus.tsx` — AI status indicators
-- `supabase/functions/run-tool/index.ts` — tool execution
-- `supabase/functions/plugins/index.ts` — plugin management
-- `supabase/functions/models/index.ts` — model management
-- `public/loading.html` — startup splash
+- None (all changes are modifications to existing files)
 
 ## Files to Modify
-- `src/pages/IoTWorkspace.tsx` — fix useState crash
-- `src/App.tsx` — add ErrorBoundary
-- `src/pages/ImproveWorkspace.tsx` — dynamic file tree
-- `src/pages/Models.tsx` — download progress, auto-start
-- `src/components/DebugPanel.tsx` — real logs
-- `src/components/ChatSidebar.tsx` — search, grouping
-- `src/components/CodeLibrary.tsx` — run button
-- `src/components/OpenClawOverlay.tsx` — enhanced floating widget
-- `src/lib/chat-api.ts` — agent tool calling, retry logic
-- `supabase/functions/chat/index.ts` — tool calling support
-- `setup.bat`, `setup.sh`, `start.bat`, `start.sh` — reliability upgrades
+- `src/pages/ImproveWorkspace.tsx` — Select All, file upload, live preview panel
+- `src/pages/IDESettings.tsx` — Remote Access tab
+- `src/lib/openclaw-agent.ts` — Agentic tool-calling loop
+- `src/components/OpenClawOverlay.tsx` — Tool execution UI
+- `start.bat` — Consolidate setup + run into one script
+- `start.sh` — Consolidate setup + run into one script
+
+## Files to Delete
+- `setup.bat` — Merged into `start.bat`
+- `setup.sh` — Merged into `start.sh`
+- `run.bat` — Redundant alias
 
