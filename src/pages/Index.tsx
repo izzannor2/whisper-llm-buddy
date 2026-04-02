@@ -415,9 +415,11 @@ export default function Index() {
           ttsRate={settings.ttsRate}
           onEnd={() => setShowVoiceCall(false)}
           autoStart
-          existingMessages={currentConversation?.messages.map(m => ({
-            id: m.id, role: m.role, content: m.content, timestamp: m.timestamp,
-          })) || []}
+          existingMessages={currentConversation?.messages
+            .filter(m => m.role !== 'system')
+            .map(m => ({
+              id: m.id, role: m.role as 'user' | 'assistant', content: m.content, timestamp: m.timestamp,
+            })) || []}
         />
       )}
     </div>
