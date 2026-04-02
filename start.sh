@@ -102,31 +102,39 @@ else
     echo -e "      ${GREEN}[OK] Dependencies installed${NC}"
 fi
 
-# Step 4: Environment setup
-echo "[4/5] Setting up environment..."
-mkdir -p models/gguf bin/llama bin/ollama
-
-LLAMA_SERVER_CMD=""
+# Step 4: Ollama
+echo "[4/6] Checking Ollama..."
 OLLAMA_CMD=""
-LLAMA_SERVER_RUNNING=0
-
-# Detect llama-server
-if [ -x "bin/llama/llama-server" ]; then
-    LLAMA_SERVER_CMD="./bin/llama/llama-server"
-    echo -e "      ${GREEN}[OK] Found local llama-server${NC}"
-elif command -v llama-server &> /dev/null; then
-    LLAMA_SERVER_CMD="llama-server"
-fi
-
-# Detect Ollama
 if [ -x "bin/ollama/ollama" ]; then
     OLLAMA_CMD="./bin/ollama/ollama"
-    echo -e "      ${GREEN}[OK] Found local Ollama${NC}"
 elif command -v ollama &> /dev/null; then
     OLLAMA_CMD="ollama"
 fi
 
-# Check GGUF models
+if [ -z "$OLLAMA_CMD" ]; then
+    echo -e "      ${YELLOW}[!] Ollama not found - attempting install...${NC}"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if command -v brew &> /dev/null; then
+            brew install ollama 2>/dev/null && OLLAMA_CMD="ollama"
+        fi
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        curl -fsSL https://ollama.com/install.sh | sh 2>/dev/null && OLLAMA_CMD="ollama"
+    fi
+fi
+
+LLAMA_SERVER_CMD=""
+LLAMA_SERVER_RUNNING=0
+
+if [ -x "bin/llama/llama-server" ]; then
+    LLAMA_SERVER_CMD="./bin/llama/llama-server"
+elif command -v llama-server &> /dev/null; then
+    LLAMA_SERVER_CMD="llama-server"
+fi
+
+# Step 5: Environment setup
+echo "[5/6] Setting up environment..."
+mkdir -p models/gguf bin/llama bin/ollama
+
 GGUF_MODEL=""
 if [ -d "models/gguf" ]; then
     GGUF_MODEL=$(find models/gguf -name "*.gguf" -type f | head -n 1)
@@ -168,6 +176,12 @@ if [ $LLAMA_SERVER_RUNNING -eq 0 ] && [ -n "$OLLAMA_CMD" ]; then
         done
     else
         echo -e "      ${GREEN}[OK] Ollama running${NC}"
+    fi
+    # Auto-pull a default model if none exist
+    MODELS=$(curl -s http://localhost:11434/api/tags 2>/dev/null | grep -o '"name"' | wc -l)
+    if [ "$MODELS" -eq 0 ] 2>/dev/null; then
+        echo -e "      ${YELLOW}[*] Pulling llama3.2 (first time setup)...${NC}"
+        $OLLAMA_CMD pull llama3.2 2>/dev/null &
     fi
 elif [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
     echo "      [*] No local LLM found - using Cloud backend"
