@@ -72,6 +72,7 @@ export function VoiceCallMode({
   const [pushToTalk, setPushToTalk] = useState(() => localStorage.getItem('voice-push-to-talk') === 'true');
   const [isHoldingSpace, setIsHoldingSpace] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeakerOff, setIsSpeakerOff] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gemini-flash');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
