@@ -180,6 +180,17 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       startLocalRecording();
     }, [isRecording, whisperAvailable, startLocalRecording, stopRecording]);
 
+    const switchBackendModel = (backend: ChatSettings['backend'], model: string) => {
+      const updated = { ...loadSettings(), backend };
+      if (backend === 'ollama') updated.ollamaModel = model;
+      else if (backend === 'huggingface') updated.huggingfaceModel = model;
+      else updated.model = model;
+      saveSettings(updated);
+      setSettingsState(updated);
+      onSettingsChange?.(updated);
+      toast.success(`Switched to ${model}`);
+    };
+
     const currentModelName = getBackendDisplayName();
     const currentPresetData = currentPreset ? PRESETS.find(p => p.id === currentPreset) : null;
     const PresetIcon = currentPresetData?.icon;
