@@ -344,15 +344,21 @@ export function VoiceCallMode({
               onNewMessages?.(userMsg, assistantMsg);
 
               setCallState('speaking');
-              speak(response, {
-                voice: ttsVoice, rate: ttsRate,
-                onEnd: () => {
-                  if (isCallActiveRef.current) {
-                    if (pushToTalkRef.current) setCallState('waiting');
-                    else setTimeout(() => startListening(), 300);
-                  }
-                },
-              });
+              if (isSpeakerOff) {
+                // Skip TTS, go straight to next listen cycle
+                if (pushToTalkRef.current) setCallState('waiting');
+                else setTimeout(() => startListening(), 300);
+              } else {
+                speak(response, {
+                  voice: ttsVoice, rate: ttsRate,
+                  onEnd: () => {
+                    if (isCallActiveRef.current) {
+                      if (pushToTalkRef.current) setCallState('waiting');
+                      else setTimeout(() => startListening(), 300);
+                    }
+                  },
+                });
+              }
             } else if (isCallActiveRef.current) {
               if (pushToTalkRef.current) setCallState('waiting');
               else setTimeout(() => startListening(), 500);
