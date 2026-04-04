@@ -32,13 +32,6 @@ import {
 } from '@/lib/local-stt';
 import { getToolStats, ToolStats } from '@/lib/tool-learning';
 import { getAuditLog, AuditEntry } from '@/lib/permissions';
-import { 
-  isWhisperLoaded, 
-  getSelectedWhisperModel, 
-  getDownloadedModels,
-  isWebGPUSupported,
-  WHISPER_MODELS
-} from '@/lib/local-stt';
 
 interface ServiceStatus {
   name: string;
