@@ -1085,8 +1085,51 @@ export function SettingsDialog({
             </div>
           </TabsContent>
 
-          <TabsContent value="debug" className="mt-4">
+          <TabsContent value="debug" className="mt-4 space-y-4">
             <DebugPanel />
+
+            {/* Self-Test */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <h4 className="font-medium text-sm">Self-Test Suite</h4>
+              <Button size="sm" onClick={async () => {
+                const results = await runSelfTests();
+                toast.success(formatTestResults(results));
+              }}>
+                Run Self-Tests
+              </Button>
+            </div>
+
+            {/* Safe Mode */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Safe Mode</p>
+                    <p className="text-[10px] text-muted-foreground">Block destructive file & system operations</p>
+                  </div>
+                </div>
+                <Switch checked={getPermissions().safeMode} onCheckedChange={() => { toggleSafeMode(); toast.success('Safe mode toggled'); }} />
+              </div>
+            </div>
+
+            {/* Export / Import */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <h4 className="font-medium text-sm">Data Export / Import</h4>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={async () => { await handleExport(); toast.success('Data exported'); }}>
+                  <FileDown className="w-3 h-3 mr-1" /> Export All
+                </Button>
+                <Button variant="outline" size="sm" onClick={async () => {
+                  const result = await handleImportFromFile();
+                  if (result.errors.length > 0) toast.error(result.errors[0]);
+                  else toast.success(`Imported ${result.imported} items`);
+                }}>
+                  <Upload className="w-3 h-3 mr-1" /> Import
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Exports conversations, memories, settings, feedback, and tool stats as a single JSON file.</p>
+            </div>
           </TabsContent>
         </Tabs>
 
