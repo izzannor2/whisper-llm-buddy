@@ -14,7 +14,8 @@ import {
   Zap,
   Copy,
   Download,
-  Trash2
+  Trash2,
+  Wrench
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +23,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { loadSettings } from '@/lib/chat-api';
+import { 
+  isWhisperLoaded, 
+  getSelectedWhisperModel, 
+  getDownloadedModels,
+  isWebGPUSupported,
+  WHISPER_MODELS
+} from '@/lib/local-stt';
+import { getToolStats, ToolStats } from '@/lib/tool-learning';
+import { getAuditLog, AuditEntry } from '@/lib/permissions';
 import { 
   isWhisperLoaded, 
   getSelectedWhisperModel, 

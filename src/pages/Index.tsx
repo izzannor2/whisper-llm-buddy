@@ -401,7 +401,8 @@ export default function Index() {
           onDelete={handleDeleteConversation}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenMemory={() => setMemoryPanelOpen(true)}
-          onOpenAutoBuild={() => setAutoBuildOpen(true)}
+           onOpenAutoBuild={() => setAutoBuildOpen(true)}
+           onOpenTaskGraph={() => setTaskGraphOpen(true)}
           currentMode={currentMode}
           currentModeKey={currentModeKey}
           onModeChange={handleModeChange}
