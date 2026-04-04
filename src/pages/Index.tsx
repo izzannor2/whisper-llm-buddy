@@ -66,6 +66,7 @@ export default function Index() {
   const [autonomousMode, setAutonomousMode] = useState(false);
   const [autonomousStepCount, setAutonomousStepCount] = useState(0);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [currentAgent, setCurrentAgent] = useState<AgentType | undefined>();
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
