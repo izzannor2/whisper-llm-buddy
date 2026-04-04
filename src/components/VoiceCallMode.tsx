@@ -737,7 +737,7 @@ export function VoiceCallMode({
             </div>
           )}
 
-          {/* Call action buttons */}
+          {/* Call action buttons (contextual) */}
           <div className="flex gap-3 mt-2">
             {callState === 'listening' && !pushToTalk && (
               <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5" onClick={stopListeningManually}>
@@ -753,7 +753,7 @@ export function VoiceCallMode({
               </Button>
             )}
             {callState === 'listening' && pushToTalk && (
-              <Button variant="default" size="sm" className="rounded-full px-5 gap-1.5 bg-green-600 hover:bg-green-700"
+              <Button variant="default" size="sm" className="rounded-full px-5 gap-1.5 bg-green-600 hover:bg-green-700 text-primary-foreground"
                 onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}>
                 <Mic className="w-4 h-4 animate-pulse" /> Recording...
               </Button>
@@ -766,6 +766,61 @@ export function VoiceCallMode({
             {pushToTalk ? 'Hold Space: record • Esc: end' : 'Space: toggle • Esc: end'}
           </p>
         </div>
+      </div>
+
+      {/* ── Floating Bottom Control Bar ── */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 rounded-full bg-card/90 backdrop-blur-xl border border-border shadow-2xl">
+        {/* Mute mic */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={cn(
+                'w-14 h-14 rounded-full flex items-center justify-center transition-all',
+                isMuted
+                  ? 'bg-destructive text-destructive-foreground'
+                  : 'bg-muted/80 text-foreground hover:bg-muted'
+              )}
+              onClick={() => setIsMuted(!isMuted)}
+            >
+              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{isMuted ? 'Unmute mic' : 'Mute mic'}</TooltipContent>
+        </Tooltip>
+
+        {/* Hang Up */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="w-16 h-16 rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground flex items-center justify-center transition-all shadow-lg"
+              onClick={endCall}
+            >
+              <PhoneOff className="w-7 h-7" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Hang up</TooltipContent>
+        </Tooltip>
+
+        {/* Speaker off */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={cn(
+                'w-14 h-14 rounded-full flex items-center justify-center transition-all',
+                isSpeakerOff
+                  ? 'bg-amber-500/20 text-amber-500 ring-2 ring-amber-500/40'
+                  : 'bg-muted/80 text-foreground hover:bg-muted'
+              )}
+              onClick={() => {
+                setIsSpeakerOff(!isSpeakerOff);
+                if (!isSpeakerOff) stopSpeaking();
+              }}
+            >
+              {isSpeakerOff ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{isSpeakerOff ? 'Turn speaker on' : 'Turn speaker off'}</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );
