@@ -126,13 +126,29 @@ function parseToolCalls(response: string): Array<{ tool: string; params: Record<
   return toolCalls;
 }
 
-// Execute a single tool
+// Execute a single tool with learning and permission tracking
 async function executeTool(tool: string, params: Record<string, string>): Promise<string> {
+  const start = Date.now();
+
+  // Permission check for destructive tools
+  if (tool === 'write_file' || tool === 'run_command') {
+    const permType = tool === 'write_file' ? 'file_write' as const : 'command_exec' as const;
+    const perm = checkPermission(permType);
+    if (perm === 'blocked') {
+      logAuditEntry(`Tool: ${tool}`, permType, false, 'Blocked by safe mode');
+      recordToolUse(tool, false, Date.now() - start, 'Blocked by safe mode');
+      return `❌ Blocked: Safe mode is enabled. Disable it in Settings → Debug to allow ${tool}.`;
+    }
+    logAuditEntry(`Tool: ${tool}`, permType, true, JSON.stringify(params));
+  }
+
   try {
+    let result: string;
     switch (tool) {
       case 'read_file': {
         const content = await readFile(params.path || '');
-        return `File contents of ${params.path}:\n\`\`\`\n${content.slice(0, 8000)}\n\`\`\``;
+        result = `File contents of ${params.path}:\n\`\`\`\n${content.slice(0, 8000)}\n\`\`\``;
+        break;
       }
       case 'write_file': {
         const content = params.content || '';
@@ -146,11 +162,13 @@ async function executeTool(tool: string, params: Record<string, string>): Promis
           } catch { /* no existing file */ }
         }
         await writeFile(params.path || '', content);
-        return `✅ Written ${content.length} bytes to ${params.path}`;
+        result = `✅ Written ${content.length} bytes to ${params.path}`;
+        break;
       }
       case 'list_files': {
         const entries = await listFiles();
-        return `Files in project:\n${entries.map(e => e.path).join('\n')}`;
+        result = `Files in project:\n${entries.map(e => e.path).join('\n')}`;
+        break;
       }
       case 'search_code': {
         const query = params.query || '';
@@ -170,21 +188,27 @@ async function executeTool(tool: string, params: Record<string, string>): Promis
             }
           } catch { /* skip unreadable */ }
         }
-        return results.length > 0 ? `Search results for "${query}":\n${results.join('\n\n')}` : `No results found for "${query}"`;
+        result = results.length > 0 ? `Search results for "${query}":\n${results.join('\n\n')}` : `No results found for "${query}"`;
+        break;
       }
       case 'run_command': {
         const cmd = params.command || '';
-        if (!isCommandAllowed(cmd)) return `❌ Command blocked: "${cmd}" (not allowed in sandbox)`;
-        const result = await executeCommand(cmd);
-        return `Command: ${cmd}\nOutput:\n${result.output}${result.error ? '\nError: ' + result.error : ''}`;
+        if (!isCommandAllowed(cmd)) { result = `❌ Command blocked: "${cmd}" (not allowed in sandbox)`; break; }
+        const cmdResult = await executeCommand(cmd);
+        result = `Command: ${cmd}\nOutput:\n${cmdResult.output}${cmdResult.error ? '\nError: ' + cmdResult.error : ''}`;
+        break;
       }
       case 'web_search': {
-        return `Web search for "${params.query}" is available via the cloud backend. Use the chat to ask questions instead.`;
+        result = `Web search for "${params.query}" is available via the cloud backend. Use the chat to ask questions instead.`;
+        break;
       }
       default:
-        return `Unknown tool: ${tool}`;
+        result = `Unknown tool: ${tool}`;
     }
+    recordToolUse(tool, true, Date.now() - start);
+    return result;
   } catch (err) {
+    recordToolUse(tool, false, Date.now() - start, String(err));
     return `Tool error (${tool}): ${err}`;
   }
 }
