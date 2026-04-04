@@ -537,6 +537,8 @@ export default function Index() {
           webSearchEnabled={webSearchEnabled}
           onWebSearchToggle={setWebSearchEnabled}
           onVoiceCall={() => setShowVoiceCall(true)}
+          availableOllamaModels={ollamaModels}
+          onSettingsChange={(s) => { setSettings(s); }}
         />
       </div>
 

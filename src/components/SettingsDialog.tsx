@@ -210,10 +210,11 @@ export function SettingsDialog({
       <DialogContent className="max-w-2xl glass-panel border-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl">Settings</DialogTitle>
+          <p className="text-sm text-muted-foreground">Configure backend, models, voice, and more.</p>
         </DialogHeader>
 
         <Tabs defaultValue={initialTab || "backend"} key={initialTab} className="mt-4">
-          <TabsList className="grid w-full grid-cols-9 bg-muted">
+          <TabsList className="flex flex-wrap gap-1 h-auto bg-muted p-1">
             <TabsTrigger value="backend" className="text-xs">Backend</TabsTrigger>
             <TabsTrigger value="models" className="text-xs">Models</TabsTrigger>
             <TabsTrigger value="voicemodels" className="text-xs flex items-center gap-1">
