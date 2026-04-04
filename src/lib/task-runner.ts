@@ -36,6 +36,7 @@ function genId(): string {
 }
 
 function notify() {
+  updateSnapshot();
   listeners.forEach(fn => fn());
 }
 
