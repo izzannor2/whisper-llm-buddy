@@ -114,9 +114,9 @@ export function VoiceCallMode({
     localStorage.setItem('voice-push-to-talk', String(pushToTalk));
   }, [pushToTalk]);
 
-  const whisperReady = isWhisperLoaded() || getDownloadedModels().length > 0;
+  const whisperReady = isVoiceReady();
   const ttsReady = isTTSSupported();
-  const canMakeCall = whisperReady && ttsReady;
+  const canMakeCall = whisperReady; // TTS is optional (speaker-off mode works without it)
 
   // Scroll chat to bottom
   useEffect(() => {
