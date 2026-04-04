@@ -298,6 +298,9 @@ export default function Index() {
           const searchResult = await searchWeb(content);
           if (searchResult.success && searchResult.results && searchResult.results.length > 0) {
             searchContext = '\n\n' + formatSearchContext(searchResult.results);
+            toast({ title: `🔍 Found ${searchResult.results.length} web results`, duration: 2000 });
+          } else {
+            toast({ title: '🔍 No web results found', duration: 2000 });
           }
         } catch (e) {
           console.error('Web search failed, continuing without:', e);
