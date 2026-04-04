@@ -15,6 +15,7 @@ import {
   unloadWhisper,
   isWebGPUSupported,
   clearDownloadedModel,
+  dispatchVoiceStateChanged,
   type TranscriptionProgress,
 } from '@/lib/local-stt';
 import { isTTSSupported, getAvailableVoices } from '@/lib/tts';
