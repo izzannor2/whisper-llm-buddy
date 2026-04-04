@@ -1,125 +1,135 @@
 
 
-# Production Upgrade: AI Companion Hub → AI Control Center
+# AI Control Center: Deep Integration Upgrade
 
-## Current State Assessment
-The project already has extensive functionality built across 4 rounds of upgrades:
-- Multi-mode UI (Chat, IDE, IoT, Sandbox, AI Improvement) — all working
-- Cloud backend via Lovable AI Gateway edge functions (chat, run-tool, web-search, plugins, models)
-- OpenClaw agent with tool-calling loop (read_file, write_file, search_code, run_command)
-- Plugin system with file manager, system monitor, code runner, macros
-- Voice call mode with split-screen UI, screen sharing, noise filtering
-- Debug panel, code library, task queue, offline/online toggle
-- Auto-install start scripts (start.bat, start.sh)
+## Assessment
+The project already has ~80% of the requested systems built. What's missing is deeper integration between them, persistent task storage, autonomous mode, a visual task graph, performance mode selector, tool learning, and export/import. This plan connects existing pieces and adds the missing layers.
 
-Most of the requested features already exist in some form. This plan focuses on **hardening, connecting, and filling gaps** rather than rebuilding.
+## Phase 1: Central Orchestrator + Persistent Task System
 
----
+**New file: `src/lib/orchestrator.ts`**
+- Wraps the existing `task-runner.ts` with persistent storage via IndexedDB (using the existing `db.ts` pattern)
+- Task objects gain: `goal`, `steps[]`, `logs[]`, `parentId` (for subtasks), `retryCount`
+- Auto-retry failed steps (up to 3 attempts) with backoff
+- Pause/resume support via status flags
+- Tasks persist across page reloads
 
-## Phase 1: Stability & Environment Cleanup
+**Update: `src/components/TaskQueue.tsx`**
+- Show task logs, subtasks, retry indicators
+- Add pause/resume buttons
+- Expand to show step-by-step execution history
 
-**Files: `package.json`, `start.bat`, `start.sh`**
-- Remove `bun.lock` and `bun.lockb` — standardize on `package-lock.json` + Node 20 LTS
-- Add `setup.ps1` (PowerShell) that wraps the same logic as `start.bat` for modern Windows users
-- Ensure start scripts also check/install Ollama and auto-pull a default model (e.g., `llama3.2`)
+## Phase 2: Autonomous Mode
 
-## Phase 2: Memory System
+**New file: `src/lib/autonomous-mode.ts`**
+- Toggle that chains agent calls: AI plans steps, executes each via the orchestrator, evaluates results, continues
+- Safety: max 20 steps, confirmation for file writes and commands, stop button
+- Uses existing `agent-executor.ts` loop but auto-feeds results back as new prompts
 
-**New files: `supabase/functions/memory/index.ts`, `src/lib/memory-store.ts`, `src/components/MemoryPanel.tsx`**
-- Create a `memories` database table (id, user_id, content, embedding_text, tags, created_at) with RLS
-- Edge function `memory` with endpoints: `store`, `search` (keyword-based semantic search via AI summarization), `list`, `delete`
-- "Remember this" button on each assistant message in `ChatMessage.tsx`
-- Automatic memory extraction: after each conversation, the AI summarizes key facts and stores them
-- Memory viewer panel accessible from settings/sidebar
-- Inject relevant memories into system prompt before each chat request
+**Update: `src/pages/Index.tsx`**
+- Add "Autonomous Mode" toggle in header toolbar (next to offline toggle)
+- When active, after each AI response, auto-extract next action and re-invoke
+- Show step counter and stop button
 
-## Phase 3: Multi-Agent System
+## Phase 3: Enhanced Multi-Agent System
 
-**New file: `src/lib/agent-router.ts`, update `supabase/functions/chat/index.ts`**
-- Create specialized agent personas (Developer, Research, Debug, Automation) as system prompt templates
-- Agent router: analyzes user input and selects the best agent(s) based on intent classification
-- For complex tasks, split into sub-tasks and route to different agents sequentially
-- Show agent activity in UI: add an `AgentActivityPanel` component that displays which agent is working, current step, and progress
-- Wire into the existing OpenClaw agentic loop — agents use the same tool-calling infrastructure
+**Update: `src/lib/agent-router.ts`**
+- Agents return structured JSON outputs (wrap responses in `{agent, action, result, nextStep}`)
+- Add parallel execution support: router can dispatch to multiple agents and merge results
+- Add inter-agent communication: one agent's output feeds as context to the next
 
-## Phase 4: Enhanced Code Execution
+**Update: `src/components/AgentActivityPanel.tsx`**
+- Show parallel agent tracks
+- Progress percentage per agent
+- Expand each step to see full details
 
-**Update: `src/pages/SandboxWorkspace.tsx`, `src/lib/python-runner.ts`**
-- Python already runs via Pyodide — verify it works end-to-end
-- JavaScript execution: use `Function()` constructor in a sandboxed iframe
-- HTML preview: render in an iframe with srcdoc
-- For C++/Rust/Go/Java: show "Compile & Run requires local backend" message with instructions to connect to a local compiler service, or provide a cloud compilation option via the run-tool edge function
-- Add file output support: download button for generated files
+## Phase 4: Tool Learning System
 
-## Phase 5: File System Enhancement
+**New file: `src/lib/tool-learning.ts`**
+- Track per-tool: call count, success rate, avg duration, failure reasons
+- Store in localStorage (same pattern as `feedback-tracker.ts`)
+- Before tool selection, score tools by reliability
+- Inject tool reliability hints into agent system prompt
+- Expose stats in Debug Panel
 
-**Update: `src/components/ide/FileTree.tsx`, `src/lib/agent-tools.ts`**
-- Already have File System Access API integration — ensure create/delete/rename work
-- Add context menu (right-click) on file tree: New File, New Folder, Rename, Delete
-- Let AI agents modify files through the existing write_file tool — add confirmation dialog before writes
+## Phase 5: Memory System 2.0
 
-## Phase 6: UI Polish
+**Update: `src/lib/memory-store.ts`**
+- Add memory types: `fact`, `goal`, `pattern`, `preference`
+- Add relevance scoring (keyword overlap + recency decay)
+- Add memory cleanup: auto-remove memories with zero relevance hits after 30 days
+- Automatic extraction: after each conversation, summarize key facts and store
 
-**Update: multiple component files**
-- Add progress bars with percentages to long-running operations (model downloads, agent loops)
-- Agent activity panel: collapsible sidebar showing real-time agent steps with timestamps
-- Task timeline: visual step-by-step execution history in the OpenClaw overlay
-- Better error notifications: categorize errors (network, auth, model, tool) with specific recovery suggestions
-- Ensure all loading states show spinners/skeletons consistently
+**Update: `src/components/MemoryPanel.tsx`**
+- Filter by memory type
+- Show relevance scores
+- Bulk delete low-value memories
 
-## Phase 7: Logging & Debug Upgrades
+## Phase 6: Visual Task Graph
 
-**Update: `src/components/DebugPanel.tsx`, `src/lib/openclaw-store.ts`**
-- Add log categories: Errors, AI Requests, Tool Usage, File Operations
-- Filter/search logs in the debug panel
-- Add "Export Logs" button (downloads JSON)
-- Add a debug mode toggle that enables verbose console logging across all modules
+**New file: `src/components/TaskGraph.tsx`**
+- Canvas-based or SVG node graph showing tasks as nodes, dependencies as edges
+- Color-coded by status (green=done, blue=running, red=failed, gray=queued)
+- Clickable nodes to view task details
+- Accessible from sidebar or debug panel
 
-## Phase 8: Auto-Build Mode
+## Phase 7: Performance Modes + Multi-Model Routing
 
-**New: `src/components/AutoBuildPanel.tsx`, update agent system**
-- User describes a project in natural language
-- Agent creates a plan (using existing create_plan tool)
-- Agent executes plan step-by-step: creates files, writes code, structures project
-- Shows progress timeline with each file created
-- Uses the existing OpenClaw agentic loop with write_file tool
+**Update: `src/lib/chat-api.ts`**
+- Add performance mode setting: `fast` (gemini-flash-lite), `smart` (gemini-pro / gpt-5), `local` (ollama only)
+- Auto-select model based on task complexity (short messages → fast, code/debug → smart)
 
-## Phase 9: Self-Improvement Tracking
+**Update: `src/components/SettingsDialog.tsx`**
+- Add Performance Mode selector (Fast / Smart / Local-Only)
 
-**New: `src/lib/feedback-tracker.ts`, update `src/components/ChatMessage.tsx`**
-- Add thumbs up/down on AI responses
-- Track success/failure rates per agent, per tool
-- Store in IndexedDB alongside existing action logs
-- Show improvement metrics in the debug panel
+## Phase 8: Safety & Permissions
+
+**New file: `src/lib/permissions.ts`**
+- Permission registry: file_write, file_delete, command_exec, system_access
+- Safe mode toggle: blocks all destructive operations
+- Confirmation dialog for risky actions
+- Audit log: all actions with timestamp, user confirmation status
+
+**Update: OpenClaw agent and tool handlers**
+- Check permissions before executing tools
+- Log all actions to audit trail
+
+## Phase 9: Export / Import System
+
+**New file: `src/lib/export-import.ts`**
+- Export: memories, tasks, settings, feedback, tool stats → single JSON file
+- Import: validate and merge data
+- UI: buttons in Settings page
+
+## Phase 10: Built-in Testing / Validation
+
+**New file: `src/lib/self-test.ts`**
+- Run validation suite: test each tool handler, verify memory store, check agent routing
+- Show results in Debug Panel
+- Auto-run on startup (optional)
 
 ---
 
 ## Files to Create
-- `setup.ps1` — PowerShell setup script
-- `supabase/functions/memory/index.ts` — Memory storage/retrieval edge function
-- `src/lib/memory-store.ts` — Client-side memory API
-- `src/lib/agent-router.ts` — Multi-agent routing logic
-- `src/lib/feedback-tracker.ts` — Response quality tracking
-- `src/components/MemoryPanel.tsx` — Memory viewer UI
-- `src/components/AgentActivityPanel.tsx` — Live agent status UI
-- `src/components/AutoBuildPanel.tsx` — Auto-build project wizard
+- `src/lib/orchestrator.ts` — Central task orchestrator with IndexedDB persistence
+- `src/lib/autonomous-mode.ts` — Autonomous execution loop
+- `src/lib/tool-learning.ts` — Tool usage tracking and reliability scoring
+- `src/lib/permissions.ts` — Permission system and audit log
+- `src/lib/export-import.ts` — Data export/import
+- `src/lib/self-test.ts` — Built-in validation suite
+- `src/components/TaskGraph.tsx` — Visual task dependency graph
 
 ## Files to Modify
-- `package.json` — Clean scripts
-- `start.bat` / `start.sh` — Add Ollama auto-install and model pull
-- `supabase/functions/chat/index.ts` — Memory injection, agent routing
-- `src/pages/Index.tsx` — Memory button, agent panel, auto-build access
-- `src/components/ChatMessage.tsx` — "Remember" button, feedback thumbs
-- `src/components/ChatSidebar.tsx` — Memory panel link
-- `src/pages/SandboxWorkspace.tsx` — Enhanced execution for JS/HTML
-- `src/components/DebugPanel.tsx` — Log filtering, export, categories
-- `src/components/OpenClawOverlay.tsx` — Task timeline visualization
-- `src/lib/openclaw-agent.ts` — Agent routing integration
-
-## Files to Delete
-- `bun.lock`
-- `bun.lockb`
-
-## Database Migration
-- Create `memories` table with RLS policies for authenticated users
+- `src/lib/task-runner.ts` — Add persistence, subtasks, retry, pause/resume
+- `src/lib/agent-router.ts` — Structured outputs, parallel dispatch
+- `src/lib/memory-store.ts` — Memory types, relevance scoring, auto-cleanup
+- `src/lib/chat-api.ts` — Performance modes, auto-model selection
+- `src/pages/Index.tsx` — Autonomous mode toggle, task graph access
+- `src/components/TaskQueue.tsx` — Enhanced UI with logs, subtasks
+- `src/components/AgentActivityPanel.tsx` — Parallel agents, expanded details
+- `src/components/MemoryPanel.tsx` — Type filters, relevance display
+- `src/components/SettingsDialog.tsx` — Performance mode, export/import buttons
+- `src/components/DebugPanel.tsx` — Tool learning stats, self-test results, audit log
+- `src/components/ChatSidebar.tsx` — Task graph link
+- `src/lib/openclaw-agent.ts` — Permission checks on tool execution
 
