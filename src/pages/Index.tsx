@@ -78,7 +78,11 @@ export default function Index() {
   useEffect(() => { applyModeTheme(currentModeKey); }, [currentModeKey]);
 
   useEffect(() => {
-    const init = async () => { await initDB(); setConversations(await getAllConversations()); };
+    const init = async () => {
+      await initDB();
+      await initOrchestrator();
+      setConversations(await getAllConversations());
+    };
     init();
 
     // Listen for OpenClaw bridge events
@@ -90,7 +94,14 @@ export default function Index() {
         handleSendMessage(event.payload.message);
       }
     });
-    return () => unsubscribe();
+
+    // Subscribe to autonomous mode state
+    const unsubAuto = subscribeAutonomous((state) => {
+      setAutonomousMode(state.active);
+      setAutonomousStepCount(state.stepCount);
+    });
+
+    return () => { unsubscribe(); unsubAuto(); };
   }, []);
 
   useEffect(() => {
