@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   isWhisperLoaded, loadWhisperModel, transcribeAudio,
-  getSelectedWhisperModel, getDownloadedModels,
+  getSelectedWhisperModel, getDownloadedModels, isVoiceReady,
+  isSelectedModelCached, getAnyCachedModel,
 } from '@/lib/local-stt';
 import { speak, stopSpeaking, isTTSSupported } from '@/lib/tts';
 import { Switch } from '@/components/ui/switch';
