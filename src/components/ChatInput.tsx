@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { isWhisperLoaded, loadWhisperModel, transcribeAudio, getSelectedWhisperModel, getDownloadedModels } from '@/lib/local-stt';
+import { isWhisperLoaded, loadWhisperModel, transcribeAudio, getSelectedWhisperModel, getDownloadedModels, isVoiceReady, isSelectedModelCached, getAnyCachedModel } from '@/lib/local-stt';
 import { loadSettings, CLOUD_MODELS } from '@/lib/chat-api';
 import { getModeTheme } from '@/lib/mode-themes';
 
