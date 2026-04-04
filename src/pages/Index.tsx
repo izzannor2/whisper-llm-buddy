@@ -84,6 +84,18 @@ export default function Index() {
       await initDB();
       await initOrchestrator();
       setConversations(await getAllConversations());
+      // Scan Ollama models silently
+      try {
+        const ollamaUrl = settings.ollamaUrl || 'http://localhost:11434';
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch(`${ollamaUrl}/api/tags`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const data = await res.json();
+          setOllamaModels(data.models?.map((m: any) => m.name) || []);
+        }
+      } catch { /* silently ignore */ }
     };
     init();
 
