@@ -268,6 +268,12 @@ export function ChatSidebar({
           </Button>
         )}
 
+        {onOpenTaskGraph && (
+          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenTaskGraph}>
+            <Layers className="w-4 h-4 mr-3 text-cyan-400" />Task Graph
+          </Button>
+        )}
+
         <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" asChild>
           <Link to="/models">
             <Cpu className="w-4 h-4 mr-3" />Models
