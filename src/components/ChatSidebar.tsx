@@ -78,7 +78,7 @@ const MODE_ICON_MAP: Record<string, { icon: any; color: string }> = {
 
 export function ChatSidebar({
   conversations, currentId, onSelect, onNew, onDelete, onOpenSettings,
-  onOpenMemory, onOpenAutoBuild,
+  onOpenMemory, onOpenAutoBuild, onOpenTaskGraph,
   currentMode = 'app-builder', currentModeKey, onModeChange, onCollapse,
   isLocked, onToggleLock, isOfflineMode, onToggleOffline,
 }: ChatSidebarProps) {
