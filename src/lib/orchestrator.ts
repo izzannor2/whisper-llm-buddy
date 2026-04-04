@@ -37,7 +37,7 @@ let db: IDBDatabase | null = null;
 let listeners: Array<() => void> = [];
 let memoryTasks: OrchestratorTask[] = [];
 
-function notify() { listeners.forEach(fn => fn()); }
+function notify() { updateSnapshot(); listeners.forEach(fn => fn()); }
 
 async function openDB(): Promise<IDBDatabase> {
   if (db) return db;
