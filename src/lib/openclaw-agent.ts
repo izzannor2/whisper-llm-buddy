@@ -7,6 +7,8 @@ import { logAction, recordHabit, getHabitSuggestions, createBackup, getActionLog
 import { getIDESettings } from './ide-store';
 import { getProjectContext } from './project-context';
 import { AGENT_TOOLS } from './agent-tools';
+import { recordToolUse } from './tool-learning';
+import { checkPermission, logAuditEntry } from './permissions';
 
 export interface OpenClawConfig {
   model: string;
