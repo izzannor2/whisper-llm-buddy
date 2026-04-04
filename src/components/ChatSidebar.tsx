@@ -90,6 +90,9 @@ export function ChatSidebar({
   const [fileSearchQuery, setFileSearchQuery] = useState('');
   const [pcSearchResults, setPcSearchResults] = useState<string[]>([]);
   const [pcSearching, setPcSearching] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(true);
+  const [aiToolsOpen, setAiToolsOpen] = useState(false);
+  const [systemOpen, setSystemOpen] = useState(false);
   const { isOnline } = useNetworkStatus();
   const { toast } = useToast();
 
