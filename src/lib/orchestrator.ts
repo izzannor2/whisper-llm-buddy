@@ -124,8 +124,14 @@ export function subscribeOrchestrator(listener: () => void): () => void {
   return () => { listeners = listeners.filter(l => l !== listener); };
 }
 
+let tasksSnapshot: OrchestratorTask[] = [];
+
+function updateSnapshot() {
+  tasksSnapshot = [...memoryTasks];
+}
+
 export function getOrchestratorTasks(): OrchestratorTask[] {
-  return [...memoryTasks];
+  return tasksSnapshot;
 }
 
 export function getTaskById(id: string): OrchestratorTask | undefined {
