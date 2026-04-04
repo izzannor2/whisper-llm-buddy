@@ -477,15 +477,20 @@ export function VoiceCallMode({
         onNewMessages?.(userMsg, assistantMsg);
 
         setCallState('speaking');
-        speak(response, {
-          voice: ttsVoice, rate: ttsRate,
-          onEnd: () => {
-            if (isCallActiveRef.current) {
-              if (pushToTalkRef.current) setCallState('waiting');
-              else setTimeout(() => startListening(), 300);
-            }
-          },
-        });
+        if (isSpeakerOff) {
+          if (pushToTalkRef.current) setCallState('waiting');
+          else setTimeout(() => startListening(), 300);
+        } else {
+          speak(response, {
+            voice: ttsVoice, rate: ttsRate,
+            onEnd: () => {
+              if (isCallActiveRef.current) {
+                if (pushToTalkRef.current) setCallState('waiting');
+                else setTimeout(() => startListening(), 300);
+              }
+            },
+          });
+        }
       }
     } catch { toast.error('Failed to send message'); }
   }, [textInput, onSendMessage, ttsVoice, ttsRate, startListening, onNewMessages]);
