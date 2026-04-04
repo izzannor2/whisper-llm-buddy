@@ -9,7 +9,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { isWhisperLoaded, loadWhisperModel, transcribeAudio, getSelectedWhisperModel, getDownloadedModels, isVoiceReady, isSelectedModelCached, getAnyCachedModel } from '@/lib/local-stt';
-import { loadSettings, CLOUD_MODELS } from '@/lib/chat-api';
+import { loadSettings, saveSettings, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, ChatSettings } from '@/lib/chat-api';
 import { getModeTheme } from '@/lib/mode-themes';
 
 interface ChatInputProps {
@@ -26,6 +26,8 @@ interface ChatInputProps {
   webSearchEnabled?: boolean;
   onWebSearchToggle?: (enabled: boolean) => void;
   onVoiceCall?: () => void;
+  availableOllamaModels?: string[];
+  onSettingsChange?: (settings: ChatSettings) => void;
 }
 
 export interface ChatInputRef {
@@ -65,8 +67,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
   function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice, selectedModel = 'llama-3.2-1b',
     onModelChange, modelLoaded = false, modeKey = 'chat', planningMode = false, onPlanningToggle,
     webSearchEnabled = false, onWebSearchToggle, onVoiceCall,
+    availableOllamaModels = [], onSettingsChange,
   }, ref) {
-    const settings = loadSettings();
+    const [settings, setSettingsState] = useState<ChatSettings>(() => loadSettings());
     const [message, setMessage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
@@ -177,6 +180,17 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       startLocalRecording();
     }, [isRecording, whisperAvailable, startLocalRecording, stopRecording]);
 
+    const switchBackendModel = (backend: ChatSettings['backend'], model: string) => {
+      const updated = { ...loadSettings(), backend };
+      if (backend === 'ollama') updated.ollamaModel = model;
+      else if (backend === 'huggingface') updated.huggingfaceModel = model;
+      else updated.model = model;
+      saveSettings(updated);
+      setSettingsState(updated);
+      onSettingsChange?.(updated);
+      toast.success(`Switched to ${model}`);
+    };
+
     const currentModelName = getBackendDisplayName();
     const currentPresetData = currentPreset ? PRESETS.find(p => p.id === currentPreset) : null;
     const PresetIcon = currentPresetData?.icon;
@@ -213,12 +227,76 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             />
             
             <div className="flex items-center gap-2 mt-2">
-              <Button variant="ghost" size="sm" className="h-8 px-3 text-accent hover:text-accent/80 hover:bg-accent/10 font-mono text-sm"
-                onClick={openSettings} title="Click to change backend/model in settings">
-                {currentModelName}
-                <span className="w-2 h-2 rounded-full bg-accent ml-2" />
-                <Settings className="w-3 h-3 ml-1" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 px-3 text-accent hover:text-accent/80 hover:bg-accent/10 font-mono text-sm">
+                    {currentModelName}
+                    <span className="w-2 h-2 rounded-full bg-accent ml-2" />
+                    <ChevronDown className="w-3 h-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="bg-popover border-border z-50 w-56 max-h-80 overflow-y-auto">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-mono">CLOUD</DropdownMenuLabel>
+                  {CLOUD_MODELS.map(m => (
+                    <DropdownMenuItem key={m.id} onClick={() => switchBackendModel('cloud', m.id)}
+                      className={cn("font-mono text-sm", settings.backend === 'cloud' && settings.model === m.id && "bg-accent/10")}>
+                      {m.name}
+                    </DropdownMenuItem>
+                  ))}
+                  {availableOllamaModels.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-mono">OLLAMA</DropdownMenuLabel>
+                      {availableOllamaModels.map(m => (
+                        <DropdownMenuItem key={m} onClick={() => switchBackendModel('ollama', m)}
+                          className={cn("font-mono text-sm", settings.backend === 'ollama' && settings.ollamaModel === m && "bg-accent/10")}>
+                          {m}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                  {settings.apiKeys?.openai && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-mono">OPENAI</DropdownMenuLabel>
+                      {OPENAI_MODELS.map(m => (
+                        <DropdownMenuItem key={m.id} onClick={() => switchBackendModel('openai', m.id)}
+                          className={cn("font-mono text-sm", settings.backend === 'openai' && settings.model === m.id && "bg-accent/10")}>
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                  {settings.apiKeys?.anthropic && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-mono">ANTHROPIC</DropdownMenuLabel>
+                      {ANTHROPIC_MODELS.map(m => (
+                        <DropdownMenuItem key={m.id} onClick={() => switchBackendModel('anthropic', m.id)}
+                          className={cn("font-mono text-sm", settings.backend === 'anthropic' && settings.model === m.id && "bg-accent/10")}>
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                  {settings.apiKeys?.google && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-mono">GOOGLE</DropdownMenuLabel>
+                      {GOOGLE_MODELS.map(m => (
+                        <DropdownMenuItem key={m.id} onClick={() => switchBackendModel('google', m.id)}
+                          className={cn("font-mono text-sm", settings.backend === 'google' && settings.model === m.id && "bg-accent/10")}>
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={openSettings} className="font-mono text-sm text-muted-foreground">
+                    <Settings className="w-3.5 h-3.5 mr-2" />More options…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

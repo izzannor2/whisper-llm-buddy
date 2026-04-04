@@ -66,6 +66,7 @@ export default function Index() {
   const [autonomousMode, setAutonomousMode] = useState(false);
   const [autonomousStepCount, setAutonomousStepCount] = useState(0);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [currentAgent, setCurrentAgent] = useState<AgentType | undefined>();
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
@@ -83,6 +84,18 @@ export default function Index() {
       await initDB();
       await initOrchestrator();
       setConversations(await getAllConversations());
+      // Scan Ollama models silently
+      try {
+        const ollamaUrl = settings.ollamaUrl || 'http://localhost:11434';
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch(`${ollamaUrl}/api/tags`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const data = await res.json();
+          setOllamaModels(data.models?.map((m: any) => m.name) || []);
+        }
+      } catch { /* silently ignore */ }
     };
     init();
 
@@ -285,6 +298,9 @@ export default function Index() {
           const searchResult = await searchWeb(content);
           if (searchResult.success && searchResult.results && searchResult.results.length > 0) {
             searchContext = '\n\n' + formatSearchContext(searchResult.results);
+            toast({ title: `🔍 Found ${searchResult.results.length} web results`, duration: 2000 });
+          } else {
+            toast({ title: '🔍 No web results found', duration: 2000 });
           }
         } catch (e) {
           console.error('Web search failed, continuing without:', e);
@@ -521,6 +537,8 @@ export default function Index() {
           webSearchEnabled={webSearchEnabled}
           onWebSearchToggle={setWebSearchEnabled}
           onVoiceCall={() => setShowVoiceCall(true)}
+          availableOllamaModels={ollamaModels}
+          onSettingsChange={(s) => { setSettings(s); }}
         />
       </div>
 
