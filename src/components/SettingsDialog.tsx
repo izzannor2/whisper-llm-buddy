@@ -29,6 +29,7 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   settings: ChatSettings;
   onSave: (settings: ChatSettings) => void;
+  initialTab?: string;
 }
 
 // No placeholder models - only show what's actually available
@@ -38,6 +39,7 @@ export function SettingsDialog({
   onOpenChange,
   settings,
   onSave,
+  initialTab,
 }: SettingsDialogProps) {
   const [localSettings, setLocalSettings] = useState<ChatSettings>(settings);
   const [localModels, setLocalModels] = useState<string[]>([]);
@@ -210,7 +212,7 @@ export function SettingsDialog({
           <DialogTitle className="text-xl">Settings</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="backend" className="mt-4">
+        <Tabs defaultValue={initialTab || "backend"} key={initialTab} className="mt-4">
           <TabsList className="grid w-full grid-cols-9 bg-muted">
             <TabsTrigger value="backend" className="text-xs">Backend</TabsTrigger>
             <TabsTrigger value="models" className="text-xs">Models</TabsTrigger>

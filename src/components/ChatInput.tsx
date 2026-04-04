@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { isWhisperLoaded, loadWhisperModel, transcribeAudio, getSelectedWhisperModel, getDownloadedModels } from '@/lib/local-stt';
+import { isWhisperLoaded, loadWhisperModel, transcribeAudio, getSelectedWhisperModel, getDownloadedModels, isVoiceReady, isSelectedModelCached, getAnyCachedModel } from '@/lib/local-stt';
 import { loadSettings, CLOUD_MODELS } from '@/lib/chat-api';
 import { getModeTheme } from '@/lib/mode-themes';
 
@@ -76,7 +76,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
 
-    const [whisperAvailable, setWhisperAvailable] = useState(() => isWhisperLoaded() || getDownloadedModels().length > 0);
+    const [whisperAvailable, setWhisperAvailable] = useState(() => isVoiceReady());
 
     const getBackendDisplayName = () => {
       switch (settings.backend) {
@@ -92,7 +92,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     };
 
     useEffect(() => {
-      const checkWhisper = () => setWhisperAvailable(isWhisperLoaded() || getDownloadedModels().length > 0);
+      const checkWhisper = () => setWhisperAvailable(isVoiceReady());
       checkWhisper();
       window.addEventListener('whisper-model-changed', checkWhisper);
       return () => window.removeEventListener('whisper-model-changed', checkWhisper);
@@ -142,7 +142,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
             const audioData = audioBuffer.getChannelData(0);
             const text = await transcribeAudio(audioData);
-            if (text.trim()) { autoSendOnVoice ? onSend(text.trim()) : setMessage(text.trim()); }
+            if (text.trim()) { setMessage(prev => prev ? prev + ' ' + text.trim() : text.trim()); }
           } catch (error) { console.error('Transcription error:', error); toast.error('Failed to transcribe audio'); }
           finally { setIsTranscribing(false); }
         };

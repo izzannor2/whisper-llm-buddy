@@ -15,6 +15,7 @@ import {
   unloadWhisper,
   isWebGPUSupported,
   clearDownloadedModel,
+  dispatchVoiceStateChanged,
   type TranscriptionProgress,
 } from '@/lib/local-stt';
 import { isTTSSupported, getAvailableVoices } from '@/lib/tts';
@@ -53,6 +54,7 @@ export function VoiceModelManager() {
       setSelectedModel(modelId);
       setSelectedWhisperModel(modelId);
       setModelLoaded(true);
+      dispatchVoiceStateChanged();
       toast.success('Model ready for offline voice input!');
     } else {
       toast.error('Failed to download model. Check your connection.');
@@ -65,6 +67,7 @@ export function VoiceModelManager() {
   const handleSelectModel = (modelId: string) => {
     setSelectedModel(modelId);
     setSelectedWhisperModel(modelId);
+    dispatchVoiceStateChanged();
     
     // If model was previously downloaded, load it
     if (downloadedModels.includes(modelId) && !isWhisperLoaded()) {
@@ -73,7 +76,7 @@ export function VoiceModelManager() {
   };
 
   const handleUnloadModel = () => {
-    unloadWhisper();
+    unloadWhisper(); // already dispatches voice-state-changed
     setModelLoaded(false);
     toast.success('Model unloaded to free memory');
   };
@@ -84,9 +87,10 @@ export function VoiceModelManager() {
       await clearDownloadedModel(modelId);
       setDownloadedModels(getDownloadedModels());
       if (selectedModel === modelId) {
-        unloadWhisper();
+        unloadWhisper(); // dispatches event
         setModelLoaded(false);
       }
+      dispatchVoiceStateChanged();
       toast.success('Model cache cleared');
     } catch (error) {
       toast.error('Failed to clear model cache');

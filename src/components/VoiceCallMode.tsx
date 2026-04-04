@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   isWhisperLoaded, loadWhisperModel, transcribeAudio,
-  getSelectedWhisperModel, getDownloadedModels,
+  getSelectedWhisperModel, getDownloadedModels, isVoiceReady,
+  isSelectedModelCached, getAnyCachedModel,
 } from '@/lib/local-stt';
 import { speak, stopSpeaking, isTTSSupported } from '@/lib/tts';
 import { Switch } from '@/components/ui/switch';
@@ -113,9 +114,9 @@ export function VoiceCallMode({
     localStorage.setItem('voice-push-to-talk', String(pushToTalk));
   }, [pushToTalk]);
 
-  const whisperReady = isWhisperLoaded() || getDownloadedModels().length > 0;
+  const whisperReady = isVoiceReady();
   const ttsReady = isTTSSupported();
-  const canMakeCall = whisperReady && ttsReady;
+  const canMakeCall = whisperReady; // TTS is optional (speaker-off mode works without it)
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -400,7 +401,16 @@ export function VoiceCallMode({
   /* ---------------------------------------------------------------- */
   const startCall = useCallback(async () => {
     if (!canMakeCall) {
-      toast.error('Download a Whisper model in Settings → Voice Models to enable voice calls');
+      const downloaded = getDownloadedModels();
+      if (downloaded.length === 0) {
+        toast.error('No voice model downloaded', {
+          description: 'Go to Settings → Voice Models to download Whisper.',
+          action: { label: 'Open Settings', onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })) },
+          duration: 5000,
+        });
+      } else {
+        toast.error('Voice model not ready. Try again.');
+      }
       return;
     }
     try {

@@ -69,6 +69,7 @@ export default function Index() {
   const [currentAgent, setCurrentAgent] = useState<AgentType | undefined>();
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
+  const [settingsTab, setSettingsTab] = useState<string | undefined>();
   const [killSwitchActive, setKillSwitchActive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -105,7 +106,11 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
-    const handleOpenSettings = () => setSettingsOpen(true);
+    const handleOpenSettings = (e: Event) => {
+      setSettingsOpen(true);
+      const tab = (e as CustomEvent)?.detail?.tab;
+      if (tab) setSettingsTab(tab);
+    };
     window.addEventListener('open-settings', handleOpenSettings);
     return () => window.removeEventListener('open-settings', handleOpenSettings);
   }, []);
@@ -315,11 +320,7 @@ export default function Index() {
         speak(fullResponse, {
           voice: settings.ttsVoice,
           rate: settings.ttsRate,
-          onEnd: () => {
-            if (settings.voiceConversation && chatInputRef.current) {
-              setTimeout(() => chatInputRef.current?.startListening(), 300);
-            }
-          },
+          // Do NOT auto-relisten in main chat — mic is "type into field" only
         });
       }
     } catch (err: any) {
@@ -523,7 +524,7 @@ export default function Index() {
         />
       </div>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onSave={handleSettingsSave} />
+      <SettingsDialog open={settingsOpen} onOpenChange={(open) => { setSettingsOpen(open); if (!open) setSettingsTab(undefined); }} settings={settings} onSave={handleSettingsSave} initialTab={settingsTab} />
       <MemoryPanel open={memoryPanelOpen} onOpenChange={setMemoryPanelOpen} />
       <AutoBuildPanel open={autoBuildOpen} onOpenChange={setAutoBuildOpen} onSendMessage={handleSendMessage} />
       <TaskGraph open={taskGraphOpen} onOpenChange={setTaskGraphOpen} />
