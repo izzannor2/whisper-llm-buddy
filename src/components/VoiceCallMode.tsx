@@ -570,7 +570,7 @@ export function VoiceCallMode({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background/98 backdrop-blur-md">
-      {/* ── Top Toolbar ── */}
+      {/* ── Top Toolbar (secondary controls only) ── */}
       <div className="h-12 flex items-center justify-between px-4 border-b border-border/50 bg-background/80 backdrop-blur shrink-0">
         <div className="flex items-center gap-3">
           <div className={cn('w-2 h-2 rounded-full', callState === 'listening' ? 'bg-green-500 animate-pulse' : callState === 'speaking' ? 'bg-purple-500 animate-pulse' : callState === 'processing' ? 'bg-yellow-500 animate-pulse' : 'bg-muted-foreground')} />
@@ -597,7 +597,7 @@ export function VoiceCallMode({
             <TooltipTrigger asChild>
               <Button
                 variant={isScreenSharing ? 'default' : 'ghost'} size="icon"
-                className={cn('h-8 w-8', isScreenSharing && 'bg-blue-600 hover:bg-blue-500 text-white')}
+                className={cn('h-8 w-8', isScreenSharing && 'bg-blue-600 hover:bg-blue-500 text-primary-foreground')}
                 onClick={isScreenSharing ? stopScreenShare : startScreenShare}
               >
                 {isScreenSharing ? <MonitorOff className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
@@ -612,25 +612,12 @@ export function VoiceCallMode({
             <MessageSquare className="w-4 h-4" />
           </Button>
 
-          {/* Mute */}
-          <Button
-            variant={isMuted ? 'destructive' : 'ghost'} size="icon" className="h-8 w-8"
-            onClick={() => setIsMuted(!isMuted)}
-          >
-            {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </Button>
-
           {/* Push-to-talk */}
           <div className="flex items-center gap-1.5 bg-muted/30 rounded-full px-3 py-1 border border-border/30">
             <Hand className="w-3 h-3 text-muted-foreground" />
             <Label htmlFor="ptt-toggle" className="text-xs text-muted-foreground cursor-pointer">PTT</Label>
             <Switch id="ptt-toggle" checked={pushToTalk} onCheckedChange={setPushToTalk} className="scale-75" />
           </div>
-
-          {/* End call */}
-          <Button variant="destructive" size="sm" className="h-8 gap-1.5 rounded-full px-4" onClick={endCall}>
-            <PhoneOff className="w-4 h-4" /> End
-          </Button>
         </div>
       </div>
 
