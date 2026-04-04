@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug } from 'lucide-react';
+import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug, Shield, Upload, FileDown } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,9 @@ import { VoiceModelManager } from '@/components/VoiceModelManager';
 import { DebugPanel } from '@/components/DebugPanel';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { handleExport, handleImportFromFile } from '@/lib/export-import';
+import { getPermissions, savePermissions, toggleSafeMode } from '@/lib/permissions';
+import { runSelfTests, formatTestResults, TestResult } from '@/lib/self-test';
 
 interface SettingsDialogProps {
   open: boolean;
