@@ -320,11 +320,7 @@ export default function Index() {
         speak(fullResponse, {
           voice: settings.ttsVoice,
           rate: settings.ttsRate,
-          onEnd: () => {
-            if (settings.voiceConversation && chatInputRef.current) {
-              setTimeout(() => chatInputRef.current?.startListening(), 300);
-            }
-          },
+          // Do NOT auto-relisten in main chat — mic is "type into field" only
         });
       }
     } catch (err: any) {
