@@ -39,6 +39,7 @@ interface ChatSidebarProps {
   onOpenModels?: () => void;
   onOpenMemory?: () => void;
   onOpenAutoBuild?: () => void;
+  onOpenTaskGraph?: () => void;
   currentMode?: IDEMode;
   currentModeKey?: string;
   onModeChange?: (mode: IDEMode, key: string) => void;
