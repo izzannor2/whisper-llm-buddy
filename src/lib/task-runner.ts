@@ -108,7 +108,7 @@ export function removeTask(id: string): void {
 }
 
 export function getTasks(): Task[] {
-  return [...taskQueue];
+  return tasksSnapshot;
 }
 
 export function getActiveTasks(): Task[] {
