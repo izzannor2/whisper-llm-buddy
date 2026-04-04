@@ -76,7 +76,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
 
-    const [whisperAvailable, setWhisperAvailable] = useState(() => isWhisperLoaded() || getDownloadedModels().length > 0);
+    const [whisperAvailable, setWhisperAvailable] = useState(() => isVoiceReady());
 
     const getBackendDisplayName = () => {
       switch (settings.backend) {
