@@ -436,9 +436,34 @@ export default function Index() {
           </div>
         )}
 
+        {/* Autonomous Mode + Task Graph toolbar */}
+        <div className="flex items-center gap-3 px-4 py-1.5 border-b border-border bg-card/50">
+          <div className="flex items-center gap-2">
+            <BotIcon className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Autonomous</span>
+            <Switch checked={autonomousMode} onCheckedChange={(checked) => {
+              if (!checked) stopAutonomous();
+              setAutonomousMode(checked);
+            }} />
+            {autonomousMode && (
+              <span className="text-xs text-primary animate-pulse">Step {autonomousStepCount}</span>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => setTaskGraphOpen(true)}>
+            <Network className="w-3.5 h-3.5" />
+            Tasks
+          </Button>
+          {isSafeMode() && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Shield className="w-3 h-3" />
+              Safe Mode
+            </div>
+          )}
+        </div>
+
         {/* Kill switch activated banner */}
         {killSwitchActive && (
-          <div className="flex items-center justify-center py-2 bg-red-600 text-white text-sm font-bold animate-pulse">
+          <div className="flex items-center justify-center py-2 bg-destructive text-destructive-foreground text-sm font-bold animate-pulse">
             ⛔ ALL OPERATIONS KILLED
           </div>
         )}
