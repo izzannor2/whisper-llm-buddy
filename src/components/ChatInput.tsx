@@ -142,7 +142,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
             const audioData = audioBuffer.getChannelData(0);
             const text = await transcribeAudio(audioData);
-            if (text.trim()) { autoSendOnVoice ? onSend(text.trim()) : setMessage(text.trim()); }
+            if (text.trim()) { setMessage(prev => prev ? prev + ' ' + text.trim() : text.trim()); }
           } catch (error) { console.error('Transcription error:', error); toast.error('Failed to transcribe audio'); }
           finally { setIsTranscribing(false); }
         };

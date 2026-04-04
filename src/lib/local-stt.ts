@@ -187,6 +187,32 @@ export function isWhisperLoaded(): boolean {
 export function unloadWhisper(): void {
   transcriber = null;
   currentModelId = null;
+  dispatchVoiceStateChanged();
+}
+
+// ── Shared readiness helpers ──
+
+/** Dispatch a global event so all UI components refresh voice state */
+export function dispatchVoiceStateChanged(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('whisper-model-changed'));
+  }
+}
+
+/** Is the currently-selected model cached (downloaded)? */
+export function isSelectedModelCached(): boolean {
+  return getDownloadedModels().includes(getSelectedWhisperModel());
+}
+
+/** Return the first cached model id, or null */
+export function getAnyCachedModel(): string | null {
+  const downloaded = getDownloadedModels();
+  return downloaded.length > 0 ? downloaded[0] : null;
+}
+
+/** Overall readiness: is any model available to use? */
+export function isVoiceReady(): boolean {
+  return isWhisperLoaded() || getDownloadedModels().length > 0;
 }
 
 // Clear a downloaded model from cache

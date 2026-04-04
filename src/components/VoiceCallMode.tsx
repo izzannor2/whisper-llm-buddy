@@ -401,7 +401,16 @@ export function VoiceCallMode({
   /* ---------------------------------------------------------------- */
   const startCall = useCallback(async () => {
     if (!canMakeCall) {
-      toast.error('Download a Whisper model in Settings → Voice Models to enable voice calls');
+      const downloaded = getDownloadedModels();
+      if (downloaded.length === 0) {
+        toast.error('No voice model downloaded', {
+          description: 'Go to Settings → Voice Models to download Whisper.',
+          action: { label: 'Open Settings', onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })) },
+          duration: 5000,
+        });
+      } else {
+        toast.error('Voice model not ready. Try again.');
+      }
       return;
     }
     try {

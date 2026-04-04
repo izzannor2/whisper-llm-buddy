@@ -524,7 +524,7 @@ export default function Index() {
         />
       </div>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onSave={handleSettingsSave} />
+      <SettingsDialog open={settingsOpen} onOpenChange={(open) => { setSettingsOpen(open); if (!open) setSettingsTab(undefined); }} settings={settings} onSave={handleSettingsSave} initialTab={settingsTab} />
       <MemoryPanel open={memoryPanelOpen} onOpenChange={setMemoryPanelOpen} />
       <AutoBuildPanel open={autoBuildOpen} onOpenChange={setAutoBuildOpen} onSendMessage={handleSendMessage} />
       <TaskGraph open={taskGraphOpen} onOpenChange={setTaskGraphOpen} />

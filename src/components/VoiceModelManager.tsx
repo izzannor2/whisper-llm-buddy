@@ -87,9 +87,10 @@ export function VoiceModelManager() {
       await clearDownloadedModel(modelId);
       setDownloadedModels(getDownloadedModels());
       if (selectedModel === modelId) {
-        unloadWhisper();
+        unloadWhisper(); // dispatches event
         setModelLoaded(false);
       }
+      dispatchVoiceStateChanged();
       toast.success('Model cache cleared');
     } catch (error) {
       toast.error('Failed to clear model cache');
