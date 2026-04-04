@@ -242,65 +242,92 @@ export function ChatSidebar({
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="px-2 space-y-0.5">
+      {/* New Chat - always visible */}
+      <div className="px-2 pb-1">
         <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onNew}>
           <Plus className="w-4 h-4 mr-3" />New Chat
         </Button>
+      </div>
 
-        {/* My Apps - filter to app-builder conversations */}
-        <Button variant="ghost" className={cn("w-full justify-start h-9 px-3 text-sm font-normal", filterMode === 'app-builder' && "bg-sidebar-accent")}
-          onClick={() => setFilterMode(filterMode === 'app-builder' ? null : 'app-builder')}>
-          <FolderHeart className="w-4 h-4 mr-3 text-purple-400" />My Apps
-          <span className="ml-auto text-xs text-muted-foreground">{conversations.filter(c => c.modeKey === 'app-builder').length}</span>
-        </Button>
+      {/* Collapsible Groups */}
+      <div className="px-2 space-y-0.5">
+        {/* Browse Group */}
+        <Collapsible open={browseOpen} onOpenChange={setBrowseOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between h-8 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
+              <span>Browse</span>
+              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", browseOpen && "rotate-180")} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-0.5 pl-1">
+            <Button variant="ghost" className={cn("w-full justify-start h-9 px-3 text-sm font-normal", filterMode === 'app-builder' && "bg-sidebar-accent")}
+              onClick={() => setFilterMode(filterMode === 'app-builder' ? null : 'app-builder')}>
+              <FolderHeart className="w-4 h-4 mr-3 text-purple-400" />My Apps
+              <span className="ml-auto text-xs text-muted-foreground">{conversations.filter(c => c.modeKey === 'app-builder').length}</span>
+            </Button>
+            <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={() => setFileSearchOpen(true)}>
+              <FileSearch className="w-4 h-4 mr-3 text-blue-400" />File Search
+            </Button>
+            {isFileSystemSupported() && (
+              <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={handlePCSearch} disabled={pcSearching}>
+                <MonitorSmartphone className="w-4 h-4 mr-3 text-green-400" />
+                {pcSearching ? 'Scanning...' : 'PC Search'}
+              </Button>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
 
-        {/* File Search */}
-        <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={() => setFileSearchOpen(true)}>
-          <FileSearch className="w-4 h-4 mr-3 text-blue-400" />File Search
-        </Button>
+        {/* AI Tools Group */}
+        <Collapsible open={aiToolsOpen} onOpenChange={setAiToolsOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between h-8 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
+              <span>AI Tools</span>
+              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", aiToolsOpen && "rotate-180")} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-0.5 pl-1">
+            {onOpenMemory && (
+              <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenMemory}>
+                <Sparkles className="w-4 h-4 mr-3 text-pink-400" />AI Memory
+              </Button>
+            )}
+            {onOpenAutoBuild && (
+              <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenAutoBuild}>
+                <Zap className="w-4 h-4 mr-3 text-amber-400" />Auto-Build
+              </Button>
+            )}
+            {onOpenTaskGraph && (
+              <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenTaskGraph}>
+                <Layers className="w-4 h-4 mr-3 text-cyan-400" />Task Graph
+              </Button>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
 
-        {onOpenMemory && (
-          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenMemory}>
-            <Sparkles className="w-4 h-4 mr-3 text-pink-400" />AI Memory
-          </Button>
-        )}
+        {/* System Group */}
+        <Collapsible open={systemOpen} onOpenChange={setSystemOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between h-8 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
+              <span>System</span>
+              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", systemOpen && "rotate-180")} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-0.5 pl-1">
+            <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" asChild>
+              <Link to="/models">
+                <Cpu className="w-4 h-4 mr-3" />Models
+              </Link>
+            </Button>
+            {isFileSystemSupported() && (
+              <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={handleOpenProject}>
+                <HardDrive className="w-4 h-4 mr-3 text-amber-400" />
+                {projectFolder ? `System: ${projectFolder}` : 'System Files'}
+              </Button>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
 
-        {onOpenAutoBuild && (
-          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenAutoBuild}>
-            <Zap className="w-4 h-4 mr-3 text-amber-400" />Auto-Build
-          </Button>
-        )}
-
-        {onOpenTaskGraph && (
-          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenTaskGraph}>
-            <Layers className="w-4 h-4 mr-3 text-cyan-400" />Task Graph
-          </Button>
-        )}
-
-        <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" asChild>
-          <Link to="/models">
-            <Cpu className="w-4 h-4 mr-3" />Models
-          </Link>
-        </Button>
-
-        {/* System Files */}
-        {isFileSystemSupported() && (
-          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={handleOpenProject}>
-            <HardDrive className="w-4 h-4 mr-3 text-amber-400" />
-            {projectFolder ? `System: ${projectFolder}` : 'System Files'}
-          </Button>
-        )}
-
-        {/* PC Search */}
-        {isFileSystemSupported() && (
-          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={handlePCSearch} disabled={pcSearching}>
-            <MonitorSmartphone className="w-4 h-4 mr-3 text-green-400" />
-            {pcSearching ? 'Scanning...' : 'PC Search'}
-          </Button>
-        )}
-
-        {/* Mode filter chips */}
+        {/* Mode filter clear */}
         {filterMode && filterMode !== 'app-builder' && (
           <Button variant="ghost" size="sm" className="w-full justify-start h-7 px-3 text-xs text-muted-foreground"
             onClick={() => setFilterMode(null)}>
