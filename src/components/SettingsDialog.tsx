@@ -39,6 +39,7 @@ export function SettingsDialog({
   onOpenChange,
   settings,
   onSave,
+  initialTab,
 }: SettingsDialogProps) {
   const [localSettings, setLocalSettings] = useState<ChatSettings>(settings);
   const [localModels, setLocalModels] = useState<string[]>([]);
