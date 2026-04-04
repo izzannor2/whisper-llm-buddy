@@ -92,7 +92,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     };
 
     useEffect(() => {
-      const checkWhisper = () => setWhisperAvailable(isWhisperLoaded() || getDownloadedModels().length > 0);
+      const checkWhisper = () => setWhisperAvailable(isVoiceReady());
       checkWhisper();
       window.addEventListener('whisper-model-changed', checkWhisper);
       return () => window.removeEventListener('whisper-model-changed', checkWhisper);
