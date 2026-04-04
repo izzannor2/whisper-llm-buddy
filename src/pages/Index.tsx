@@ -293,9 +293,10 @@ export default function Index() {
       } catch { /* ignore */ }
 
       const agentPrompt = routeResult.agent.systemPrompt || '';
+      const toolHints = getToolLearningHints();
 
-      if (modePrompt || planningPrefix || searchContext || memoryContext || agentPrompt) {
-        effectiveSettings.systemPrompt = planningPrefix + agentPrompt + (agentPrompt ? '\n\n' : '') + (modePrompt || '') + searchContext + memoryContext + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
+      if (modePrompt || planningPrefix || searchContext || memoryContext || agentPrompt || toolHints) {
+        effectiveSettings.systemPrompt = planningPrefix + agentPrompt + (agentPrompt ? '\n\n' : '') + (modePrompt || '') + searchContext + memoryContext + toolHints + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
       }
 
       await sendChatMessage(chatMessages, effectiveSettings, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
