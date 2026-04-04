@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Phone, PhoneOff, Mic, Volume2, Loader2, MicOff, Hand,
-  Monitor, MonitorOff, MessageSquare, Send, ChevronDown,
+  Monitor, MonitorOff, MessageSquare, Send, ChevronDown, VolumeX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
