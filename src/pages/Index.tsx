@@ -176,8 +176,63 @@ export default function Index() {
     toast({ title: 'Chat deleted' });
   };
 
-  const handleSendMessage = async (content: string, isPlan?: boolean) => sendMessageAndGetResponse(content, isPlan);
+  const handleSendMessage = async (content: string, isPlan?: boolean) => {
+    // If autonomous mode is on, run the autonomous loop
+    if (autonomousMode && !isPlan) {
+      return handleAutonomousMessage(content);
+    }
+    return sendMessageAndGetResponse(content, isPlan);
+  };
   const handleVoiceCallMessage = async (content: string): Promise<string> => sendMessageAndGetResponse(content);
+
+  const handleAutonomousMessage = async (content: string): Promise<string> => {
+    // Create user message first
+    const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
+    let conv = currentConversation;
+    if (!conv) {
+      conv = { id: generateId(), title: `🤖 ${content.slice(0, 40)}...`, messages: [], createdAt: Date.now(), updatedAt: Date.now(), model: settings.model, modeKey: currentModeKey };
+    }
+    conv = { ...conv, messages: [...conv.messages, userMessage], updatedAt: Date.now() };
+    setCurrentConversation(conv);
+    await saveConversation(conv);
+    setConversations(prev => {
+      const existing = prev.find(c => c.id === conv!.id);
+      if (existing) return prev.map(c => (c.id === conv!.id ? conv! : c));
+      return [conv!, ...prev];
+    });
+
+    setIsLoading(true);
+    setStreamingContent('');
+    let fullResponse = '';
+
+    try {
+      fullResponse = await runAutonomous(
+        content,
+        (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); },
+        (step, summary) => {
+          const agentStep: AgentStep = {
+            id: generateId(), agentType: 'automation',
+            action: `Step ${step}`, status: 'complete',
+            detail: summary, timestamp: Date.now(),
+          };
+          setAgentSteps(prev => [...prev.slice(-30), agentStep]);
+        },
+        settings
+      );
+
+      const assistantMessage: Message = { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() };
+      const updatedConv = { ...conv, messages: [...conv.messages, assistantMessage], updatedAt: Date.now() };
+      setCurrentConversation(updatedConv);
+      await saveConversation(updatedConv);
+      setConversations(prev => prev.map(c => (c.id === updatedConv.id ? updatedConv : c)));
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Autonomous mode error', description: err.message });
+    } finally {
+      setIsLoading(false);
+      setStreamingContent('');
+    }
+    return fullResponse;
+  };
 
   const sendMessageAndGetResponse = async (content: string, isPlan?: boolean): Promise<string> => {
     const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
