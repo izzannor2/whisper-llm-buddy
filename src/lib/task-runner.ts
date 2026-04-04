@@ -25,6 +25,11 @@ const taskQueue: Task[] = [];
 const taskHandlers = new Map<string, TaskHandler>();
 let isProcessing = false;
 let listeners: Array<() => void> = [];
+let tasksSnapshot: Task[] = [];
+
+function updateSnapshot() {
+  tasksSnapshot = [...taskQueue];
+}
 
 function genId(): string {
   return Math.random().toString(36).slice(2, 10);
