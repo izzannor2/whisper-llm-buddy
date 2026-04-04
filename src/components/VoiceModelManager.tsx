@@ -67,6 +67,7 @@ export function VoiceModelManager() {
   const handleSelectModel = (modelId: string) => {
     setSelectedModel(modelId);
     setSelectedWhisperModel(modelId);
+    dispatchVoiceStateChanged();
     
     // If model was previously downloaded, load it
     if (downloadedModels.includes(modelId) && !isWhisperLoaded()) {
