@@ -76,7 +76,7 @@ export function VoiceModelManager() {
   };
 
   const handleUnloadModel = () => {
-    unloadWhisper();
+    unloadWhisper(); // already dispatches voice-state-changed
     setModelLoaded(false);
     toast.success('Model unloaded to free memory');
   };
