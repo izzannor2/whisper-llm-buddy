@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, X, Zap, OctagonX, Crown, Brain, Rocket } from 'lucide-react';
+import { Menu, X, Zap, OctagonX, Crown, Brain, Rocket, Network, BotIcon, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { ChatSidebar } from '@/components/ChatSidebar';
 import { ChatMessage } from '@/components/ChatMessage';
@@ -17,11 +18,16 @@ import { VoiceCallMode } from '@/components/VoiceCallMode';
 import { MemoryPanel } from '@/components/MemoryPanel';
 import { AgentActivityPanel, AgentStep } from '@/components/AgentActivityPanel';
 import { AutoBuildPanel } from '@/components/AutoBuildPanel';
+import { TaskGraph } from '@/components/TaskGraph';
 import { IDEMode } from '@/lib/ide-types';
 import { getIDESettings, saveIDESettings } from '@/lib/ide-store';
 import { applyModeTheme, getModeSystemPrompt } from '@/lib/mode-themes';
 import { routeToAgent, AgentType } from '@/lib/agent-router';
 import { getRelevantMemories } from '@/lib/memory-store';
+import { getToolLearningHints } from '@/lib/tool-learning';
+import { initOrchestrator } from '@/lib/orchestrator';
+import { getAutonomousState, subscribeAutonomous, runAutonomous, stopAutonomous } from '@/lib/autonomous-mode';
+import { isSafeMode } from '@/lib/permissions';
 import {
   Conversation, Message, getAllConversations, getConversation,
   saveConversation, deleteConversation, generateId, initDB,
@@ -56,6 +62,9 @@ export default function Index() {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [memoryPanelOpen, setMemoryPanelOpen] = useState(false);
   const [autoBuildOpen, setAutoBuildOpen] = useState(false);
+  const [taskGraphOpen, setTaskGraphOpen] = useState(false);
+  const [autonomousMode, setAutonomousMode] = useState(false);
+  const [autonomousStepCount, setAutonomousStepCount] = useState(0);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [currentAgent, setCurrentAgent] = useState<AgentType | undefined>();
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
@@ -69,7 +78,11 @@ export default function Index() {
   useEffect(() => { applyModeTheme(currentModeKey); }, [currentModeKey]);
 
   useEffect(() => {
-    const init = async () => { await initDB(); setConversations(await getAllConversations()); };
+    const init = async () => {
+      await initDB();
+      await initOrchestrator();
+      setConversations(await getAllConversations());
+    };
     init();
 
     // Listen for OpenClaw bridge events
@@ -81,7 +94,14 @@ export default function Index() {
         handleSendMessage(event.payload.message);
       }
     });
-    return () => unsubscribe();
+
+    // Subscribe to autonomous mode state
+    const unsubAuto = subscribeAutonomous((state) => {
+      setAutonomousMode(state.active);
+      setAutonomousStepCount(state.stepCount);
+    });
+
+    return () => { unsubscribe(); unsubAuto(); };
   }, []);
 
   useEffect(() => {
@@ -156,8 +176,63 @@ export default function Index() {
     toast({ title: 'Chat deleted' });
   };
 
-  const handleSendMessage = async (content: string, isPlan?: boolean) => sendMessageAndGetResponse(content, isPlan);
+  const handleSendMessage = async (content: string, isPlan?: boolean) => {
+    // If autonomous mode is on, run the autonomous loop
+    if (autonomousMode && !isPlan) {
+      return handleAutonomousMessage(content);
+    }
+    return sendMessageAndGetResponse(content, isPlan);
+  };
   const handleVoiceCallMessage = async (content: string): Promise<string> => sendMessageAndGetResponse(content);
+
+  const handleAutonomousMessage = async (content: string): Promise<string> => {
+    // Create user message first
+    const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
+    let conv = currentConversation;
+    if (!conv) {
+      conv = { id: generateId(), title: `🤖 ${content.slice(0, 40)}...`, messages: [], createdAt: Date.now(), updatedAt: Date.now(), model: settings.model, modeKey: currentModeKey };
+    }
+    conv = { ...conv, messages: [...conv.messages, userMessage], updatedAt: Date.now() };
+    setCurrentConversation(conv);
+    await saveConversation(conv);
+    setConversations(prev => {
+      const existing = prev.find(c => c.id === conv!.id);
+      if (existing) return prev.map(c => (c.id === conv!.id ? conv! : c));
+      return [conv!, ...prev];
+    });
+
+    setIsLoading(true);
+    setStreamingContent('');
+    let fullResponse = '';
+
+    try {
+      fullResponse = await runAutonomous(
+        content,
+        (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); },
+        (step, summary) => {
+          const agentStep: AgentStep = {
+            id: generateId(), agentType: 'automation',
+            action: `Step ${step}`, status: 'complete',
+            detail: summary, timestamp: Date.now(),
+          };
+          setAgentSteps(prev => [...prev.slice(-30), agentStep]);
+        },
+        settings
+      );
+
+      const assistantMessage: Message = { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() };
+      const updatedConv = { ...conv, messages: [...conv.messages, assistantMessage], updatedAt: Date.now() };
+      setCurrentConversation(updatedConv);
+      await saveConversation(updatedConv);
+      setConversations(prev => prev.map(c => (c.id === updatedConv.id ? updatedConv : c)));
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Autonomous mode error', description: err.message });
+    } finally {
+      setIsLoading(false);
+      setStreamingContent('');
+    }
+    return fullResponse;
+  };
 
   const sendMessageAndGetResponse = async (content: string, isPlan?: boolean): Promise<string> => {
     const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
@@ -218,9 +293,10 @@ export default function Index() {
       } catch { /* ignore */ }
 
       const agentPrompt = routeResult.agent.systemPrompt || '';
+      const toolHints = getToolLearningHints();
 
-      if (modePrompt || planningPrefix || searchContext || memoryContext || agentPrompt) {
-        effectiveSettings.systemPrompt = planningPrefix + agentPrompt + (agentPrompt ? '\n\n' : '') + (modePrompt || '') + searchContext + memoryContext + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
+      if (modePrompt || planningPrefix || searchContext || memoryContext || agentPrompt || toolHints) {
+        effectiveSettings.systemPrompt = planningPrefix + agentPrompt + (agentPrompt ? '\n\n' : '') + (modePrompt || '') + searchContext + memoryContext + toolHints + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
       }
 
       await sendChatMessage(chatMessages, effectiveSettings, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
@@ -325,7 +401,8 @@ export default function Index() {
           onDelete={handleDeleteConversation}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenMemory={() => setMemoryPanelOpen(true)}
-          onOpenAutoBuild={() => setAutoBuildOpen(true)}
+           onOpenAutoBuild={() => setAutoBuildOpen(true)}
+           onOpenTaskGraph={() => setTaskGraphOpen(true)}
           currentMode={currentMode}
           currentModeKey={currentModeKey}
           onModeChange={handleModeChange}
@@ -360,9 +437,34 @@ export default function Index() {
           </div>
         )}
 
+        {/* Autonomous Mode + Task Graph toolbar */}
+        <div className="flex items-center gap-3 px-4 py-1.5 border-b border-border bg-card/50">
+          <div className="flex items-center gap-2">
+            <BotIcon className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Autonomous</span>
+            <Switch checked={autonomousMode} onCheckedChange={(checked) => {
+              if (!checked) stopAutonomous();
+              setAutonomousMode(checked);
+            }} />
+            {autonomousMode && (
+              <span className="text-xs text-primary animate-pulse">Step {autonomousStepCount}</span>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => setTaskGraphOpen(true)}>
+            <Network className="w-3.5 h-3.5" />
+            Tasks
+          </Button>
+          {isSafeMode() && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Shield className="w-3 h-3" />
+              Safe Mode
+            </div>
+          )}
+        </div>
+
         {/* Kill switch activated banner */}
         {killSwitchActive && (
-          <div className="flex items-center justify-center py-2 bg-red-600 text-white text-sm font-bold animate-pulse">
+          <div className="flex items-center justify-center py-2 bg-destructive text-destructive-foreground text-sm font-bold animate-pulse">
             ⛔ ALL OPERATIONS KILLED
           </div>
         )}
@@ -424,6 +526,7 @@ export default function Index() {
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onSave={handleSettingsSave} />
       <MemoryPanel open={memoryPanelOpen} onOpenChange={setMemoryPanelOpen} />
       <AutoBuildPanel open={autoBuildOpen} onOpenChange={setAutoBuildOpen} onSendMessage={handleSendMessage} />
+      <TaskGraph open={taskGraphOpen} onOpenChange={setTaskGraphOpen} />
       {codeLibraryOpen && <div className="fixed inset-y-0 right-0 w-80 z-50 shadow-xl"><CodeLibrary onClose={() => setCodeLibraryOpen(false)} /></div>}
 
       {settings.openClawEnabled && openClawOpen && (

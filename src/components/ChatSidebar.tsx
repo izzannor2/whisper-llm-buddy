@@ -39,6 +39,7 @@ interface ChatSidebarProps {
   onOpenModels?: () => void;
   onOpenMemory?: () => void;
   onOpenAutoBuild?: () => void;
+  onOpenTaskGraph?: () => void;
   currentMode?: IDEMode;
   currentModeKey?: string;
   onModeChange?: (mode: IDEMode, key: string) => void;
@@ -77,7 +78,7 @@ const MODE_ICON_MAP: Record<string, { icon: any; color: string }> = {
 
 export function ChatSidebar({
   conversations, currentId, onSelect, onNew, onDelete, onOpenSettings,
-  onOpenMemory, onOpenAutoBuild,
+  onOpenMemory, onOpenAutoBuild, onOpenTaskGraph,
   currentMode = 'app-builder', currentModeKey, onModeChange, onCollapse,
   isLocked, onToggleLock, isOfflineMode, onToggleOffline,
 }: ChatSidebarProps) {
@@ -264,6 +265,12 @@ export function ChatSidebar({
         {onOpenAutoBuild && (
           <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenAutoBuild}>
             <Zap className="w-4 h-4 mr-3 text-amber-400" />Auto-Build
+          </Button>
+        )}
+
+        {onOpenTaskGraph && (
+          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenTaskGraph}>
+            <Layers className="w-4 h-4 mr-3 text-cyan-400" />Task Graph
           </Button>
         )}
 

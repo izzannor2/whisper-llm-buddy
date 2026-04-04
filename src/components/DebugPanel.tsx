@@ -14,7 +14,8 @@ import {
   Zap,
   Copy,
   Download,
-  Trash2
+  Trash2,
+  Wrench
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +30,8 @@ import {
   isWebGPUSupported,
   WHISPER_MODELS
 } from '@/lib/local-stt';
+import { getToolStats, ToolStats } from '@/lib/tool-learning';
+import { getAuditLog, AuditEntry } from '@/lib/permissions';
 
 interface ServiceStatus {
   name: string;
@@ -418,6 +421,63 @@ export function DebugPanel() {
           )}
         </ScrollArea>
       </div>
+
+      <Separator />
+
+      {/* Tool Learning Stats */}
+      <div>
+        <h4 className="font-medium mb-3 flex items-center gap-2">
+          <Wrench className="w-4 h-4" />
+          Tool Learning Stats
+        </h4>
+        {(() => {
+          const toolStats = getToolStats();
+          if (toolStats.length === 0) return <p className="text-sm text-muted-foreground">No tool usage recorded yet</p>;
+          return (
+            <div className="space-y-1.5">
+              {toolStats.slice(0, 10).map(stat => (
+                <div key={stat.name} className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm">
+                  <span className="font-mono text-xs">{stat.name}</span>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{stat.callCount} calls</span>
+                    <span className={stat.successCount / stat.callCount > 0.8 ? 'text-accent' : 'text-destructive'}>
+                      {((stat.successCount / stat.callCount) * 100).toFixed(0)}% success
+                    </span>
+                    <span>{(stat.totalDuration / stat.callCount / 1000).toFixed(1)}s avg</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+
+      <Separator />
+
+      {/* Audit Log */}
+      <div>
+        <h4 className="font-medium mb-3 flex items-center gap-2">
+          <Zap className="w-4 h-4" />
+          Recent Audit Log
+        </h4>
+        {(() => {
+          const audit = getAuditLog(20);
+          if (audit.length === 0) return <p className="text-sm text-muted-foreground">No actions logged yet</p>;
+          return (
+            <ScrollArea className="h-32 rounded-lg border bg-muted/30 p-3">
+              <div className="space-y-1 font-mono text-[10px]">
+                {audit.slice().reverse().map(entry => (
+                  <div key={entry.id} className={entry.allowed ? 'text-muted-foreground' : 'text-destructive'}>
+                    [{new Date(entry.timestamp).toLocaleTimeString()}] {entry.allowed ? '✓' : '✗'} {entry.action} ({entry.permission})
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          );
+        })()}
+      </div>
+
+      <Separator />
 
       {/* Troubleshooting Tips */}
       <div className="p-4 rounded-lg border border-accent/30 bg-accent/5">
