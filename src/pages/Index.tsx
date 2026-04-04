@@ -105,7 +105,11 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
-    const handleOpenSettings = () => setSettingsOpen(true);
+    const handleOpenSettings = (e: Event) => {
+      setSettingsOpen(true);
+      const tab = (e as CustomEvent)?.detail?.tab;
+      if (tab) setSettingsTab(tab);
+    };
     window.addEventListener('open-settings', handleOpenSettings);
     return () => window.removeEventListener('open-settings', handleOpenSettings);
   }, []);
