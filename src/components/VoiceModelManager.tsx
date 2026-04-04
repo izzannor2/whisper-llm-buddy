@@ -54,6 +54,7 @@ export function VoiceModelManager() {
       setSelectedModel(modelId);
       setSelectedWhisperModel(modelId);
       setModelLoaded(true);
+      dispatchVoiceStateChanged();
       toast.success('Model ready for offline voice input!');
     } else {
       toast.error('Failed to download model. Check your connection.');
