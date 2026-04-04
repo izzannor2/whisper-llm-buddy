@@ -512,7 +512,7 @@ export default function Index() {
           onSend={handleSendMessage}
           isLoading={isLoading}
           onStop={() => abortRef.current?.abort()}
-          autoSendOnVoice={settings.voiceConversation}
+          autoSendOnVoice={false}
           modelLoaded={modelLoaded}
           modeKey={currentModeKey}
           planningMode={planningMode}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Phone, PhoneOff, Mic, Volume2, Loader2, MicOff, Hand,
-  Monitor, MonitorOff, MessageSquare, Send, ChevronDown,
+  Monitor, MonitorOff, MessageSquare, Send, ChevronDown, VolumeX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +72,7 @@ export function VoiceCallMode({
   const [pushToTalk, setPushToTalk] = useState(() => localStorage.getItem('voice-push-to-talk') === 'true');
   const [isHoldingSpace, setIsHoldingSpace] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeakerOff, setIsSpeakerOff] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gemini-flash');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
@@ -343,15 +344,21 @@ export function VoiceCallMode({
               onNewMessages?.(userMsg, assistantMsg);
 
               setCallState('speaking');
-              speak(response, {
-                voice: ttsVoice, rate: ttsRate,
-                onEnd: () => {
-                  if (isCallActiveRef.current) {
-                    if (pushToTalkRef.current) setCallState('waiting');
-                    else setTimeout(() => startListening(), 300);
-                  }
-                },
-              });
+              if (isSpeakerOff) {
+                // Skip TTS, go straight to next listen cycle
+                if (pushToTalkRef.current) setCallState('waiting');
+                else setTimeout(() => startListening(), 300);
+              } else {
+                speak(response, {
+                  voice: ttsVoice, rate: ttsRate,
+                  onEnd: () => {
+                    if (isCallActiveRef.current) {
+                      if (pushToTalkRef.current) setCallState('waiting');
+                      else setTimeout(() => startListening(), 300);
+                    }
+                  },
+                });
+              }
             } else if (isCallActiveRef.current) {
               if (pushToTalkRef.current) setCallState('waiting');
               else setTimeout(() => startListening(), 500);
@@ -470,15 +477,20 @@ export function VoiceCallMode({
         onNewMessages?.(userMsg, assistantMsg);
 
         setCallState('speaking');
-        speak(response, {
-          voice: ttsVoice, rate: ttsRate,
-          onEnd: () => {
-            if (isCallActiveRef.current) {
-              if (pushToTalkRef.current) setCallState('waiting');
-              else setTimeout(() => startListening(), 300);
-            }
-          },
-        });
+        if (isSpeakerOff) {
+          if (pushToTalkRef.current) setCallState('waiting');
+          else setTimeout(() => startListening(), 300);
+        } else {
+          speak(response, {
+            voice: ttsVoice, rate: ttsRate,
+            onEnd: () => {
+              if (isCallActiveRef.current) {
+                if (pushToTalkRef.current) setCallState('waiting');
+                else setTimeout(() => startListening(), 300);
+              }
+            },
+          });
+        }
       }
     } catch { toast.error('Failed to send message'); }
   }, [textInput, onSendMessage, ttsVoice, ttsRate, startListening, onNewMessages]);
@@ -558,7 +570,7 @@ export function VoiceCallMode({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background/98 backdrop-blur-md">
-      {/* ── Top Toolbar ── */}
+      {/* ── Top Toolbar (secondary controls only) ── */}
       <div className="h-12 flex items-center justify-between px-4 border-b border-border/50 bg-background/80 backdrop-blur shrink-0">
         <div className="flex items-center gap-3">
           <div className={cn('w-2 h-2 rounded-full', callState === 'listening' ? 'bg-green-500 animate-pulse' : callState === 'speaking' ? 'bg-purple-500 animate-pulse' : callState === 'processing' ? 'bg-yellow-500 animate-pulse' : 'bg-muted-foreground')} />
@@ -585,7 +597,7 @@ export function VoiceCallMode({
             <TooltipTrigger asChild>
               <Button
                 variant={isScreenSharing ? 'default' : 'ghost'} size="icon"
-                className={cn('h-8 w-8', isScreenSharing && 'bg-blue-600 hover:bg-blue-500 text-white')}
+                className={cn('h-8 w-8', isScreenSharing && 'bg-blue-600 hover:bg-blue-500 text-primary-foreground')}
                 onClick={isScreenSharing ? stopScreenShare : startScreenShare}
               >
                 {isScreenSharing ? <MonitorOff className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
@@ -600,25 +612,12 @@ export function VoiceCallMode({
             <MessageSquare className="w-4 h-4" />
           </Button>
 
-          {/* Mute */}
-          <Button
-            variant={isMuted ? 'destructive' : 'ghost'} size="icon" className="h-8 w-8"
-            onClick={() => setIsMuted(!isMuted)}
-          >
-            {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </Button>
-
           {/* Push-to-talk */}
           <div className="flex items-center gap-1.5 bg-muted/30 rounded-full px-3 py-1 border border-border/30">
             <Hand className="w-3 h-3 text-muted-foreground" />
             <Label htmlFor="ptt-toggle" className="text-xs text-muted-foreground cursor-pointer">PTT</Label>
             <Switch id="ptt-toggle" checked={pushToTalk} onCheckedChange={setPushToTalk} className="scale-75" />
           </div>
-
-          {/* End call */}
-          <Button variant="destructive" size="sm" className="h-8 gap-1.5 rounded-full px-4" onClick={endCall}>
-            <PhoneOff className="w-4 h-4" /> End
-          </Button>
         </div>
       </div>
 
@@ -738,7 +737,7 @@ export function VoiceCallMode({
             </div>
           )}
 
-          {/* Call action buttons */}
+          {/* Call action buttons (contextual) */}
           <div className="flex gap-3 mt-2">
             {callState === 'listening' && !pushToTalk && (
               <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5" onClick={stopListeningManually}>
@@ -754,7 +753,7 @@ export function VoiceCallMode({
               </Button>
             )}
             {callState === 'listening' && pushToTalk && (
-              <Button variant="default" size="sm" className="rounded-full px-5 gap-1.5 bg-green-600 hover:bg-green-700"
+              <Button variant="default" size="sm" className="rounded-full px-5 gap-1.5 bg-green-600 hover:bg-green-700 text-primary-foreground"
                 onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}>
                 <Mic className="w-4 h-4 animate-pulse" /> Recording...
               </Button>
@@ -767,6 +766,61 @@ export function VoiceCallMode({
             {pushToTalk ? 'Hold Space: record • Esc: end' : 'Space: toggle • Esc: end'}
           </p>
         </div>
+      </div>
+
+      {/* ── Floating Bottom Control Bar ── */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 rounded-full bg-card/90 backdrop-blur-xl border border-border shadow-2xl">
+        {/* Mute mic */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={cn(
+                'w-14 h-14 rounded-full flex items-center justify-center transition-all',
+                isMuted
+                  ? 'bg-destructive text-destructive-foreground'
+                  : 'bg-muted/80 text-foreground hover:bg-muted'
+              )}
+              onClick={() => setIsMuted(!isMuted)}
+            >
+              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{isMuted ? 'Unmute mic' : 'Mute mic'}</TooltipContent>
+        </Tooltip>
+
+        {/* Hang Up */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="w-16 h-16 rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground flex items-center justify-center transition-all shadow-lg"
+              onClick={endCall}
+            >
+              <PhoneOff className="w-7 h-7" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Hang up</TooltipContent>
+        </Tooltip>
+
+        {/* Speaker off */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={cn(
+                'w-14 h-14 rounded-full flex items-center justify-center transition-all',
+                isSpeakerOff
+                  ? 'bg-amber-500/20 text-amber-500 ring-2 ring-amber-500/40'
+                  : 'bg-muted/80 text-foreground hover:bg-muted'
+              )}
+              onClick={() => {
+                setIsSpeakerOff(!isSpeakerOff);
+                if (!isSpeakerOff) stopSpeaking();
+              }}
+            >
+              {isSpeakerOff ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{isSpeakerOff ? 'Turn speaker on' : 'Turn speaker off'}</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );
