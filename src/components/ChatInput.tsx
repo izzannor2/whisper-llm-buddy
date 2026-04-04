@@ -26,6 +26,8 @@ interface ChatInputProps {
   webSearchEnabled?: boolean;
   onWebSearchToggle?: (enabled: boolean) => void;
   onVoiceCall?: () => void;
+  availableOllamaModels?: string[];
+  onSettingsChange?: (settings: ChatSettings) => void;
 }
 
 export interface ChatInputRef {
