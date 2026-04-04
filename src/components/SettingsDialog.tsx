@@ -29,6 +29,7 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   settings: ChatSettings;
   onSave: (settings: ChatSettings) => void;
+  initialTab?: string;
 }
 
 // No placeholder models - only show what's actually available
