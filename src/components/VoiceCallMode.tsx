@@ -131,6 +131,18 @@ export function VoiceCallMode({
     return () => { endCall(); };
   }, []);
 
+  // Call timer
+  useEffect(() => {
+    if (!isInCall || !callStartTime) return;
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+      const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const s = String(elapsed % 60).padStart(2, '0');
+      setCallElapsed(`${m}:${s}`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isInCall, callStartTime]);
+
   // Auto-start
   useEffect(() => {
     if (autoStart && !isInCall && canMakeCall) {
