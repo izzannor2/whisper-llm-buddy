@@ -77,6 +77,9 @@ export function VoiceCallMode({
   const [selectedModel, setSelectedModel] = useState('gemini-flash');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [callStartTime, setCallStartTime] = useState<number | null>(null);
+  const [callElapsed, setCallElapsed] = useState('00:00');
 
   // Screen share state
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -422,6 +425,8 @@ export function VoiceCallMode({
     setIsInCall(true);
     setTranscript('');
     setLoadingMessage('');
+    setCallStartTime(Date.now());
+    setIsMinimized(false);
 
     if (!isWhisperLoaded()) {
       setCallState('loading');
