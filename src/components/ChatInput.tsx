@@ -68,7 +68,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
   function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice, selectedModel = 'llama-3.2-1b',
     onModelChange, modelLoaded = false, modeKey = 'chat', planningMode = false, onPlanningToggle,
     webSearchEnabled = false, onWebSearchToggle, onVoiceCall,
-    availableOllamaModels = [], onSettingsChange,
+    availableOllamaModels = [], llamaCppAvailable = false, onSettingsChange,
   }, ref) {
     const [settings, setSettingsState] = useState<ChatSettings>(() => loadSettings());
     const [message, setMessage] = useState('');
