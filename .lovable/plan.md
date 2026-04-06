@@ -1,34 +1,87 @@
 
 
-# Make Web Search Actually Work When Online
+# Redesign Voice Call: ChatGPT/Grok-Style with Mini Mode
 
-## Problem
-The web search IS working technically (the backend returns results), but there are two disconnected toggles:
-- **Sidebar "Online/Offline"** toggle — controls which AI backend to use
-- **Globe "Search" button** in chat input — controls whether web search runs before each message
+## What You Want
+1. Voice call UI that feels like ChatGPT or Grok — centered animated orb, clean minimal look
+2. Controls for: mute, hang up, speaker off, screen share, text input toggle
+3. Ability to "minimize" the call into a small floating window so you can go back to texting while staying on the call
 
-You have to click BOTH to get web search. Most users expect that being "Online" means web search is active.
+## Current State
+The voice call is a full-screen takeover with a 60/40 split (chat left, controls right). It has all the features (mute, hang up, speaker off, screen share, text input, PTT) but:
+- Can't minimize it — it blocks the entire screen
+- Doesn't look like ChatGPT/Grok's clean centered orb design
+- Too many controls visible at once
 
-## Fix
+## New Design
 
-### 1. Auto-enable web search when going online
-**File: `src/pages/Index.tsx`**
-- In `handleToggleOffline`, when switching TO online mode (`newOffline = false`), also set `setWebSearchEnabled(true)`
-- When switching TO offline mode (`newOffline = true`), set `setWebSearchEnabled(false)` (web search can't work without internet anyway)
-- This way the globe button automatically lights up when you go online
+```text
+┌─────────────────────────────────────────┐
+│  FULL-SCREEN CALL (default)             │
+│                                         │
+│         ● Status: Listening             │
+│                                         │
+│          ╭─────────────╮                │
+│          │   Animated   │                │
+│          │     Orb      │                │
+│          ╰─────────────╯                │
+│                                         │
+│       "Listening..." / transcript       │
+│                                         │
+│    ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐ │
+│    │ Mute│  │Hang │  │Spkr │  │Mini │ │
+│    │     │  │ Up  │  │ Off │  │  ▼  │ │
+│    └─────┘  └─────┘  └─────┘  └─────┘ │
+│         [Screen Share] [Text] [PTT]     │
+└─────────────────────────────────────────┘
 
-### 2. Disable globe button when offline
-**File: `src/components/ChatInput.tsx`**
-- Accept new prop `isOfflineMode?: boolean`
-- When `isOfflineMode` is true, disable the globe button and show tooltip "Go online to use web search"
-- Prevents confusion about why search isn't working
+When minimized → small floating pill at bottom-right:
 
-### 3. Better visual feedback when search runs
-**File: `src/pages/Index.tsx`**
-- Add a brief "Searching the web..." toast BEFORE the search runs (not just after results come back)
-- This gives immediate feedback that something is happening when the user sends a message with search enabled
+┌──────────────────────────────────┐
+│  Normal chat view visible        │
+│                                  │
+│                   ┌────────────┐ │
+│                   │ 🟢 00:42  │ │
+│                   │ [🔇][📞]  │ │
+│                   │   [▲]     │ │
+│                   └────────────┘ │
+└──────────────────────────────────┘
+```
 
-## Files to Modify
-- `src/pages/Index.tsx` — Link online toggle to web search toggle, add pre-search toast
-- `src/components/ChatInput.tsx` — Accept `isOfflineMode` prop, disable globe when offline
+## Implementation
+
+### Redesign full-screen view (ChatGPT-style)
+- Remove the 60/40 split layout — go to a single centered column
+- Large animated orb in the center (pulsing rings based on state: green=listening, purple=speaking, yellow=processing)
+- Transcript text below the orb
+- Bottom control bar: row of circular buttons — Mute, Hang Up, Speaker Off
+- Secondary row below: Screen Share, Text Input toggle, PTT toggle, **Minimize** button (chevron-down icon)
+- Chat history moves to a scrollable overlay behind the orb (subtle, transparent background) — or hidden entirely in full mode, only visible in mini mode's parent chat
+
+### Add minimize/expand toggle
+- New state `isMinimized` — when true, render a small floating pill instead of full-screen
+- **Mini pill**: fixed bottom-right corner, shows call timer, status dot, mute button, hang-up button, and expand button
+- Call continues running in the background — audio recording/playback uninterrupted
+- When minimized, the normal chat UI is fully accessible underneath
+- Click expand (chevron-up) to go back to full-screen
+
+### Call timer
+- Track `callStartTime` on call start
+- Display elapsed time in `MM:SS` format in both full and mini views
+
+### Files to Modify
+- `src/components/VoiceCallMode.tsx` — Full redesign of the render section (lines 560-837). Core logic (start/stop/listen/transcribe) stays unchanged. Changes:
+  - Add `isMinimized` state and `callStartTime` state
+  - New full-screen layout: centered column with orb, transcript, and two rows of controls
+  - New mini-mode render: small floating card with status, timer, mute, hang-up, expand
+  - Minimize button in full view, expand button in mini view
+  - Move chat history display to only show in mini-mode's parent (the Index page chat still has it via `existingMessages`)
+
+- `src/pages/Index.tsx` — Minor: ensure `showVoiceCall` doesn't hide the main chat when call is minimized. Currently `showVoiceCall` renders `<VoiceCallMode>` which takes over the whole screen. Add a prop or callback so the minimized state allows the chat to show through.
+
+## What Stays the Same
+- All voice logic (Whisper STT, TTS, silence detection, push-to-talk)
+- Screen sharing capture logic
+- Text input during call
+- All keyboard shortcuts (Space, Esc)
 
