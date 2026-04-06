@@ -1,55 +1,34 @@
 
 
-# Wire Up File Attachments (Paperclip Button)
+# Make Web Search Actually Work When Online
 
-## What's Changing
-The Paperclip button currently does nothing. We'll make it open a file picker, attach files to your message, display previews, and send images to the AI for analysis. Non-image files (zip, code, text) get their content extracted and included as text context.
+## Problem
+The web search IS working technically (the backend returns results), but there are two disconnected toggles:
+- **Sidebar "Online/Offline"** toggle — controls which AI backend to use
+- **Globe "Search" button** in chat input — controls whether web search runs before each message
 
-## How It Works
+You have to click BOTH to get web search. Most users expect that being "Online" means web search is active.
 
-### 1. ChatInput — File picker + preview strip
-**File: `src/components/ChatInput.tsx`**
-- Add a hidden `<input type="file" multiple>` triggered by the Paperclip button
-- Accept images (png, jpg, gif, webp), text files (txt, md, json, js, ts, py, css, html, xml, yaml), and archives (zip — show name only)
-- Store attachments in state as `{ name, type, dataUrl, textContent }[]`
-- Show a preview strip above the textarea: image thumbnails with X buttons, file chips for non-images
-- New prop `onSendWithAttachments` that passes `(message, attachments, isPlan)` to Index
-- On send, clear attachments
+## Fix
 
-### 2. Chat API — Multimodal content support
-**File: `src/lib/chat-api.ts`**
-- Update `ChatMessage.content` type to `string | Array<{type: string, text?: string, image_url?: {url: string}}>` 
-- When attachments include images, format the user message as a multimodal content array (text + image_url parts) — the Gemini gateway already supports this format
-- For text files, prepend file contents as context in the text part
-- For zip/binary files, just mention the filename in the text
-
-### 3. Message Display — Show images inline
-**File: `src/components/ChatMessage.tsx`**
-- Detect if `message.content` contains base64 image data URLs or `[ATTACHMENT:filename]` markers
-- Render inline image previews for image attachments
-- Show file name badges for non-image attachments
-
-### 4. Index — Pass handler through
+### 1. Auto-enable web search when going online
 **File: `src/pages/Index.tsx`**
-- Update `handleSendMessage` to accept optional attachments array
-- When attachments present, build multimodal `ChatMessage` content before sending to `sendChatMessage`
-- Store a simplified version in the conversation (image thumbnails or markers) to avoid bloating IndexedDB
+- In `handleToggleOffline`, when switching TO online mode (`newOffline = false`), also set `setWebSearchEnabled(true)`
+- When switching TO offline mode (`newOffline = true`), set `setWebSearchEnabled(false)` (web search can't work without internet anyway)
+- This way the globe button automatically lights up when you go online
 
-### 5. DB Message type update
-**File: `src/lib/db.ts`**
-- Add optional `attachments?: { name: string; type: string; dataUrl?: string }[]` field to `Message` interface
-- Existing messages without attachments continue working unchanged
+### 2. Disable globe button when offline
+**File: `src/components/ChatInput.tsx`**
+- Accept new prop `isOfflineMode?: boolean`
+- When `isOfflineMode` is true, disable the globe button and show tooltip "Go online to use web search"
+- Prevents confusion about why search isn't working
+
+### 3. Better visual feedback when search runs
+**File: `src/pages/Index.tsx`**
+- Add a brief "Searching the web..." toast BEFORE the search runs (not just after results come back)
+- This gives immediate feedback that something is happening when the user sends a message with search enabled
 
 ## Files to Modify
-- `src/components/ChatInput.tsx` — File input, preview strip, send with attachments
-- `src/lib/chat-api.ts` — Multimodal content type support
-- `src/components/ChatMessage.tsx` — Render image/file attachments inline
-- `src/pages/Index.tsx` — Wire attachment handler into send flow
-- `src/lib/db.ts` — Add attachments field to Message type
-
-## Limitations
-- Images are sent as base64 data URLs (works with Gemini vision models)
-- Large files (>5MB) will show a warning and be skipped to avoid memory issues
-- ZIP files can't be analyzed in-browser — AI gets told the filename only
-- Text files get their full content injected as context for AI analysis
+- `src/pages/Index.tsx` — Link online toggle to web search toggle, add pre-search toast
+- `src/components/ChatInput.tsx` — Accept `isOfflineMode` prop, disable globe when offline
 
