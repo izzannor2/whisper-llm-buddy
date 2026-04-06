@@ -39,10 +39,9 @@ interface VoiceCallModeProps {
   disabled?: boolean;
   onEnd?: () => void;
   autoStart?: boolean;
-  /** Existing conversation messages to display in the chat panel */
   existingMessages?: VoiceMessage[];
-  /** Callback when a new voice message pair is created so parent can persist */
   onNewMessages?: (userMsg: VoiceMessage, assistantMsg: VoiceMessage) => void;
+  onMinimizedChange?: (minimized: boolean) => void;
 }
 
 type CallState = 'idle' | 'loading' | 'listening' | 'processing' | 'speaking' | 'waiting';

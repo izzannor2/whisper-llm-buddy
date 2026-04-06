@@ -619,8 +619,9 @@ export default function Index() {
           onSendMessage={async (content, _screenshot) => handleVoiceCallMessage(content)}
           ttsVoice={settings.ttsVoice}
           ttsRate={settings.ttsRate}
-          onEnd={() => setShowVoiceCall(false)}
+          onEnd={() => { setShowVoiceCall(false); setVoiceCallMinimized(false); }}
           autoStart
+          onMinimizedChange={setVoiceCallMinimized}
           existingMessages={currentConversation?.messages
             .filter(m => m.role !== 'system')
             .map(m => ({
