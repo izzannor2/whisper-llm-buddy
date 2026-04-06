@@ -56,6 +56,7 @@ interface ChatInputProps {
   onVoiceCall?: () => void;
   availableOllamaModels?: string[];
   llamaCppAvailable?: boolean;
+  llamaCppModels?: string[];
   onSettingsChange?: (settings: ChatSettings) => void;
 }
 
@@ -96,7 +97,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
   function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice, selectedModel = 'llama-3.2-1b',
     onModelChange, modelLoaded = false, modeKey = 'chat', planningMode = false, onPlanningToggle,
     webSearchEnabled = false, onWebSearchToggle, isOfflineMode = false, onVoiceCall,
-    availableOllamaModels = [], llamaCppAvailable = false, onSettingsChange,
+    availableOllamaModels = [], llamaCppAvailable = false, llamaCppModels = [], onSettingsChange,
   }, ref) {
     const [settings, setSettingsState] = useState<ChatSettings>(() => loadSettings());
     const [message, setMessage] = useState('');
@@ -114,12 +115,30 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
     const getBackendDisplayName = () => {
       switch (settings.backend) {
-        case 'cloud': return 'Cloud';
-        case 'ollama': return settings.ollamaModel || 'Ollama';
-        case 'local': return 'Llama.cpp (local)';
-        case 'openai': return settings.model || 'OpenAI';
-        case 'anthropic': return settings.model || 'Anthropic';
-        case 'google': return settings.model || 'Google';
+        case 'cloud': {
+          const cm = CLOUD_MODELS.find(m => m.id === settings.model);
+          return cm ? cm.name : 'Cloud';
+        }
+        case 'ollama': return settings.ollamaModel ? `Ollama: ${settings.ollamaModel}` : 'Ollama';
+        case 'local': {
+          if (llamaCppModels.length > 0) {
+            const selected = settings.model || llamaCppModels[0];
+            return `Llama: ${selected}`;
+          }
+          return 'Llama.cpp (local)';
+        }
+        case 'openai': {
+          const om = OPENAI_MODELS.find(m => m.id === settings.model);
+          return om ? om.name : 'OpenAI';
+        }
+        case 'anthropic': {
+          const am = ANTHROPIC_MODELS.find(m => m.id === settings.model);
+          return am ? am.name : 'Anthropic';
+        }
+        case 'google': {
+          const gm = GOOGLE_MODELS.find(m => m.id === settings.model);
+          return gm ? gm.name : 'Google';
+        }
         case 'huggingface': return settings.huggingfaceModel?.split('/').pop() || 'HuggingFace';
         default: return settings.backend;
       }
@@ -357,14 +376,16 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                       ))}
                     </>
                   )}
-                  {llamaCppAvailable && (
+                  {(llamaCppAvailable || llamaCppModels.length > 0) && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuLabel className="text-xs text-muted-foreground font-mono">LLAMA.CPP</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => switchBackendModel('local', 'local')}
-                        className={cn("font-mono text-sm", settings.backend === 'local' && "bg-accent/10")}>
-                        Local Model (port 8081)
-                      </DropdownMenuItem>
+                      {(llamaCppModels.length > 0 ? llamaCppModels : ['local-model']).map(m => (
+                        <DropdownMenuItem key={m} onClick={() => switchBackendModel('local', m)}
+                          className={cn("font-mono text-sm", settings.backend === 'local' && (settings.model === m || (!settings.model && m === llamaCppModels[0])) && "bg-accent/10")}>
+                          {m}
+                        </DropdownMenuItem>
+                      ))}
                     </>
                   )}
                   {settings.apiKeys?.openai && (

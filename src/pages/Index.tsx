@@ -71,6 +71,7 @@ export default function Index() {
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [llamaCppAvailable, setLlamaCppAvailable] = useState(false);
+  const [llamaCppModels, setLlamaCppModels] = useState<string[]>([]);
   const [currentAgent, setCurrentAgent] = useState<AgentType | undefined>();
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
@@ -109,8 +110,21 @@ export default function Index() {
           const tid2 = setTimeout(() => ctrl2.abort(), 3000);
           const res2 = await fetch('http://127.0.0.1:8081/health', { signal: ctrl2.signal });
           clearTimeout(tid2);
-          setLlamaCppAvailable(res2.ok);
-        } catch { setLlamaCppAvailable(false); }
+          if (res2.ok) {
+            setLlamaCppAvailable(true);
+            try {
+              const ctrl3 = new AbortController();
+              const tid3 = setTimeout(() => ctrl3.abort(), 3000);
+              const res3 = await fetch('http://127.0.0.1:8081/v1/models', { signal: ctrl3.signal });
+              clearTimeout(tid3);
+              if (res3.ok) {
+                const mdata = await res3.json();
+                const names = (mdata.data || []).map((m: any) => m.id || m.object || 'local-model');
+                setLlamaCppModels(names.length > 0 ? names : ['local-model']);
+              }
+            } catch { setLlamaCppModels(['local-model']); }
+          }
+        } catch { setLlamaCppAvailable(false); setLlamaCppModels([]); }
       }
     };
     init();
@@ -585,6 +599,7 @@ export default function Index() {
           onVoiceCall={() => setShowVoiceCall(true)}
           availableOllamaModels={ollamaModels}
           llamaCppAvailable={llamaCppAvailable}
+          llamaCppModels={llamaCppModels}
           onSettingsChange={(s) => { setSettings(s); }}
         />
       </div>
