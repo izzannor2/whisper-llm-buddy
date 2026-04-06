@@ -506,7 +506,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                   <Square className="w-4 h-4" />
                 </Button>
               ) : (
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-muted" onClick={handleSend} disabled={!message.trim()}>
+                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-muted" onClick={handleSend} disabled={!message.trim() && attachments.length === 0}>
                   <Send className="w-4 h-4" />
                 </Button>
               )}
