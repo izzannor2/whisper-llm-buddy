@@ -1,30 +1,30 @@
 
 
-# Fix: SWC Native Binding Error on Node.js 24
+# Fix Model Dropdown to Show Correct Models Per Backend
 
 ## Problem
-You're running **Node.js v24.14.1**, but the `@swc/core` package (used by `@vitejs/plugin-react-swc`) doesn't have prebuilt native binaries for Node 24 yet. This causes the "Failed to load native binding" crash on startup.
+The model dropdown button always displays "Cloud" even after switching to Ollama or Llama.cpp. When you select an Ollama model, the button text doesn't update to show the model name. Llama.cpp only shows a generic "Local Model" instead of the actual loaded GGUF model name.
 
-## Two Options
+## Root Causes
+1. `getBackendDisplayName()` returns just `"Cloud"` for the cloud backend — doesn't show which cloud model is selected (e.g., "Gemini 2.5 Flash")
+2. Llama.cpp section hardcodes "Local Model (port 8081)" instead of fetching the actual model name from the server's `/v1/models` endpoint
+3. The display name function works correctly for Ollama (`settings.ollamaModel`), but if the settings state isn't persisting the `ollamaModel` field properly on switch, it could still show "Ollama"
 
-### Option A: Downgrade Node.js to v20 LTS (Recommended)
-Install Node.js 20 LTS instead. This is the version the project was built for (per project standards). Everything will work immediately.
-- Download from: https://nodejs.org/en/download/ (pick "20.x LTS")
-- Or via winget: `winget install OpenJS.NodeJS.LTS --version 20.18.0`
-- Then delete `node_modules` and run `npm install` again
+## Fixes
 
-### Option B: Switch from SWC to Babel (code change)
-If you want to keep Node 24, we swap the Vite React plugin from SWC to standard Babel:
+### 1. Show actual model name in button text for all backends
+**File: `src/components/ChatInput.tsx`** — Update `getBackendDisplayName()`:
+- `cloud`: Look up `settings.model` in `CLOUD_MODELS` array and return its display name (e.g., "Gemini 2.5 Flash"), fallback to "Cloud"
+- `local`: Show the actual llama.cpp model name from a new `llamaCppModels` prop instead of hardcoded text
+- `ollama`: Already correct, but add the "Ollama:" prefix so it's clear which backend
 
-**File: `package.json`**
-- Remove `@vitejs/plugin-react-swc` from devDependencies
-- Add `@vitejs/plugin-react` instead
+### 2. Fetch actual llama.cpp model names from `/v1/models`
+**File: `src/pages/Index.tsx`** — In the init scan, when llama.cpp health check passes, also fetch `http://127.0.0.1:8081/v1/models` to get the list of loaded model names. Store them in a new `llamaCppModels` state array and pass to ChatInput.
 
-**File: `vite.config.ts`**
-- Change import from `@vitejs/plugin-react-swc` to `@vitejs/plugin-react`
+### 3. Show llama.cpp models individually in dropdown
+**File: `src/components/ChatInput.tsx`** — Replace the single hardcoded "Local Model (port 8081)" entry with a dynamic list from the new `llamaCppModels` prop. Each model gets its own selectable row, just like Ollama models.
 
-This is a 2-line change. Build times will be slightly slower but everything works on Node 24.
-
-## Recommendation
-**Option A** is best — Node 20 LTS is the project standard and avoids any compatibility surprises with other packages too. Option B is the fallback if you specifically need Node 24.
+### Files to Modify
+- `src/pages/Index.tsx` — Add `llamaCppModels` state, fetch from `/v1/models` endpoint during init scan, pass as prop
+- `src/components/ChatInput.tsx` — Accept `llamaCppModels` prop, update `getBackendDisplayName()` to show actual model names for all backends, render llama.cpp models dynamically
 
