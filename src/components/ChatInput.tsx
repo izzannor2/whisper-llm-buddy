@@ -52,6 +52,7 @@ interface ChatInputProps {
   onPlanningToggle?: (active: boolean) => void;
   webSearchEnabled?: boolean;
   onWebSearchToggle?: (enabled: boolean) => void;
+  isOfflineMode?: boolean;
   onVoiceCall?: () => void;
   availableOllamaModels?: string[];
   llamaCppAvailable?: boolean;
@@ -448,10 +449,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                 variant={webSearchEnabled ? "default" : "ghost"}
                 size="sm"
                 className={cn("h-8 gap-1.5 text-xs font-medium",
-                  webSearchEnabled ? "bg-cyan-500/90 hover:bg-cyan-500 text-white" : "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                  webSearchEnabled ? "bg-cyan-500/90 hover:bg-cyan-500 text-white" : "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10",
+                  isOfflineMode && "opacity-50 cursor-not-allowed"
                 )}
-                onClick={() => onWebSearchToggle?.(!webSearchEnabled)}
-                title={webSearchEnabled ? "Web search ON — queries will search the web first" : "Toggle web search"}
+                onClick={() => !isOfflineMode && onWebSearchToggle?.(!webSearchEnabled)}
+                disabled={isOfflineMode}
+                title={isOfflineMode ? "Go online to use web search" : webSearchEnabled ? "Web search ON — queries will search the web first" : "Toggle web search"}
               >
                 <Globe className="w-3.5 h-3.5" />
                 {webSearchEnabled ? 'Search On' : 'Search'}

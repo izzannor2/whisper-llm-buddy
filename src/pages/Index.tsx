@@ -182,7 +182,9 @@ export default function Index() {
     const s = { ...settings, offlineMode: newOffline };
     setSettings(s);
     saveSettings(s);
-    toast({ title: newOffline ? 'Offline mode — local backends only' : 'Online mode restored' });
+    // Auto-sync web search with online/offline
+    setWebSearchEnabled(!newOffline);
+    toast({ title: newOffline ? 'Offline mode — local backends only' : 'Online mode — web search enabled' });
   };
 
   const handleKillSwitch = () => {
@@ -336,6 +338,7 @@ export default function Index() {
       let searchContext = '';
       if (webSearchEnabled) {
         try {
+          toast({ title: '🔍 Searching the web…' });
           const searchResult = await searchWeb(content);
           if (searchResult.success && searchResult.results && searchResult.results.length > 0) {
             searchContext = '\n\n' + formatSearchContext(searchResult.results);
