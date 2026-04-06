@@ -1,10 +1,17 @@
 // IndexedDB wrapper for chat history persistence
 
+export interface MessageAttachment {
+  name: string;
+  type: string;
+  dataUrl?: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
+  attachments?: MessageAttachment[];
 }
 
 export interface Conversation {

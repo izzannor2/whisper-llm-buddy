@@ -72,9 +72,13 @@ export interface ChatSettings {
   openClawMurmur: boolean;
 }
 
+export type MultimodalContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | MultimodalContentPart[];
 }
 
 export const DEFAULT_API_KEYS: APIKeys = {

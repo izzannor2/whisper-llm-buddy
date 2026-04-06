@@ -335,7 +335,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                onClick={() => fileInputRef.current?.click()} title="Attach files">
                 <Paperclip className="w-4 h-4" />
               </Button>
 
