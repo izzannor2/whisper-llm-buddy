@@ -39,7 +39,7 @@ export interface Attachment {
   textContent?: string;
 }
 
-interface ChatInputProps {
+export interface ChatInputProps {
   onSend: (message: string, isPlan?: boolean, attachments?: Attachment[]) => void;
   isLoading: boolean;
   onStop?: () => void;
