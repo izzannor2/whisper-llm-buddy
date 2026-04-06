@@ -34,7 +34,9 @@ import {
 } from '@/lib/db';
 import {
   ChatSettings, loadSettings, saveSettings, sendChatMessage,
+  MultimodalContentPart,
 } from '@/lib/chat-api';
+import type { Attachment } from '@/components/ChatInput';
 import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { onOpenClawEvent } from '@/lib/openclaw-bridge';
 import { cn } from '@/lib/utils';
@@ -207,12 +209,12 @@ export default function Index() {
     toast({ title: 'Chat deleted' });
   };
 
-  const handleSendMessage = async (content: string, isPlan?: boolean) => {
+  const handleSendMessage = async (content: string, isPlan?: boolean, attachments?: Attachment[]) => {
     // If autonomous mode is on, run the autonomous loop
     if (autonomousMode && !isPlan) {
       return handleAutonomousMessage(content);
     }
-    return sendMessageAndGetResponse(content, isPlan);
+    return sendMessageAndGetResponse(content, isPlan, attachments);
   };
   const handleVoiceCallMessage = async (content: string): Promise<string> => sendMessageAndGetResponse(content);
 
@@ -265,8 +267,10 @@ export default function Index() {
     return fullResponse;
   };
 
-  const sendMessageAndGetResponse = async (content: string, isPlan?: boolean): Promise<string> => {
-    const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
+  const sendMessageAndGetResponse = async (content: string, isPlan?: boolean, attachments?: Attachment[]): Promise<string> => {
+    // Build message attachments for storage
+    const messageAttachments = attachments?.map(a => ({ name: a.name, type: a.type, dataUrl: a.dataUrl }));
+    const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now(), attachments: messageAttachments };
     let conv = currentConversation;
     if (!conv) {
       conv = { id: generateId(), title: content.slice(0, 50) + (content.length > 50 ? '...' : ''), messages: [], createdAt: Date.now(), updatedAt: Date.now(), model: settings.model, modeKey: currentModeKey };
