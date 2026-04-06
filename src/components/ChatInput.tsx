@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2, Lightbulb, Globe, Phone } from 'lucide-react';
+import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2, Lightbulb, Globe, Phone, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -12,8 +12,17 @@ import { isWhisperLoaded, loadWhisperModel, transcribeAudio, getSelectedWhisperM
 import { loadSettings, saveSettings, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, ChatSettings } from '@/lib/chat-api';
 import { getModeTheme } from '@/lib/mode-themes';
 
+import { MessageAttachment } from '@/lib/db';
+
+export interface Attachment {
+  name: string;
+  type: string;
+  dataUrl?: string;
+  textContent?: string;
+}
+
 interface ChatInputProps {
-  onSend: (message: string, isPlan?: boolean) => void;
+  onSend: (message: string, isPlan?: boolean, attachments?: Attachment[]) => void;
   isLoading: boolean;
   onStop?: () => void;
   autoSendOnVoice?: boolean;
@@ -79,6 +88,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [attachments, setAttachments] = useState<Attachment[]>([]);
 
     const [whisperAvailable, setWhisperAvailable] = useState(() => isVoiceReady());
 
@@ -163,7 +174,46 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       setIsRecording(false);
     }, []);
 
-    const handleSend = () => { if (message.trim() && !isLoading) { onSend(message.trim(), planningMode); setMessage(''); } };
+    const handleSend = () => {
+      if ((message.trim() || attachments.length > 0) && !isLoading) {
+        onSend(message.trim(), planningMode, attachments.length > 0 ? attachments : undefined);
+        setMessage('');
+        setAttachments([]);
+      }
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+      e.target.value = '';
+
+      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+      const newAttachments: Attachment[] = [];
+
+      for (const file of files) {
+        if (file.size > MAX_SIZE) {
+          toast.error(`${file.name} is too large (max 5MB)`);
+          continue;
+        }
+
+        const isImage = file.type.startsWith('image/');
+        const isText = /\.(txt|md|json|js|jsx|ts|tsx|py|css|html|xml|yaml|yml|csv|log|env|toml|sh|bat|rs|go|java|c|cpp|h|hpp|rb|php|sql|r|swift|kt)$/i.test(file.name);
+
+        if (isImage) {
+          const dataUrl = await readFileAsDataUrl(file);
+          newAttachments.push({ name: file.name, type: file.type, dataUrl });
+        } else if (isText) {
+          const textContent = await readFileAsText(file);
+          newAttachments.push({ name: file.name, type: file.type, textContent });
+        } else {
+          // Binary/archive — just store filename
+          newAttachments.push({ name: file.name, type: file.type });
+        }
+      }
+      setAttachments(prev => [...prev, ...newAttachments]);
+    };
+
+    const removeAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
     const showPlanButton = modeKey === 'app-builder' || modeKey === 'ai-improvement' || modeKey === 'all-in-one';
 
     const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
