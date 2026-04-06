@@ -61,6 +61,7 @@ export default function Index() {
   const [openClawOpen, setOpenClawOpen] = useState(false);
   const [planningMode, setPlanningMode] = useState(false);
   const [showVoiceCall, setShowVoiceCall] = useState(false);
+  const [voiceCallMinimized, setVoiceCallMinimized] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [memoryPanelOpen, setMemoryPanelOpen] = useState(false);
   const [autoBuildOpen, setAutoBuildOpen] = useState(false);
@@ -618,8 +619,9 @@ export default function Index() {
           onSendMessage={async (content, _screenshot) => handleVoiceCallMessage(content)}
           ttsVoice={settings.ttsVoice}
           ttsRate={settings.ttsRate}
-          onEnd={() => setShowVoiceCall(false)}
+          onEnd={() => { setShowVoiceCall(false); setVoiceCallMinimized(false); }}
           autoStart
+          onMinimizedChange={setVoiceCallMinimized}
           existingMessages={currentConversation?.messages
             .filter(m => m.role !== 'system')
             .map(m => ({

@@ -39,10 +39,9 @@ interface VoiceCallModeProps {
   disabled?: boolean;
   onEnd?: () => void;
   autoStart?: boolean;
-  /** Existing conversation messages to display in the chat panel */
   existingMessages?: VoiceMessage[];
-  /** Callback when a new voice message pair is created so parent can persist */
   onNewMessages?: (userMsg: VoiceMessage, assistantMsg: VoiceMessage) => void;
+  onMinimizedChange?: (minimized: boolean) => void;
 }
 
 type CallState = 'idle' | 'loading' | 'listening' | 'processing' | 'speaking' | 'waiting';
@@ -65,6 +64,7 @@ export function VoiceCallMode({
   autoStart = false,
   existingMessages = [],
   onNewMessages,
+  onMinimizedChange,
 }: VoiceCallModeProps) {
   const [isInCall, setIsInCall] = useState(false);
   const [callState, setCallState] = useState<CallState>('idle');
@@ -77,6 +77,12 @@ export function VoiceCallMode({
   const [selectedModel, setSelectedModel] = useState('gemini-flash');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [callStartTime, setCallStartTime] = useState<number | null>(null);
+  const [callElapsed, setCallElapsed] = useState('00:00');
+
+  // Notify parent of minimize state changes
+  useEffect(() => { onMinimizedChange?.(isMinimized); }, [isMinimized, onMinimizedChange]);
 
   // Screen share state
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -127,6 +133,18 @@ export function VoiceCallMode({
   useEffect(() => {
     return () => { endCall(); };
   }, []);
+
+  // Call timer
+  useEffect(() => {
+    if (!isInCall || !callStartTime) return;
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+      const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const s = String(elapsed % 60).padStart(2, '0');
+      setCallElapsed(`${m}:${s}`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isInCall, callStartTime]);
 
   // Auto-start
   useEffect(() => {
@@ -422,6 +440,8 @@ export function VoiceCallMode({
     setIsInCall(true);
     setTranscript('');
     setLoadingMessage('');
+    setCallStartTime(Date.now());
+    setIsMinimized(false);
 
     if (!isWhisperLoaded()) {
       setCallState('loading');
@@ -571,26 +591,71 @@ export function VoiceCallMode({
   }
 
   /* ---------------------------------------------------------------- */
-  /*  Render: Active Call — Split Screen                               */
+  /*  Orb colors based on state                                       */
   /* ---------------------------------------------------------------- */
-  const stateColor = callState === 'listening' ? 'from-green-500/20 to-green-600/10'
-    : callState === 'speaking' ? 'from-purple-500/20 to-purple-600/10'
-    : callState === 'processing' ? 'from-yellow-500/20 to-yellow-600/10'
-    : 'from-muted/20 to-muted/10';
+  const orbConfig = {
+    listening: { bg: 'bg-green-500/20', ring: 'ring-green-500/40', pulse: 'shadow-[0_0_60px_rgba(34,197,94,0.4)]', icon: <Mic className="w-10 h-10 text-green-400" />, label: pushToTalk ? 'Recording...' : 'Listening...' },
+    speaking: { bg: 'bg-purple-500/20', ring: 'ring-purple-500/40', pulse: 'shadow-[0_0_60px_rgba(168,85,247,0.4)]', icon: <Volume2 className="w-10 h-10 text-purple-400" />, label: 'Speaking...' },
+    processing: { bg: 'bg-yellow-500/20', ring: 'ring-yellow-500/40', pulse: 'shadow-[0_0_60px_rgba(234,179,8,0.3)]', icon: <Loader2 className="w-10 h-10 text-yellow-400 animate-spin" />, label: 'Thinking...' },
+    loading: { bg: 'bg-blue-500/20', ring: 'ring-blue-500/40', pulse: '', icon: <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />, label: 'Connecting...' },
+    waiting: { bg: 'bg-muted/40', ring: 'ring-muted-foreground/20', pulse: '', icon: <Hand className="w-10 h-10 text-muted-foreground" />, label: 'Ready' },
+    idle: { bg: 'bg-muted/40', ring: 'ring-muted-foreground/20', pulse: '', icon: <Phone className="w-10 h-10 text-muted-foreground" />, label: 'Idle' },
+  };
+  const orb = orbConfig[callState] || orbConfig.idle;
 
+  /* ---------------------------------------------------------------- */
+  /*  Render: Minimized Pill                                           */
+  /* ---------------------------------------------------------------- */
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-card/95 backdrop-blur-xl border border-border shadow-2xl animate-scale-in">
+        {/* Status dot */}
+        <div className={cn('w-3 h-3 rounded-full', callState === 'listening' ? 'bg-green-500 animate-pulse' : callState === 'speaking' ? 'bg-purple-500 animate-pulse' : callState === 'processing' ? 'bg-yellow-500 animate-pulse' : 'bg-muted-foreground')} />
+        
+        {/* Timer */}
+        <span className="text-sm font-mono text-foreground tabular-nums">{callElapsed}</span>
+        
+        {/* Mute */}
+        <button
+          className={cn('w-9 h-9 rounded-full flex items-center justify-center transition-all', isMuted ? 'bg-destructive text-destructive-foreground' : 'bg-muted/80 text-foreground hover:bg-muted')}
+          onClick={() => setIsMuted(!isMuted)}
+        >
+          {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+        </button>
+        
+        {/* Hang up */}
+        <button
+          className="w-9 h-9 rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground flex items-center justify-center transition-all"
+          onClick={endCall}
+        >
+          <PhoneOff className="w-4 h-4" />
+        </button>
+        
+        {/* Expand */}
+        <button
+          className="w-9 h-9 rounded-full bg-muted/80 text-foreground hover:bg-muted flex items-center justify-center transition-all"
+          onClick={() => setIsMinimized(false)}
+        >
+          <ChevronDown className="w-4 h-4 rotate-180" />
+        </button>
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  Render: Full-Screen ChatGPT/Grok Style                          */
+  /* ---------------------------------------------------------------- */
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background/98 backdrop-blur-md">
-      {/* ── Top Toolbar (secondary controls only) ── */}
-      <div className="h-12 flex items-center justify-between px-4 border-b border-border/50 bg-background/80 backdrop-blur shrink-0">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/98 backdrop-blur-md">
+      {/* Top bar: timer + model + secondary controls */}
+      <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-6 bg-background/60 backdrop-blur border-b border-border/30">
         <div className="flex items-center gap-3">
-          <div className={cn('w-2 h-2 rounded-full', callState === 'listening' ? 'bg-green-500 animate-pulse' : callState === 'speaking' ? 'bg-purple-500 animate-pulse' : callState === 'processing' ? 'bg-yellow-500 animate-pulse' : 'bg-muted-foreground')} />
-          <span className="text-sm font-medium text-foreground">
-            {callState === 'loading' ? 'Connecting...' : callState === 'listening' ? 'Listening' : callState === 'processing' ? 'Thinking' : callState === 'speaking' ? 'Speaking' : 'Ready'}
-          </span>
+          <div className={cn('w-2.5 h-2.5 rounded-full', callState === 'listening' ? 'bg-green-500 animate-pulse' : callState === 'speaking' ? 'bg-purple-500 animate-pulse' : callState === 'processing' ? 'bg-yellow-500 animate-pulse' : 'bg-muted-foreground')} />
+          <span className="text-sm font-medium text-foreground">{orb.label}</span>
+          <span className="text-sm font-mono text-muted-foreground tabular-nums">{callElapsed}</span>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Model selector */}
           <Select value={selectedModel} onValueChange={setSelectedModel}>
             <SelectTrigger className="w-36 h-8 text-xs bg-muted/30 border-border/50">
               <SelectValue />
@@ -602,7 +667,6 @@ export function VoiceCallMode({
             </SelectContent>
           </Select>
 
-          {/* Screen share */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -613,16 +677,13 @@ export function VoiceCallMode({
                 {isScreenSharing ? <MonitorOff className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{isScreenSharing ? 'Stop screen share' : 'Share screen (vision models)'}</TooltipContent>
+            <TooltipContent>{isScreenSharing ? 'Stop screen share' : 'Share screen'}</TooltipContent>
           </Tooltip>
 
-          {/* Text input toggle */}
-          <Button variant={showTextInput ? 'default' : 'ghost'} size="icon" className="h-8 w-8"
-            onClick={() => setShowTextInput(!showTextInput)}>
+          <Button variant={showTextInput ? 'default' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setShowTextInput(!showTextInput)}>
             <MessageSquare className="w-4 h-4" />
           </Button>
 
-          {/* Push-to-talk */}
           <div className="flex items-center gap-1.5 bg-muted/30 rounded-full px-3 py-1 border border-border/30">
             <Hand className="w-3 h-3 text-muted-foreground" />
             <Label htmlFor="ptt-toggle" className="text-xs text-muted-foreground cursor-pointer">PTT</Label>
@@ -631,180 +692,114 @@ export function VoiceCallMode({
         </div>
       </div>
 
-      {/* ── Main Split Layout ── */}
-      <div className="flex-1 flex min-h-0">
-        {/* Left: Chat History (60%) */}
-        <div className="w-[60%] flex flex-col border-r border-border/30">
-          <ScrollArea className="flex-1">
-            <div className="p-4 space-y-3">
-              {callMessages.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Phone className="w-8 h-8 mx-auto mb-3 opacity-40" />
-                  <p className="text-sm">Start speaking — your conversation will appear here</p>
-                </div>
-              )}
-              {callMessages.map((msg) => (
-                <div key={msg.id} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
-                  <div className={cn(
-                    'max-w-[80%] rounded-2xl px-4 py-2.5 text-sm',
-                    msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground rounded-br-md'
-                      : 'bg-muted text-foreground rounded-bl-md'
-                  )}>
-                    {msg.isVoice && (
-                      <span className="inline-flex items-center gap-1 text-[10px] opacity-60 mb-1">
-                        <Mic className="w-2.5 h-2.5" /> voice
-                      </span>
-                    )}
-                    {msg.screenshot && (
-                      <div className="mb-2">
-                        <img src={msg.screenshot} alt="Screen capture" className="rounded-lg max-h-32 w-auto border border-border/20" />
-                      </div>
-                    )}
-                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                  </div>
-                </div>
-              ))}
-              {callState === 'processing' && (
-                <div className="flex justify-start">
-                  <div className="bg-muted text-foreground rounded-2xl rounded-bl-md px-4 py-3">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={chatBottomRef} />
-            </div>
-          </ScrollArea>
-
-          {/* Text input (optional) */}
-          {showTextInput && (
-            <div className="p-3 border-t border-border/30">
-              <form onSubmit={(e) => { e.preventDefault(); handleSendText(); }} className="flex gap-2">
-                <Input
-                  value={textInput} onChange={(e) => setTextInput(e.target.value)}
-                  placeholder="Type a message..."
-                  className="flex-1 h-9 text-sm bg-muted/30 border-border/50"
-                />
-                <Button type="submit" size="icon" className="h-9 w-9" disabled={!textInput.trim()}>
-                  <Send className="w-4 h-4" />
-                </Button>
-              </form>
-            </div>
+      {/* Center: Animated Orb */}
+      <div className="flex flex-col items-center justify-center flex-1 pt-14 pb-48 gap-6">
+        {/* Pulsing rings behind orb */}
+        <div className="relative">
+          {(callState === 'listening' || callState === 'speaking') && (
+            <>
+              <div className={cn('absolute inset-0 rounded-full animate-ping opacity-20', callState === 'listening' ? 'bg-green-500' : 'bg-purple-500')} style={{ animationDuration: '2s', transform: 'scale(1.4)' }} />
+              <div className={cn('absolute inset-0 rounded-full animate-ping opacity-10', callState === 'listening' ? 'bg-green-500' : 'bg-purple-500')} style={{ animationDuration: '3s', transform: 'scale(1.8)' }} />
+            </>
           )}
+          <div className={cn(
+            'w-36 h-36 rounded-full flex items-center justify-center transition-all duration-500 ring-4',
+            orb.bg, orb.ring, orb.pulse,
+          )}>
+            {orb.icon}
+          </div>
         </div>
 
-        {/* Right: Controls (40%) */}
-        <div className={cn('w-[40%] flex flex-col items-center justify-center p-6 bg-gradient-to-b', stateColor)}>
-          {/* Waveform canvas */}
-          <canvas ref={canvasRef} width={280} height={80}
-            className="mb-6 rounded-xl opacity-80" />
+        {/* Waveform canvas */}
+        <canvas ref={canvasRef} width={320} height={60} className="rounded-xl opacity-70" />
 
-          {/* Status orb */}
-          <div className={cn(
-            'w-28 h-28 rounded-full flex items-center justify-center mb-6 transition-all shadow-2xl',
-            callState === 'loading' && 'bg-blue-500/20 border-2 border-blue-500/30',
-            callState === 'listening' && 'bg-green-500/20 ring-4 ring-green-500/30 animate-pulse',
-            callState === 'processing' && 'bg-yellow-500/20 border-2 border-yellow-500/30',
-            callState === 'speaking' && 'bg-purple-500/20 ring-4 ring-purple-500/30 animate-pulse',
-            callState === 'waiting' && 'bg-muted/50 border-2 border-dashed border-muted-foreground/30',
-          )}>
-            {callState === 'loading' && <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />}
-            {callState === 'listening' && <Mic className="w-10 h-10 text-green-500" />}
-            {callState === 'processing' && <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />}
-            {callState === 'speaking' && <Volume2 className="w-10 h-10 text-purple-500" />}
-            {callState === 'waiting' && <Hand className="w-10 h-10 text-muted-foreground" />}
-          </div>
-
-          {/* Status text */}
-          <p className="text-lg font-medium mb-1">
-            {callState === 'loading' ? 'Getting Ready...' : callState === 'listening' ? (pushToTalk ? 'Recording...' : 'Listening...') : callState === 'processing' ? 'Thinking...' : callState === 'speaking' ? 'Speaking...' : 'Ready'}
-          </p>
-          <p className="text-xs text-muted-foreground text-center mb-6">
+        {/* Status text */}
+        <div className="text-center">
+          <p className="text-xl font-semibold text-foreground">{orb.label}</p>
+          <p className="text-sm text-muted-foreground mt-1">
             {callState === 'loading' && loadingMessage}
-            {callState === 'listening' && (pushToTalk ? 'Release Space when done' : 'Speak now — Space to send early')}
+            {callState === 'listening' && (pushToTalk ? 'Release Space when done' : 'Speak naturally — pauses send')}
             {callState === 'processing' && 'Processing your voice...'}
-            {callState === 'speaking' && 'Space to interrupt • Esc to end'}
+            {callState === 'speaking' && 'Space to interrupt'}
             {callState === 'waiting' && (isMuted ? 'Mic is muted' : 'Hold Space to speak')}
           </p>
+        </div>
 
-          {/* Current transcript */}
-          {transcript && (
-            <div className="max-w-xs w-full mb-4 p-3 rounded-xl bg-muted/40 border border-border/30 backdrop-blur">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">You said</p>
-              <p className="text-sm text-foreground">{transcript}</p>
-            </div>
-          )}
-
-          {/* Screen share preview */}
-          {isScreenSharing && screenPreview && (
-            <div className="max-w-xs w-full mb-4">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Screen Preview</p>
-              <img src={screenPreview} alt="Screen" className="rounded-lg border border-border/30 w-full" />
-            </div>
-          )}
-
-          {/* Call action buttons (contextual) */}
-          <div className="flex gap-3 mt-2">
-            {callState === 'listening' && !pushToTalk && (
-              <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5" onClick={stopListeningManually}>
-                <MicOff className="w-4 h-4" /> Done Speaking
-              </Button>
-            )}
-            {callState === 'waiting' && pushToTalk && !isMuted && (
-              <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5"
-                onMouseDown={() => { setIsHoldingSpace(true); startListening(); }}
-                onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}
-                onMouseLeave={() => { if (isHoldingSpace) { setIsHoldingSpace(false); stopListeningManually(); } }}>
-                <Mic className="w-4 h-4" /> Hold to Talk
-              </Button>
-            )}
-            {callState === 'listening' && pushToTalk && (
-              <Button variant="default" size="sm" className="rounded-full px-5 gap-1.5 bg-green-600 hover:bg-green-700 text-primary-foreground"
-                onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}>
-                <Mic className="w-4 h-4 animate-pulse" /> Recording...
-              </Button>
-            )}
+        {/* Transcript preview */}
+        {transcript && (
+          <div className="max-w-sm w-full p-3 rounded-xl bg-muted/30 border border-border/30 backdrop-blur text-center">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">You said</p>
+            <p className="text-sm text-foreground">{transcript}</p>
           </div>
+        )}
 
-          {/* Footer */}
-          <p className="mt-auto pt-4 text-[10px] text-muted-foreground/60 text-center">
-            🔒 Offline STT (Whisper) + Browser TTS<br />
-            {pushToTalk ? 'Hold Space: record • Esc: end' : 'Space: toggle • Esc: end'}
-          </p>
+        {/* Screen share preview */}
+        {isScreenSharing && screenPreview && (
+          <div className="max-w-xs">
+            <img src={screenPreview} alt="Screen" className="rounded-lg border border-border/30 w-full max-h-28 object-cover" />
+          </div>
+        )}
+
+        {/* PTT contextual button */}
+        <div className="flex gap-3">
+          {callState === 'listening' && !pushToTalk && (
+            <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5" onClick={stopListeningManually}>
+              <MicOff className="w-4 h-4" /> Done Speaking
+            </Button>
+          )}
+          {callState === 'waiting' && pushToTalk && !isMuted && (
+            <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5"
+              onMouseDown={() => { setIsHoldingSpace(true); startListening(); }}
+              onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}
+              onMouseLeave={() => { if (isHoldingSpace) { setIsHoldingSpace(false); stopListeningManually(); } }}>
+              <Mic className="w-4 h-4" /> Hold to Talk
+            </Button>
+          )}
+          {callState === 'listening' && pushToTalk && (
+            <Button variant="default" size="sm" className="rounded-full px-5 gap-1.5 bg-green-600 hover:bg-green-700 text-primary-foreground"
+              onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}>
+              <Mic className="w-4 h-4 animate-pulse" /> Recording...
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* ── Floating Bottom Control Bar ── */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 rounded-full bg-card/90 backdrop-blur-xl border border-border shadow-2xl">
-        {/* Mute mic */}
+      {/* Text input overlay (when toggled) */}
+      {showTextInput && (
+        <div className="absolute bottom-52 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleSendText(); }} className="flex gap-2">
+            <Input
+              value={textInput} onChange={(e) => setTextInput(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1 h-10 text-sm bg-card/90 backdrop-blur-xl border-border/50"
+              autoFocus
+            />
+            <Button type="submit" size="icon" className="h-10 w-10" disabled={!textInput.trim()}>
+              <Send className="w-4 h-4" />
+            </Button>
+          </form>
+        </div>
+      )}
+
+      {/* Bottom Control Bar */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-5 px-8 py-4 rounded-full bg-card/90 backdrop-blur-xl border border-border shadow-2xl">
+        {/* Mute */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              className={cn(
-                'w-14 h-14 rounded-full flex items-center justify-center transition-all',
-                isMuted
-                  ? 'bg-destructive text-destructive-foreground'
-                  : 'bg-muted/80 text-foreground hover:bg-muted'
-              )}
+              className={cn('w-14 h-14 rounded-full flex items-center justify-center transition-all', isMuted ? 'bg-destructive text-destructive-foreground' : 'bg-muted/80 text-foreground hover:bg-muted')}
               onClick={() => setIsMuted(!isMuted)}
             >
               {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
             </button>
           </TooltipTrigger>
-          <TooltipContent>{isMuted ? 'Unmute mic' : 'Mute mic'}</TooltipContent>
+          <TooltipContent>{isMuted ? 'Unmute' : 'Mute'}</TooltipContent>
         </Tooltip>
 
         {/* Hang Up */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
-              className="w-16 h-16 rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground flex items-center justify-center transition-all shadow-lg"
-              onClick={endCall}
-            >
+            <button className="w-16 h-16 rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground flex items-center justify-center transition-all shadow-lg" onClick={endCall}>
               <PhoneOff className="w-7 h-7" />
             </button>
           </TooltipTrigger>
@@ -815,22 +810,29 @@ export function VoiceCallMode({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              className={cn(
-                'w-14 h-14 rounded-full flex items-center justify-center transition-all',
-                isSpeakerOff
-                  ? 'bg-amber-500/20 text-amber-500 ring-2 ring-amber-500/40'
-                  : 'bg-muted/80 text-foreground hover:bg-muted'
-              )}
-              onClick={() => {
-                setIsSpeakerOff(!isSpeakerOff);
-                if (!isSpeakerOff) stopSpeaking();
-              }}
+              className={cn('w-14 h-14 rounded-full flex items-center justify-center transition-all', isSpeakerOff ? 'bg-amber-500/20 text-amber-500 ring-2 ring-amber-500/40' : 'bg-muted/80 text-foreground hover:bg-muted')}
+              onClick={() => { setIsSpeakerOff(!isSpeakerOff); if (!isSpeakerOff) stopSpeaking(); }}
             >
               {isSpeakerOff ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
             </button>
           </TooltipTrigger>
-          <TooltipContent>{isSpeakerOff ? 'Turn speaker on' : 'Turn speaker off'}</TooltipContent>
+          <TooltipContent>{isSpeakerOff ? 'Speaker on' : 'Speaker off'}</TooltipContent>
         </Tooltip>
+
+        {/* Minimize */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button className="w-12 h-12 rounded-full bg-muted/80 text-foreground hover:bg-muted flex items-center justify-center transition-all" onClick={() => setIsMinimized(true)}>
+              <ChevronDown className="w-5 h-5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Minimize call</TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Footer hint */}
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground/50">
+        {pushToTalk ? 'Hold Space: record' : 'Space: toggle mic'} · Esc: end call · 🔒 Offline STT
       </div>
     </div>
   );
