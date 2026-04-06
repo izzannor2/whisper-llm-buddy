@@ -34,7 +34,9 @@ import {
 } from '@/lib/db';
 import {
   ChatSettings, loadSettings, saveSettings, sendChatMessage,
+  MultimodalContentPart,
 } from '@/lib/chat-api';
+import type { Attachment } from '@/components/ChatInput';
 import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { onOpenClawEvent } from '@/lib/openclaw-bridge';
 import { cn } from '@/lib/utils';
@@ -207,12 +209,12 @@ export default function Index() {
     toast({ title: 'Chat deleted' });
   };
 
-  const handleSendMessage = async (content: string, isPlan?: boolean) => {
+  const handleSendMessage = async (content: string, isPlan?: boolean, attachments?: Attachment[]) => {
     // If autonomous mode is on, run the autonomous loop
     if (autonomousMode && !isPlan) {
       return handleAutonomousMessage(content);
     }
-    return sendMessageAndGetResponse(content, isPlan);
+    return sendMessageAndGetResponse(content, isPlan, attachments);
   };
   const handleVoiceCallMessage = async (content: string): Promise<string> => sendMessageAndGetResponse(content);
 
@@ -265,8 +267,10 @@ export default function Index() {
     return fullResponse;
   };
 
-  const sendMessageAndGetResponse = async (content: string, isPlan?: boolean): Promise<string> => {
-    const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now() };
+  const sendMessageAndGetResponse = async (content: string, isPlan?: boolean, attachments?: Attachment[]): Promise<string> => {
+    // Build message attachments for storage
+    const messageAttachments = attachments?.map(a => ({ name: a.name, type: a.type, dataUrl: a.dataUrl }));
+    const userMessage: Message = { id: generateId(), role: 'user', content, timestamp: Date.now(), attachments: messageAttachments };
     let conv = currentConversation;
     if (!conv) {
       conv = { id: generateId(), title: content.slice(0, 50) + (content.length > 50 ? '...' : ''), messages: [], createdAt: Date.now(), updatedAt: Date.now(), model: settings.model, modeKey: currentModeKey };
@@ -287,7 +291,31 @@ export default function Index() {
 
     let fullResponse = '';
     try {
-      const chatMessages = conv.messages.map(m => ({ role: m.role, content: m.content }));
+      // Build chat messages — for the last user message, include attachments as multimodal content
+      const chatMessages = conv.messages.map(m => {
+        if (m.attachments && m.attachments.length > 0) {
+          const parts: MultimodalContentPart[] = [];
+          // Add text file contents as context
+          const textAttachments = attachments?.filter(a => a.textContent) || [];
+          for (const ta of textAttachments) {
+            parts.push({ type: 'text', text: `--- File: ${ta.name} ---\n${ta.textContent}\n---` });
+          }
+          // Add non-image file mentions
+          const binaryAttachments = m.attachments.filter(a => !a.type.startsWith('image/') && !textAttachments.find(t => t.name === a.name));
+          for (const ba of binaryAttachments) {
+            parts.push({ type: 'text', text: `[Attached file: ${ba.name} (${ba.type})]` });
+          }
+          // Add the user's text message
+          if (m.content) parts.push({ type: 'text', text: m.content });
+          // Add images
+          const imageAttachments = m.attachments.filter(a => a.dataUrl && a.type.startsWith('image/'));
+          for (const ia of imageAttachments) {
+            parts.push({ type: 'image_url', image_url: { url: ia.dataUrl! } });
+          }
+          return { role: m.role, content: parts.length > 0 ? parts : m.content };
+        }
+        return { role: m.role, content: m.content };
+      });
       const modePrompt = getModeSystemPrompt(currentModeKey, (settings as any).jailbreakPrompt);
       const effectiveSettings = { ...settings };
       const planningPrefix = isPlan

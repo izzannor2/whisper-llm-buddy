@@ -72,9 +72,19 @@ export interface ChatSettings {
   openClawMurmur: boolean;
 }
 
+export type MultimodalContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | MultimodalContentPart[];
+}
+
+/** Extract plain text from a ChatMessage content (string or multimodal array) */
+export function getTextContent(content: string | MultimodalContentPart[]): string {
+  if (typeof content === 'string') return content;
+  return content.filter(p => p.type === 'text').map(p => (p as any).text).join('\n');
 }
 
 export const DEFAULT_API_KEYS: APIKeys = {

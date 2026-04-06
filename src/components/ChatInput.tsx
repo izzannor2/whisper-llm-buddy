@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2, Lightbulb, Globe, Phone } from 'lucide-react';
+import { Send, Mic, MicOff, Square, Loader2, ChevronDown, X, Code, Sparkles, FileText, ListTodo, Search, Shield, Pencil, Minus, Settings, Paperclip, Volume2, Lightbulb, Globe, Phone, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -12,8 +12,35 @@ import { isWhisperLoaded, loadWhisperModel, transcribeAudio, getSelectedWhisperM
 import { loadSettings, saveSettings, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, ChatSettings } from '@/lib/chat-api';
 import { getModeTheme } from '@/lib/mode-themes';
 
+import { MessageAttachment } from '@/lib/db';
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+}
+
+export interface Attachment {
+  name: string;
+  type: string;
+  dataUrl?: string;
+  textContent?: string;
+}
+
 interface ChatInputProps {
-  onSend: (message: string, isPlan?: boolean) => void;
+  onSend: (message: string, isPlan?: boolean, attachments?: Attachment[]) => void;
   isLoading: boolean;
   onStop?: () => void;
   autoSendOnVoice?: boolean;
@@ -79,6 +106,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [attachments, setAttachments] = useState<Attachment[]>([]);
 
     const [whisperAvailable, setWhisperAvailable] = useState(() => isVoiceReady());
 
@@ -163,7 +192,46 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       setIsRecording(false);
     }, []);
 
-    const handleSend = () => { if (message.trim() && !isLoading) { onSend(message.trim(), planningMode); setMessage(''); } };
+    const handleSend = () => {
+      if ((message.trim() || attachments.length > 0) && !isLoading) {
+        onSend(message.trim(), planningMode, attachments.length > 0 ? attachments : undefined);
+        setMessage('');
+        setAttachments([]);
+      }
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+      e.target.value = '';
+
+      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+      const newAttachments: Attachment[] = [];
+
+      for (const file of files) {
+        if (file.size > MAX_SIZE) {
+          toast.error(`${file.name} is too large (max 5MB)`);
+          continue;
+        }
+
+        const isImage = file.type.startsWith('image/');
+        const isText = /\.(txt|md|json|js|jsx|ts|tsx|py|css|html|xml|yaml|yml|csv|log|env|toml|sh|bat|rs|go|java|c|cpp|h|hpp|rb|php|sql|r|swift|kt)$/i.test(file.name);
+
+        if (isImage) {
+          const dataUrl = await readFileAsDataUrl(file);
+          newAttachments.push({ name: file.name, type: file.type, dataUrl });
+        } else if (isText) {
+          const textContent = await readFileAsText(file);
+          newAttachments.push({ name: file.name, type: file.type, textContent });
+        } else {
+          // Binary/archive — just store filename
+          newAttachments.push({ name: file.name, type: file.type });
+        }
+      }
+      setAttachments(prev => [...prev, ...newAttachments]);
+    };
+
+    const removeAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
     const showPlanButton = modeKey === 'app-builder' || modeKey === 'ai-improvement' || modeKey === 'all-in-one';
 
     const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
@@ -216,12 +284,44 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
           )}
           {/* Input Container */}
           <div className="bg-card/50 border border-border rounded-xl p-3">
+            {/* Hidden file input */}
+            <input ref={fileInputRef} type="file" multiple className="hidden"
+              accept="image/*,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.css,.html,.xml,.yaml,.yml,.csv,.log,.zip,.rar,.7z,.tar,.gz,.pdf,.doc,.docx"
+              onChange={handleFileSelect} />
+
+            {/* Attachment preview strip */}
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2 p-2 bg-muted/30 rounded-lg">
+                {attachments.map((att, idx) => (
+                  <div key={idx} className="relative group">
+                    {att.dataUrl && att.type.startsWith('image/') ? (
+                      <div className="relative w-16 h-16 rounded-md overflow-hidden border border-border">
+                        <img src={att.dataUrl} alt={att.name} className="w-full h-full object-cover" />
+                        <button onClick={() => removeAttachment(idx)}
+                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted border border-border text-xs">
+                        <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="max-w-[120px] truncate">{att.name}</span>
+                        <button onClick={() => removeAttachment(idx)} className="ml-1 text-muted-foreground hover:text-destructive">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <Textarea
               ref={textareaRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={isRecording ? "Listening..." : "Ask anything"}
+              placeholder={isRecording ? "Listening..." : attachments.length > 0 ? "Add a message about your files..." : "Ask anything"}
               className="min-h-[44px] max-h-[200px] resize-none border-0 bg-transparent p-2 focus-visible:ring-0 scrollbar-thin text-sm"
               disabled={isLoading}
               rows={1}
@@ -335,7 +435,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                onClick={() => fileInputRef.current?.click()} title="Attach files">
                 <Paperclip className="w-4 h-4" />
               </Button>
 
@@ -405,7 +506,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                   <Square className="w-4 h-4" />
                 </Button>
               ) : (
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-muted" onClick={handleSend} disabled={!message.trim()}>
+                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-muted" onClick={handleSend} disabled={!message.trim() && attachments.length === 0}>
                   <Send className="w-4 h-4" />
                 </Button>
               )}
