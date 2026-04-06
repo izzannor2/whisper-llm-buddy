@@ -284,12 +284,44 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
           )}
           {/* Input Container */}
           <div className="bg-card/50 border border-border rounded-xl p-3">
+            {/* Hidden file input */}
+            <input ref={fileInputRef} type="file" multiple className="hidden"
+              accept="image/*,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.css,.html,.xml,.yaml,.yml,.csv,.log,.zip,.rar,.7z,.tar,.gz,.pdf,.doc,.docx"
+              onChange={handleFileSelect} />
+
+            {/* Attachment preview strip */}
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2 p-2 bg-muted/30 rounded-lg">
+                {attachments.map((att, idx) => (
+                  <div key={idx} className="relative group">
+                    {att.dataUrl && att.type.startsWith('image/') ? (
+                      <div className="relative w-16 h-16 rounded-md overflow-hidden border border-border">
+                        <img src={att.dataUrl} alt={att.name} className="w-full h-full object-cover" />
+                        <button onClick={() => removeAttachment(idx)}
+                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted border border-border text-xs">
+                        <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="max-w-[120px] truncate">{att.name}</span>
+                        <button onClick={() => removeAttachment(idx)} className="ml-1 text-muted-foreground hover:text-destructive">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <Textarea
               ref={textareaRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={isRecording ? "Listening..." : "Ask anything"}
+              placeholder={isRecording ? "Listening..." : attachments.length > 0 ? "Add a message about your files..." : "Ask anything"}
               className="min-h-[44px] max-h-[200px] resize-none border-0 bg-transparent p-2 focus-visible:ring-0 scrollbar-thin text-sm"
               disabled={isLoading}
               rows={1}
