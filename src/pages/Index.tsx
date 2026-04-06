@@ -291,7 +291,31 @@ export default function Index() {
 
     let fullResponse = '';
     try {
-      const chatMessages = conv.messages.map(m => ({ role: m.role, content: m.content }));
+      // Build chat messages — for the last user message, include attachments as multimodal content
+      const chatMessages = conv.messages.map(m => {
+        if (m.attachments && m.attachments.length > 0) {
+          const parts: MultimodalContentPart[] = [];
+          // Add text file contents as context
+          const textAttachments = attachments?.filter(a => a.textContent) || [];
+          for (const ta of textAttachments) {
+            parts.push({ type: 'text', text: `--- File: ${ta.name} ---\n${ta.textContent}\n---` });
+          }
+          // Add non-image file mentions
+          const binaryAttachments = m.attachments.filter(a => !a.type.startsWith('image/') && !textAttachments.find(t => t.name === a.name));
+          for (const ba of binaryAttachments) {
+            parts.push({ type: 'text', text: `[Attached file: ${ba.name} (${ba.type})]` });
+          }
+          // Add the user's text message
+          if (m.content) parts.push({ type: 'text', text: m.content });
+          // Add images
+          const imageAttachments = m.attachments.filter(a => a.dataUrl && a.type.startsWith('image/'));
+          for (const ia of imageAttachments) {
+            parts.push({ type: 'image_url', image_url: { url: ia.dataUrl! } });
+          }
+          return { role: m.role, content: parts.length > 0 ? parts : m.content };
+        }
+        return { role: m.role, content: m.content };
+      });
       const modePrompt = getModeSystemPrompt(currentModeKey, (settings as any).jailbreakPrompt);
       const effectiveSettings = { ...settings };
       const planningPrefix = isPlan
