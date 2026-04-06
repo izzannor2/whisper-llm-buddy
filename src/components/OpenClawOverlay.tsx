@@ -201,7 +201,7 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
     await chat(message);
     if (speakerEnabled && isTTSSupported() && history.length > 0) {
       const lastAssistant = history.filter(m => m.role === 'assistant').pop();
-      if (lastAssistant) speak(lastAssistant.content, { voice: ttsSettings?.voice, rate: ttsSettings?.rate ?? 1.0 });
+      if (lastAssistant) speak(typeof lastAssistant.content === 'string' ? lastAssistant.content : '', { voice: ttsSettings?.voice, rate: ttsSettings?.rate ?? 1.0 });
     }
   };
 
@@ -216,7 +216,7 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
   // Get the last assistant response
   const getLastResponse = (): string | null => {
     const assistantMsgs = history.filter(m => m.role === 'assistant');
-    return assistantMsgs.length > 0 ? assistantMsgs[assistantMsgs.length - 1].content : null;
+    return assistantMsgs.length > 0 ? (typeof assistantMsgs[assistantMsgs.length - 1].content === 'string' ? assistantMsgs[assistantMsgs.length - 1].content as string : '') : null;
   };
 
   // Send last response's code to the App Builder
@@ -471,10 +471,10 @@ export function OpenClawOverlay({ onClose, onOpenSettings, config, ttsSettings }
                 )}>
                   {msg.role === 'assistant' ? (
                     <div className="prose prose-sm prose-invert max-w-none">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown>{typeof msg.content === 'string' ? msg.content : ''}</ReactMarkdown>
                     </div>
                   ) : (
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <p className="whitespace-pre-wrap">{typeof msg.content === 'string' ? msg.content : ''}</p>
                   )}
                 </div>
               </div>
