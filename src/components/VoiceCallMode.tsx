@@ -64,6 +64,7 @@ export function VoiceCallMode({
   autoStart = false,
   existingMessages = [],
   onNewMessages,
+  onMinimizedChange,
 }: VoiceCallModeProps) {
   const [isInCall, setIsInCall] = useState(false);
   const [callState, setCallState] = useState<CallState>('idle');
