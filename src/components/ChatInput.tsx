@@ -27,6 +27,7 @@ interface ChatInputProps {
   onWebSearchToggle?: (enabled: boolean) => void;
   onVoiceCall?: () => void;
   availableOllamaModels?: string[];
+  llamaCppAvailable?: boolean;
   onSettingsChange?: (settings: ChatSettings) => void;
 }
 
@@ -67,7 +68,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
   function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice, selectedModel = 'llama-3.2-1b',
     onModelChange, modelLoaded = false, modeKey = 'chat', planningMode = false, onPlanningToggle,
     webSearchEnabled = false, onWebSearchToggle, onVoiceCall,
-    availableOllamaModels = [], onSettingsChange,
+    availableOllamaModels = [], llamaCppAvailable = false, onSettingsChange,
   }, ref) {
     const [settings, setSettingsState] = useState<ChatSettings>(() => loadSettings());
     const [message, setMessage] = useState('');
@@ -85,7 +86,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       switch (settings.backend) {
         case 'cloud': return 'Cloud';
         case 'ollama': return settings.ollamaModel || 'Ollama';
-        case 'local': return 'Llama.cpp';
+        case 'local': return 'Llama.cpp (local)';
         case 'openai': return settings.model || 'OpenAI';
         case 'anthropic': return settings.model || 'Anthropic';
         case 'google': return settings.model || 'Google';
@@ -253,6 +254,16 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                           {m}
                         </DropdownMenuItem>
                       ))}
+                    </>
+                  )}
+                  {llamaCppAvailable && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-mono">LLAMA.CPP</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => switchBackendModel('local', 'local')}
+                        className={cn("font-mono text-sm", settings.backend === 'local' && "bg-accent/10")}>
+                        Local Model (port 8081)
+                      </DropdownMenuItem>
                     </>
                   )}
                   {settings.apiKeys?.openai && (

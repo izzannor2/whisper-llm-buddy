@@ -67,6 +67,7 @@ export default function Index() {
   const [autonomousStepCount, setAutonomousStepCount] = useState(0);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [llamaCppAvailable, setLlamaCppAvailable] = useState(false);
   const [currentAgent, setCurrentAgent] = useState<AgentType | undefined>();
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
@@ -84,18 +85,30 @@ export default function Index() {
       await initDB();
       await initOrchestrator();
       setConversations(await getAllConversations());
-      // Scan Ollama models silently
-      try {
-        const ollamaUrl = settings.ollamaUrl || 'http://localhost:11434';
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 3000);
-        const res = await fetch(`${ollamaUrl}/api/tags`, { signal: ctrl.signal });
-        clearTimeout(tid);
-        if (res.ok) {
-          const data = await res.json();
-          setOllamaModels(data.models?.map((m: any) => m.name) || []);
-        }
-      } catch { /* silently ignore */ }
+      // Skip local scans when running in cloud preview
+      const isCloud = window.location.hostname.includes('lovable.app') || window.location.hostname.includes('lovableproject.com');
+      if (!isCloud) {
+        // Scan Ollama models silently
+        try {
+          const ollamaUrl = settings.ollamaUrl || 'http://localhost:11434';
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 3000);
+          const res = await fetch(`${ollamaUrl}/api/tags`, { signal: ctrl.signal });
+          clearTimeout(tid);
+          if (res.ok) {
+            const data = await res.json();
+            setOllamaModels(data.models?.map((m: any) => m.name) || []);
+          }
+        } catch { /* silently ignore */ }
+        // Scan llama.cpp server
+        try {
+          const ctrl2 = new AbortController();
+          const tid2 = setTimeout(() => ctrl2.abort(), 3000);
+          const res2 = await fetch('http://127.0.0.1:8081/health', { signal: ctrl2.signal });
+          clearTimeout(tid2);
+          setLlamaCppAvailable(res2.ok);
+        } catch { setLlamaCppAvailable(false); }
+      }
     };
     init();
 
@@ -538,6 +551,7 @@ export default function Index() {
           onWebSearchToggle={setWebSearchEnabled}
           onVoiceCall={() => setShowVoiceCall(true)}
           availableOllamaModels={ollamaModels}
+          llamaCppAvailable={llamaCppAvailable}
           onSettingsChange={(s) => { setSettings(s); }}
         />
       </div>
