@@ -81,6 +81,9 @@ export function VoiceCallMode({
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
   const [callElapsed, setCallElapsed] = useState('00:00');
 
+  // Notify parent of minimize state changes
+  useEffect(() => { onMinimizedChange?.(isMinimized); }, [isMinimized, onMinimizedChange]);
+
   // Screen share state
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenPreview, setScreenPreview] = useState<string | null>(null);
