@@ -96,6 +96,19 @@ export function ChatMessage({ message, onEdit, onDelete, onAddToInput }: ChatMes
           </div>
         ) : (
           <div className={cn('message-bubble', isUser ? 'message-user' : 'message-assistant')}>
+            {/* Render attachments */}
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {message.attachments.filter(a => a.dataUrl && a.type.startsWith('image/')).map((att, i) => (
+                  <img key={i} src={att.dataUrl} alt={att.name} className="max-w-[200px] max-h-[200px] rounded-md border border-border object-cover" />
+                ))}
+                {message.attachments.filter(a => !a.type.startsWith('image/')).map((att, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-muted text-xs text-muted-foreground">
+                    📎 {att.name}
+                  </span>
+                ))}
+              </div>
+            )}
             {isUser ? (
               <p className="whitespace-pre-wrap">{displayContent}</p>
             ) : (
