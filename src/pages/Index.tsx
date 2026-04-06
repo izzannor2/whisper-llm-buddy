@@ -580,6 +580,7 @@ export default function Index() {
           onPlanningToggle={setPlanningMode}
           webSearchEnabled={webSearchEnabled}
           onWebSearchToggle={setWebSearchEnabled}
+          isOfflineMode={isOfflineMode}
           onVoiceCall={() => setShowVoiceCall(true)}
           availableOllamaModels={ollamaModels}
           llamaCppAvailable={llamaCppAvailable}
