@@ -303,7 +303,24 @@ export function SettingsDialog({
           </TabsList>
 
           <TabsContent value="backend" className="space-y-4 mt-4">
-            <div className="grid grid-cols-4 gap-2">
+            {/* System Status Panel */}
+            <div className="grid grid-cols-2 gap-2 p-3 rounded-lg border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <div className={cn("w-2 h-2 rounded-full", systemHealth.ollama === 'online' ? 'bg-green-500' : systemHealth.ollama === 'checking' ? 'bg-yellow-500 animate-pulse' : 'bg-destructive')} />
+                <span className="text-xs font-medium">Ollama</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {systemHealth.ollama === 'online' ? systemHealth.ollamaModel || 'Ready' : systemHealth.ollama === 'checking' ? 'Scanning...' : 'Offline'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={cn("w-2 h-2 rounded-full", systemHealth.llamaCpp === 'online' ? 'bg-green-500' : systemHealth.llamaCpp === 'checking' ? 'bg-yellow-500 animate-pulse' : 'bg-destructive')} />
+                <span className="text-xs font-medium">Llama.cpp</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {systemHealth.llamaCpp === 'online' ? systemHealth.llamaCppModel || 'Ready' : systemHealth.llamaCpp === 'checking' ? 'Scanning...' : 'Offline'}
+                </span>
+              </div>
+            </div>
+
               <button
                 className={cn(
                   'p-3 rounded-xl border-2 transition-all text-left',
