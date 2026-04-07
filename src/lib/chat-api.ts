@@ -155,9 +155,9 @@ export async function sendChatMessage(
   settings: ChatSettings,
   onChunk?: (chunk: string) => void
 ): Promise<string> {
-  // If offline mode is enabled, only allow local backend
-  if (settings.offlineMode && settings.backend !== 'local') {
-    throw new Error('Offline mode is enabled. Only local backend is available.');
+  // If offline mode is enabled, only allow local backends
+  if (settings.offlineMode && !['local', 'ollama'].includes(settings.backend)) {
+    throw new Error('Offline mode is enabled. Only local (Llama.cpp) and Ollama backends are available.');
   }
 
   const allMessages = settings.systemPrompt 

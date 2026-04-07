@@ -148,6 +148,39 @@ export default function Index() {
     return () => { unsubscribe(); unsubAuto(); };
   }, []);
 
+  // Periodic health check for active backend (every 30s)
+  const [backendHealthy, setBackendHealthy] = useState(true);
+  useEffect(() => {
+    const isCloud = window.location.hostname.includes('lovable.app') || window.location.hostname.includes('lovableproject.com');
+    if (isCloud) return;
+
+    const checkHealth = async () => {
+      try {
+        if (settings.backend === 'ollama') {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 3000);
+          const res = await fetch(`${settings.ollamaUrl || 'http://localhost:11434'}/api/tags`, { signal: ctrl.signal });
+          clearTimeout(tid);
+          setBackendHealthy(res.ok);
+        } else if (settings.backend === 'local') {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 3000);
+          const res = await fetch(`${settings.localUrl || 'http://127.0.0.1:8081'}/health`, { signal: ctrl.signal });
+          clearTimeout(tid);
+          setBackendHealthy(res.ok);
+        } else {
+          setBackendHealthy(true);
+        }
+      } catch {
+        if (['ollama', 'local'].includes(settings.backend)) setBackendHealthy(false);
+      }
+    };
+
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000);
+    return () => clearInterval(interval);
+  }, [settings.backend, settings.ollamaUrl, settings.localUrl]);
+
   useEffect(() => {
     const handleOpenSettings = (e: Event) => {
       setSettingsOpen(true);
