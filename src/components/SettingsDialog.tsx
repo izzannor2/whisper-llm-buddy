@@ -24,6 +24,13 @@ import { handleExport, handleImportFromFile } from '@/lib/export-import';
 import { getPermissions, savePermissions, toggleSafeMode } from '@/lib/permissions';
 import { runSelfTests, formatTestResults, TestResult } from '@/lib/self-test';
 
+interface SystemHealthStatus {
+  ollama: 'online' | 'offline' | 'checking';
+  llamaCpp: 'online' | 'offline' | 'checking';
+  ollamaModel: string;
+  llamaCppModel: string;
+}
+
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
