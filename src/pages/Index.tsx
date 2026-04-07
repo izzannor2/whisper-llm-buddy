@@ -527,6 +527,23 @@ export default function Index() {
 
       {/* Main chat area */}
       <div className={cn("flex-1 flex flex-col min-w-0", getModeClasses())}>
+        {/* Backend health warning */}
+        {!backendHealthy && ['ollama', 'local'].includes(settings.backend) && (
+          <div className="flex items-center justify-between px-4 py-2 border-b border-destructive/30 bg-destructive/5">
+            <div className="flex items-center gap-2">
+              <OctagonX className="w-4 h-4 text-destructive" />
+              <span className="text-xs font-medium text-destructive">
+                {settings.backend === 'ollama' ? 'Ollama' : 'Llama.cpp'} server is not responding
+              </span>
+            </div>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
+              setSettingsOpen(true);
+              setSettingsTab('debug');
+            }}>
+              Diagnostics
+            </Button>
+          </div>
+        )}
         {/* Kill switch banner for all-in-one */}
         {currentModeKey === 'all-in-one' && (
           <div className="flex items-center justify-between px-4 py-2 border-b border-amber-500/20" style={{ background: 'linear-gradient(90deg, hsl(38,92%,50%,0.05), hsl(340,82%,52%,0.05), hsl(262,83%,58%,0.05))' }}>
