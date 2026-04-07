@@ -1,0 +1,11 @@
+{
+  "ollama_path": "./bin/ollama",
+  "llama_path": "./bin/llama",
+  "model_path": "./models",
+  "log_path": "./logs",
+  "auto_start_ollama": true,
+  "default_model": "llama3.2",
+  "ollama_port": 11434,
+  "llama_port": 8081,
+  "app_port": 8080
+}

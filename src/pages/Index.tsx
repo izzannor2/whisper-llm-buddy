@@ -148,6 +148,39 @@ export default function Index() {
     return () => { unsubscribe(); unsubAuto(); };
   }, []);
 
+  // Periodic health check for active backend (every 30s)
+  const [backendHealthy, setBackendHealthy] = useState(true);
+  useEffect(() => {
+    const isCloud = window.location.hostname.includes('lovable.app') || window.location.hostname.includes('lovableproject.com');
+    if (isCloud) return;
+
+    const checkHealth = async () => {
+      try {
+        if (settings.backend === 'ollama') {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 3000);
+          const res = await fetch(`${settings.ollamaUrl || 'http://localhost:11434'}/api/tags`, { signal: ctrl.signal });
+          clearTimeout(tid);
+          setBackendHealthy(res.ok);
+        } else if (settings.backend === 'local') {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 3000);
+          const res = await fetch(`${settings.localUrl || 'http://127.0.0.1:8081'}/health`, { signal: ctrl.signal });
+          clearTimeout(tid);
+          setBackendHealthy(res.ok);
+        } else {
+          setBackendHealthy(true);
+        }
+      } catch {
+        if (['ollama', 'local'].includes(settings.backend)) setBackendHealthy(false);
+      }
+    };
+
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000);
+    return () => clearInterval(interval);
+  }, [settings.backend, settings.ollamaUrl, settings.localUrl]);
+
   useEffect(() => {
     const handleOpenSettings = (e: Event) => {
       setSettingsOpen(true);
@@ -494,6 +527,23 @@ export default function Index() {
 
       {/* Main chat area */}
       <div className={cn("flex-1 flex flex-col min-w-0", getModeClasses())}>
+        {/* Backend health warning */}
+        {!backendHealthy && ['ollama', 'local'].includes(settings.backend) && (
+          <div className="flex items-center justify-between px-4 py-2 border-b border-destructive/30 bg-destructive/5">
+            <div className="flex items-center gap-2">
+              <OctagonX className="w-4 h-4 text-destructive" />
+              <span className="text-xs font-medium text-destructive">
+                {settings.backend === 'ollama' ? 'Ollama' : 'Llama.cpp'} server is not responding
+              </span>
+            </div>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
+              setSettingsOpen(true);
+              setSettingsTab('debug');
+            }}>
+              Diagnostics
+            </Button>
+          </div>
+        )}
         {/* Kill switch banner for all-in-one */}
         {currentModeKey === 'all-in-one' && (
           <div className="flex items-center justify-between px-4 py-2 border-b border-amber-500/20" style={{ background: 'linear-gradient(90deg, hsl(38,92%,50%,0.05), hsl(340,82%,52%,0.05), hsl(262,83%,58%,0.05))' }}>

@@ -24,6 +24,13 @@ import { handleExport, handleImportFromFile } from '@/lib/export-import';
 import { getPermissions, savePermissions, toggleSafeMode } from '@/lib/permissions';
 import { runSelfTests, formatTestResults, TestResult } from '@/lib/self-test';
 
+interface SystemHealthStatus {
+  ollama: 'online' | 'offline' | 'checking';
+  llamaCpp: 'online' | 'offline' | 'checking';
+  ollamaModel: string;
+  llamaCppModel: string;
+}
+
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,6 +54,69 @@ export function SettingsDialog({
   const [isScanning, setIsScanning] = useState(false);
   const [isScanningOllama, setIsScanningOllama] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [systemHealth, setSystemHealth] = useState<SystemHealthStatus>({
+    ollama: 'checking', llamaCpp: 'checking', ollamaModel: '', llamaCppModel: ''
+  });
+
+  // Auto-scan system health when settings dialog opens
+  useEffect(() => {
+    if (!open) return;
+    const isCloud = window.location.hostname.includes('lovable.app') || window.location.hostname.includes('lovableproject.com');
+    if (isCloud) {
+      setSystemHealth({ ollama: 'offline', llamaCpp: 'offline', ollamaModel: '', llamaCppModel: '' });
+      return;
+    }
+
+    const scanHealth = async () => {
+      setSystemHealth(prev => ({ ...prev, ollama: 'checking', llamaCpp: 'checking' }));
+      
+      // Check Ollama
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch(`${localSettings.ollamaUrl || 'http://localhost:11434'}/api/tags`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const data = await res.json();
+          const models = data.models?.map((m: any) => m.name) || [];
+          setSystemHealth(prev => ({ ...prev, ollama: 'online', ollamaModel: models[0] || '' }));
+          if (models.length > 0 && ollamaModels.length === 0) setOllamaModels(models);
+        } else {
+          setSystemHealth(prev => ({ ...prev, ollama: 'offline' }));
+        }
+      } catch {
+        setSystemHealth(prev => ({ ...prev, ollama: 'offline' }));
+      }
+
+      // Check Llama.cpp
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch(`${localSettings.localUrl || 'http://127.0.0.1:8081'}/health`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          try {
+            const mres = await fetch(`${localSettings.localUrl || 'http://127.0.0.1:8081'}/v1/models`, { signal: AbortSignal.timeout(3000) });
+            if (mres.ok) {
+              const mdata = await mres.json();
+              const name = mdata.data?.[0]?.id || 'loaded';
+              setSystemHealth(prev => ({ ...prev, llamaCpp: 'online', llamaCppModel: name }));
+            } else {
+              setSystemHealth(prev => ({ ...prev, llamaCpp: 'online', llamaCppModel: 'running' }));
+            }
+          } catch {
+            setSystemHealth(prev => ({ ...prev, llamaCpp: 'online', llamaCppModel: 'running' }));
+          }
+        } else {
+          setSystemHealth(prev => ({ ...prev, llamaCpp: 'offline' }));
+        }
+      } catch {
+        setSystemHealth(prev => ({ ...prev, llamaCpp: 'offline' }));
+      }
+    };
+
+    scanHealth();
+  }, [open]);
   
 
   // Load available voices
@@ -233,6 +303,24 @@ export function SettingsDialog({
           </TabsList>
 
           <TabsContent value="backend" className="space-y-4 mt-4">
+            {/* System Status Panel */}
+            <div className="grid grid-cols-2 gap-2 p-3 rounded-lg border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <div className={cn("w-2 h-2 rounded-full", systemHealth.ollama === 'online' ? 'bg-green-500' : systemHealth.ollama === 'checking' ? 'bg-yellow-500 animate-pulse' : 'bg-destructive')} />
+                <span className="text-xs font-medium">Ollama</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {systemHealth.ollama === 'online' ? systemHealth.ollamaModel || 'Ready' : systemHealth.ollama === 'checking' ? 'Scanning...' : 'Offline'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={cn("w-2 h-2 rounded-full", systemHealth.llamaCpp === 'online' ? 'bg-green-500' : systemHealth.llamaCpp === 'checking' ? 'bg-yellow-500 animate-pulse' : 'bg-destructive')} />
+                <span className="text-xs font-medium">Llama.cpp</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {systemHealth.llamaCpp === 'online' ? systemHealth.llamaCppModel || 'Ready' : systemHealth.llamaCpp === 'checking' ? 'Scanning...' : 'Offline'}
+                </span>
+              </div>
+            </div>
+
             <div className="grid grid-cols-4 gap-2">
               <button
                 className={cn(

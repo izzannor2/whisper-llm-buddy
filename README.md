@@ -1,73 +1,133 @@
-# Welcome to your Lovable project
+# LocalDev AI — Portable AI Companion Hub
 
-## Project info
+A fully portable, production-ready AI assistant that runs entirely from a USB drive with **zero external dependencies**.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## ⚡ Quick Start
 
-## How can I edit this code?
+### Windows
+Double-click **`start.bat`** — that's it.
 
-There are several ways of editing your application.
+### macOS / Linux
+```bash
+chmod +x start.sh
+./start.sh
+```
 
-**Use Lovable**
+The app will:
+1. Check for Node.js (or use portable version from `bin/node/`)
+2. Install npm dependencies if needed
+3. Auto-detect and start Ollama or Llama.cpp servers
+4. Launch the app at **http://localhost:8080**
+5. Open your browser automatically
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## 📁 Folder Structure
 
-Changes made via Lovable will be committed automatically to this repo.
+```
+/AI-Companion-Hub/
+├── start.bat              # Windows launcher (double-click to run)
+├── start.sh               # Linux/Mac launcher
+├── config/
+│   └── settings.json      # Portable config (auto-created on first run)
+├── logs/
+│   └── app.log            # Runtime logs
+├── scripts/
+│   ├── setup.bat           # One-click first-time setup (Windows)
+│   └── setup.ps1           # PowerShell setup
+├── bin/
+│   ├── ollama/             # Place portable Ollama binary here
+│   ├── llama/              # Place portable llama-server binary here
+│   └── node/               # Optional: portable Node.js
+├── models/
+│   ├── gguf/               # Drop .gguf model files here
+│   └── ollama/             # Ollama models stored here automatically
+├── src/                    # React app source code
+├── supabase/               # Backend edge functions
+└── public/                 # Static assets
+```
 
-**Use your preferred IDE**
+## 🤖 Adding AI Models
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Ollama Models
+1. Place `ollama.exe` (or `ollama` binary) in `bin/ollama/`
+2. Run the app — it auto-starts Ollama and stores models in `models/ollama/`
+3. Models are pulled automatically, or use: `ollama pull llama3.2`
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### GGUF Models (Llama.cpp)
+1. Place `llama-server.exe` (or `llama-server`) in `bin/llama/`
+2. Drop any `.gguf` model file into `models/gguf/`
+3. The start script auto-launches with the first model found
 
-Follow these steps:
+### Cloud Models
+Cloud mode (Gemini 2.5 Flash/Pro) works out of the box with no setup needed.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### API Key Models
+For OpenAI, Anthropic, or Google AI, add your API keys in **Settings → API Keys**.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## 🔧 Configuration
 
-# Step 3: Install the necessary dependencies.
-npm i
+The file `config/settings.json` controls startup behavior:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```json
+{
+  "ollama_path": "./bin/ollama",
+  "llama_path": "./bin/llama",
+  "model_path": "./models",
+  "log_path": "./logs",
+  "auto_start_ollama": true,
+  "default_model": "llama3.2",
+  "ollama_port": 11434,
+  "llama_port": 8081,
+  "app_port": 8080
+}
+```
+
+## 💾 USB Portability
+
+This project is designed to run from **any drive letter** (USB, external drive, etc.):
+
+- All paths are relative — no hardcoded `C:\` or `/home/` paths
+- Models are stored inside the project folder
+- Node modules are local to the project
+- No system-wide installations required (if you use portable binaries)
+
+**To use on a USB drive:**
+1. Copy the entire folder to your USB drive
+2. On any Windows PC, double-click `start.bat`
+3. Everything runs from the USB — nothing installed on the host machine
+
+## 🔍 Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| **"Node.js not found"** | Place portable `node.exe` in `bin/node/` or install from [nodejs.org](https://nodejs.org) |
+| **Ollama won't start** | Check `bin/ollama/` has the binary, or install from [ollama.com](https://ollama.com) |
+| **No models showing** | Click the refresh icon in Settings → Backend, or run `ollama pull llama3.2` |
+| **Port already in use** | Check if another instance is running; the app detects this automatically |
+| **npm install fails** | Delete `node_modules/` and restart — the app auto-retries 3 times |
+| **Slow first start** | First run downloads npm packages; subsequent starts are instant |
+
+### Checking Logs
+- Runtime logs: `logs/app.log`
+- In-app diagnostics: **Settings → Debug** tab
+- Export full report: **Settings → Debug → Export**
+
+## 🏗 Supported Backends
+
+| Backend | Type | Requirements |
+|---------|------|-------------|
+| **Cloud (Gemini)** | Online | Internet connection |
+| **Ollama** | Local | Ollama binary + model |
+| **Llama.cpp** | Local | llama-server + .gguf model |
+| **OpenAI** | API | API key |
+| **Anthropic** | API | API key |
+| **Google AI** | API | API key |
+| **Hugging Face** | API | API key |
+
+## 🛠 Development
+
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+The app runs on Vite + React 18 + TypeScript + Tailwind CSS + shadcn/ui.
