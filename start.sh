@@ -1,5 +1,5 @@
 #!/bin/bash
-# LocalDev AI - All-in-One Start Script
+# LocalDev AI - Portable Start Script (USB-safe)
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -8,62 +8,81 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 BOLD='\033[1m'
 
+# USB-safe: resolve script directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Set portable model storage
+export OLLAMA_MODELS="$SCRIPT_DIR/models/ollama"
+
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║       ${BOLD}LocalDev AI - Quick Start${NC}${CYAN}          ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
-# Step 1: Check Node.js
+# Self-healing: create directories
+mkdir -p config logs models/gguf models/ollama bin/llama bin/ollama
+
+# Create default config if missing
+if [ ! -f "config/settings.json" ]; then
+    cat > config/settings.json << 'EOF'
+{
+  "ollama_path": "./bin/ollama",
+  "llama_path": "./bin/llama",
+  "model_path": "./models",
+  "log_path": "./logs",
+  "auto_start_ollama": true,
+  "default_model": "llama3.2",
+  "ollama_port": 11434,
+  "llama_port": 8081,
+  "app_port": 8080
+}
+EOF
+fi
+
+# Start logging
+echo "[$(date)] === LocalDev AI Starting ===" >> logs/app.log
+
+# Step 1: Check Node.js (portable first)
 echo "[1/5] Checking Node.js..."
-if ! command -v node &> /dev/null; then
+
+if [ -x "$SCRIPT_DIR/bin/node/bin/node" ]; then
+    export PATH="$SCRIPT_DIR/bin/node/bin:$PATH"
+    echo -e "      ${GREEN}[OK] Using portable Node.js${NC}"
+elif ! command -v node &> /dev/null; then
     echo -e "      ${YELLOW}[!] Node.js not found - attempting auto-install...${NC}"
 
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
         if command -v brew &> /dev/null; then
-            echo "      [*] Installing Node.js via Homebrew..."
             brew install node
         else
-            echo "      [*] Installing Node.js via official installer..."
             curl -fsSL https://nodejs.org/dist/v20.18.0/node-v20.18.0.pkg -o /tmp/nodejs.pkg
             sudo installer -pkg /tmp/nodejs.pkg -target /
             rm -f /tmp/nodejs.pkg
         fi
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        # Linux
         if command -v apt-get &> /dev/null; then
-            echo "      [*] Installing Node.js via NodeSource (apt)..."
             curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
             sudo apt-get install -y nodejs
         elif command -v dnf &> /dev/null; then
-            echo "      [*] Installing Node.js via dnf..."
             sudo dnf install -y nodejs
-        elif command -v yum &> /dev/null; then
-            echo "      [*] Installing Node.js via yum..."
-            curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-            sudo yum install -y nodejs
         elif command -v pacman &> /dev/null; then
-            echo "      [*] Installing Node.js via pacman..."
             sudo pacman -Sy --noconfirm nodejs npm
         else
-            echo -e "${RED}[ERROR] Could not auto-install Node.js! Install manually: https://nodejs.org${NC}"
+            echo -e "${RED}[ERROR] Could not install Node.js! Install manually: https://nodejs.org${NC}"
             exit 1
         fi
-    else
-        echo -e "${RED}[ERROR] Unsupported OS. Install Node.js manually: https://nodejs.org${NC}"
-        exit 1
     fi
 
-    # Refresh PATH
     export PATH="/usr/local/bin:/usr/bin:$PATH"
     hash -r 2>/dev/null
 
     if ! command -v node &> /dev/null; then
-        echo -e "${RED}[ERROR] Node.js install completed but 'node' not found. Restart your terminal or install manually: https://nodejs.org${NC}"
+        echo -e "${RED}[ERROR] Node.js not found. Restart terminal or install manually.${NC}"
         exit 1
     fi
-    echo -e "      ${GREEN}[OK] Node.js installed successfully!${NC}"
+    echo -e "      ${GREEN}[OK] Node.js installed!${NC}"
 fi
 echo -e "      ${GREEN}[OK] Node.js $(node --version)${NC}"
 
@@ -76,11 +95,11 @@ else
     echo "[2/5] [OK] Using npm"
 fi
 
-# Step 3: Dependencies with retry + auto-repair
+# Step 3: Dependencies (self-healing)
 echo "[3/5] Checking dependencies..."
 
-if [ -d "node_modules" ] && [ ! -d "node_modules/react" ]; then
-    echo -e "      ${YELLOW}[!] node_modules corrupted, reinstalling...${NC}"
+if [ -d "node_modules" ] && { [ ! -d "node_modules/react" ] || [ ! -d "node_modules/vite" ]; }; then
+    echo -e "      ${YELLOW}[!] node_modules incomplete, reinstalling...${NC}"
     rm -rf node_modules
 fi
 
@@ -93,59 +112,52 @@ if [ ! -d "node_modules" ]; then
         fi
         if [ $attempt -eq 3 ]; then
             echo -e "${RED}[ERROR] Failed after 3 attempts!${NC}"
+            echo "[$(date)] FATAL: npm install failed" >> logs/app.log
             exit 1
         fi
-        echo "      [!] Retrying in 3s..."
         sleep 3
     done
 else
-    echo -e "      ${GREEN}[OK] Dependencies installed${NC}"
+    echo -e "      ${GREEN}[OK] Dependencies ready${NC}"
 fi
 
-# Step 4: Ollama
-echo "[4/6] Checking Ollama..."
+# Step 4: Detect and start AI engines
+echo "[4/5] Setting up AI engines..."
+
 OLLAMA_CMD=""
-if [ -x "bin/ollama/ollama" ]; then
-    OLLAMA_CMD="./bin/ollama/ollama"
-elif command -v ollama &> /dev/null; then
-    OLLAMA_CMD="ollama"
-fi
-
-if [ -z "$OLLAMA_CMD" ]; then
-    echo -e "      ${YELLOW}[!] Ollama not found - attempting install...${NC}"
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        if command -v brew &> /dev/null; then
-            brew install ollama 2>/dev/null && OLLAMA_CMD="ollama"
-        fi
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        curl -fsSL https://ollama.com/install.sh | sh 2>/dev/null && OLLAMA_CMD="ollama"
-    fi
-fi
-
 LLAMA_SERVER_CMD=""
 LLAMA_SERVER_RUNNING=0
 
-if [ -x "bin/llama/llama-server" ]; then
-    LLAMA_SERVER_CMD="./bin/llama/llama-server"
+# Check llama-server (portable first)
+if [ -x "$SCRIPT_DIR/bin/llama/llama-server" ]; then
+    LLAMA_SERVER_CMD="$SCRIPT_DIR/bin/llama/llama-server"
+    echo -e "      ${GREEN}[OK] Found portable llama-server${NC}"
 elif command -v llama-server &> /dev/null; then
     LLAMA_SERVER_CMD="llama-server"
 fi
 
-# Step 5: Environment setup
-echo "[5/6] Setting up environment..."
-mkdir -p models/gguf bin/llama bin/ollama
-
-GGUF_MODEL=""
-if [ -d "models/gguf" ]; then
-    GGUF_MODEL=$(find models/gguf -name "*.gguf" -type f | head -n 1)
+# Check Ollama (portable first)
+if [ -x "$SCRIPT_DIR/bin/ollama/ollama" ]; then
+    OLLAMA_CMD="$SCRIPT_DIR/bin/ollama/ollama"
+    echo -e "      ${GREEN}[OK] Found portable Ollama${NC}"
+elif command -v ollama &> /dev/null; then
+    OLLAMA_CMD="ollama"
 fi
 
+# Check for GGUF models
+GGUF_MODEL=""
+if [ -d "models/gguf" ]; then
+    GGUF_MODEL=$(find "$SCRIPT_DIR/models/gguf" -name "*.gguf" -type f 2>/dev/null | head -n 1)
+fi
+
+# Start llama-server if model found
 if [ -n "$GGUF_MODEL" ]; then
-    echo "      [*] Found model: $GGUF_MODEL"
+    echo "      [*] Found model: $(basename "$GGUF_MODEL")"
     if [ -n "$LLAMA_SERVER_CMD" ]; then
         if ! curl -s http://localhost:8081/health &> /dev/null; then
             echo "      [*] Starting llama-server..."
             $LLAMA_SERVER_CMD -m "$GGUF_MODEL" --port 8081 --host 0.0.0.0 -ngl 99 &> /dev/null &
+            echo "[$(date)] Started llama-server with $GGUF_MODEL" >> logs/app.log
             for i in $(seq 1 10); do
                 if curl -s http://localhost:8081/health &> /dev/null; then
                     echo -e "      ${GREEN}[OK] llama-server ready on port 8081${NC}"
@@ -166,7 +178,8 @@ fi
 if [ $LLAMA_SERVER_RUNNING -eq 0 ] && [ -n "$OLLAMA_CMD" ]; then
     if ! curl -s http://localhost:11434/api/tags &> /dev/null; then
         echo "      [*] Starting Ollama..."
-        OLLAMA_HOST=127.0.0.1:11434 $OLLAMA_CMD serve &> /dev/null &
+        OLLAMA_HOST=127.0.0.1:11434 OLLAMA_MODELS="$SCRIPT_DIR/models/ollama" $OLLAMA_CMD serve &> /dev/null &
+        echo "[$(date)] Started Ollama" >> logs/app.log
         for i in $(seq 1 10); do
             if curl -s http://localhost:11434/api/tags &> /dev/null; then
                 echo -e "      ${GREEN}[OK] Ollama ready${NC}"
@@ -184,19 +197,23 @@ if [ $LLAMA_SERVER_RUNNING -eq 0 ] && [ -n "$OLLAMA_CMD" ]; then
         $OLLAMA_CMD pull llama3.2 2>/dev/null &
     fi
 elif [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
-    echo "      [*] No local LLM found - using Cloud backend"
+    echo "      [*] No local AI engine found - using Cloud backend"
 fi
 
-# Step 6: Start dev server
-echo "[6/6] Starting development server..."
+# Step 5: Start dev server
+echo "[5/5] Starting development server..."
 echo ""
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
-echo " App: http://localhost:8080"
-[ -n "$GGUF_MODEL" ] && echo " LLM: llama-server (port 8081)"
-[ -n "$OLLAMA_CMD" ] && echo " Ollama: http://localhost:11434"
+echo " App:     http://localhost:8080"
+[ -n "$GGUF_MODEL" ] && echo " Llama:   http://localhost:8081"
+[ -n "$OLLAMA_CMD" ] && echo " Ollama:  http://localhost:11434"
+echo " Models:  $SCRIPT_DIR/models/"
+echo " Logs:    $SCRIPT_DIR/logs/"
 echo " Press Ctrl+C to stop"
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 echo ""
+
+echo "[$(date)] App server starting on port 8080" >> logs/app.log
 
 # Open browser
 (sleep 3 && (xdg-open http://localhost:8080 2>/dev/null || open http://localhost:8080 2>/dev/null || true)) &
