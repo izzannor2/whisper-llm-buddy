@@ -321,7 +321,7 @@ export function SettingsDialog({
               </div>
             </div>
 
-              <button
+            <div className="grid grid-cols-4 gap-2">
                 className={cn(
                   'p-3 rounded-xl border-2 transition-all text-left',
                   localSettings.backend === 'local'
