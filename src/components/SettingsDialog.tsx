@@ -54,6 +54,69 @@ export function SettingsDialog({
   const [isScanning, setIsScanning] = useState(false);
   const [isScanningOllama, setIsScanningOllama] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [systemHealth, setSystemHealth] = useState<SystemHealthStatus>({
+    ollama: 'checking', llamaCpp: 'checking', ollamaModel: '', llamaCppModel: ''
+  });
+
+  // Auto-scan system health when settings dialog opens
+  useEffect(() => {
+    if (!open) return;
+    const isCloud = window.location.hostname.includes('lovable.app') || window.location.hostname.includes('lovableproject.com');
+    if (isCloud) {
+      setSystemHealth({ ollama: 'offline', llamaCpp: 'offline', ollamaModel: '', llamaCppModel: '' });
+      return;
+    }
+
+    const scanHealth = async () => {
+      setSystemHealth(prev => ({ ...prev, ollama: 'checking', llamaCpp: 'checking' }));
+      
+      // Check Ollama
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch(`${localSettings.ollamaUrl || 'http://localhost:11434'}/api/tags`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const data = await res.json();
+          const models = data.models?.map((m: any) => m.name) || [];
+          setSystemHealth(prev => ({ ...prev, ollama: 'online', ollamaModel: models[0] || '' }));
+          if (models.length > 0 && ollamaModels.length === 0) setOllamaModels(models);
+        } else {
+          setSystemHealth(prev => ({ ...prev, ollama: 'offline' }));
+        }
+      } catch {
+        setSystemHealth(prev => ({ ...prev, ollama: 'offline' }));
+      }
+
+      // Check Llama.cpp
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch(`${localSettings.localUrl || 'http://127.0.0.1:8081'}/health`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          try {
+            const mres = await fetch(`${localSettings.localUrl || 'http://127.0.0.1:8081'}/v1/models`, { signal: AbortSignal.timeout(3000) });
+            if (mres.ok) {
+              const mdata = await mres.json();
+              const name = mdata.data?.[0]?.id || 'loaded';
+              setSystemHealth(prev => ({ ...prev, llamaCpp: 'online', llamaCppModel: name }));
+            } else {
+              setSystemHealth(prev => ({ ...prev, llamaCpp: 'online', llamaCppModel: 'running' }));
+            }
+          } catch {
+            setSystemHealth(prev => ({ ...prev, llamaCpp: 'online', llamaCppModel: 'running' }));
+          }
+        } else {
+          setSystemHealth(prev => ({ ...prev, llamaCpp: 'offline' }));
+        }
+      } catch {
+        setSystemHealth(prev => ({ ...prev, llamaCpp: 'offline' }));
+      }
+    };
+
+    scanHealth();
+  }, [open]);
   
 
   // Load available voices
