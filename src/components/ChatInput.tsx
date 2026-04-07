@@ -105,10 +105,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [currentPreset, setCurrentPreset] = useState<string | null>(null);
+    const [isReadingBack, setIsReadingBack] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
+    const finalTranscriptRef = useRef('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [attachments, setAttachments] = useState<Attachment[]>([]);
 
@@ -172,7 +174,76 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       toast.success(`Preset: ${PRESETS.find(p => p.id === presetId)?.name}`);
     };
 
-    const startLocalRecording = useCallback(async () => {
+    // ── Live SpeechRecognition (primary, online) ──
+    const startLiveTranscription = useCallback(() => {
+      const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognitionCtor) {
+        // No browser support — fall back to Whisper batch
+        startWhisperRecording();
+        return;
+      }
+      try {
+        const recognition = new SpeechRecognitionCtor();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        finalTranscriptRef.current = message; // preserve existing text
+
+        recognition.onresult = (event: any) => {
+          let interim = '';
+          let finalNew = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalNew += transcript;
+            } else {
+              interim += transcript;
+            }
+          }
+          if (finalNew) {
+            finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + finalNew.trim();
+          }
+          const display = finalTranscriptRef.current + (interim ? ' ' + interim : '');
+          setMessage(display);
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn('SpeechRecognition error:', event.error);
+          if (event.error === 'not-allowed') {
+            toast.error('Microphone access denied');
+          }
+          setIsRecording(false);
+          recognitionRef.current = null;
+        };
+
+        recognition.onend = () => {
+          // Only reset if we didn't manually stop (prevents auto-restart issues)
+          if (recognitionRef.current === recognition) {
+            setIsRecording(false);
+            recognitionRef.current = null;
+          }
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+        setIsRecording(true);
+        toast.success('Listening...', { duration: 1500 });
+      } catch (err) {
+        console.error('Failed to start SpeechRecognition:', err);
+        startWhisperRecording();
+      }
+    }, [message]);
+
+    // ── Whisper batch fallback (offline) ──
+    const startWhisperRecording = useCallback(async () => {
+      if (!whisperAvailable) {
+        toast.info('Download a voice model first', {
+          description: 'Go to Settings → Voice Models to download Whisper.',
+          action: { label: 'Open Settings', onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })) },
+          duration: 5000,
+        });
+        return;
+      }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -185,7 +256,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
           setIsTranscribing(true);
           try {
             if (!isWhisperLoaded()) {
-              toast.error('Loading Whisper model...');
+              toast.loading('Loading Whisper model...', { id: 'whisper-loading' });
               const success = await loadWhisperModel(getSelectedWhisperModel(), (progress) => { if (progress.message) toast.loading(progress.message, { id: 'whisper-loading' }); });
               toast.dismiss('whisper-loading');
               if (!success) throw new Error('Failed to load model');
@@ -203,13 +274,16 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         mediaRecorderRef.current = mediaRecorder;
         mediaRecorder.start();
         setIsRecording(true);
-        toast.success('Recording... (local Whisper)', { duration: 1500 });
+        toast.success('Recording (offline Whisper)...', { duration: 1500 });
       } catch (error) { console.error('Failed to start recording:', error); toast.error('Failed to access microphone'); }
-    }, [autoSendOnVoice, onSend]);
+    }, [whisperAvailable]);
 
     const stopRecording = useCallback(() => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') mediaRecorderRef.current.stop();
-      if (recognitionRef.current) recognitionRef.current.stop();
       setIsRecording(false);
     }, []);
 
@@ -218,6 +292,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         onSend(message.trim(), planningMode, attachments.length > 0 ? attachments : undefined);
         setMessage('');
         setAttachments([]);
+        finalTranscriptRef.current = '';
       }
     };
 
@@ -259,16 +334,31 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
     const toggleRecording = useCallback(() => {
       if (isRecording) { stopRecording(); return; }
-      if (!whisperAvailable) {
-        toast.info('Download a voice model first', {
-          description: 'Go to Settings → Voice Models to download Whisper.',
-          action: { label: 'Open Settings', onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })) },
-          duration: 5000,
-        });
+      // Use browser SpeechRecognition if available (live streaming), otherwise Whisper
+      const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognitionCtor && !isOfflineMode) {
+        startLiveTranscription();
+      } else {
+        startWhisperRecording();
+      }
+    }, [isRecording, isOfflineMode, startLiveTranscription, startWhisperRecording, stopRecording]);
+
+    // ── Read-back (TTS) ──
+    const toggleReadBack = useCallback(() => {
+      if (isReadingBack) {
+        stopSpeaking();
+        setIsReadingBack(false);
         return;
       }
-      startLocalRecording();
-    }, [isRecording, whisperAvailable, startLocalRecording, stopRecording]);
+      if (!message.trim()) return;
+      if (!isTTSSupported()) { toast.error('Text-to-speech not supported in this browser'); return; }
+      setIsReadingBack(true);
+      speak(message, {
+        voice: settings.ttsVoice,
+        rate: settings.ttsRate,
+        onEnd: () => setIsReadingBack(false),
+      });
+    }, [isReadingBack, message, settings.ttsVoice, settings.ttsRate]);
 
     const switchBackendModel = (backend: ChatSettings['backend'], model: string) => {
       const updated = { ...loadSettings(), backend };
@@ -463,9 +553,14 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                 <Paperclip className="w-4 h-4" />
               </Button>
 
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-accent hover:text-accent/80">
-                <Volume2 className="w-4 h-4" />
-              </Button>
+              {message.trim() && (
+                <Button variant="ghost" size="icon"
+                  className={cn("h-8 w-8 rounded-full", isReadingBack ? "text-destructive hover:text-destructive/80" : "text-accent hover:text-accent/80")}
+                  onClick={toggleReadBack}
+                  title={isReadingBack ? "Stop reading" : "Read message aloud"}>
+                  {isReadingBack ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </Button>
+              )}
 
               <Button
                 variant={webSearchEnabled ? "default" : "ghost"}
