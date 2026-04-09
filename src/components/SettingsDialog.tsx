@@ -23,6 +23,9 @@ import { toast } from 'sonner';
 import { handleExport, handleImportFromFile } from '@/lib/export-import';
 import { getPermissions, savePermissions, toggleSafeMode } from '@/lib/permissions';
 import { runSelfTests, formatTestResults, TestResult } from '@/lib/self-test';
+import { UpdatePanel } from '@/components/UpdatePanel';
+import { PluginManager } from '@/components/ide/PluginManager';
+import { getPluginRegistry, type Plugin } from '@/lib/plugin-system';
 
 interface SystemHealthStatus {
   ollama: 'online' | 'offline' | 'checking';
