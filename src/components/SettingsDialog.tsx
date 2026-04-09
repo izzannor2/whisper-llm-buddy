@@ -60,6 +60,7 @@ export function SettingsDialog({
   const [systemHealth, setSystemHealth] = useState<SystemHealthStatus>({
     ollama: 'checking', llamaCpp: 'checking', ollamaModel: '', llamaCppModel: ''
   });
+  const [plugins, setPlugins] = useState<Plugin[]>(() => getPlugins());
 
   // Auto-scan system health when settings dialog opens
   useEffect(() => {
@@ -302,6 +303,14 @@ export function SettingsDialog({
             <TabsTrigger value="debug" className="text-xs flex items-center gap-1">
               <Bug className="w-3 h-3" />
               <span className="hidden sm:inline">Debug</span>
+            </TabsTrigger>
+            <TabsTrigger value="plugins" className="text-xs flex items-center gap-1">
+              <Plug className="w-3 h-3" />
+              <span className="hidden sm:inline">Plugins</span>
+            </TabsTrigger>
+            <TabsTrigger value="updates" className="text-xs flex items-center gap-1">
+              <Package className="w-3 h-3" />
+              <span className="hidden sm:inline">Updates</span>
             </TabsTrigger>
           </TabsList>
 
