@@ -25,7 +25,7 @@ import { getPermissions, savePermissions, toggleSafeMode } from '@/lib/permissio
 import { runSelfTests, formatTestResults, TestResult } from '@/lib/self-test';
 import { UpdatePanel } from '@/components/UpdatePanel';
 import { PluginManager } from '@/components/ide/PluginManager';
-import { getPlugins, type Plugin } from '@/lib/plugin-system';
+import { type Plugin } from '@/lib/ide-types';
 
 interface SystemHealthStatus {
   ollama: 'online' | 'offline' | 'checking';
