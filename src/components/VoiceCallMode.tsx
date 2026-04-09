@@ -649,14 +649,14 @@ export function VoiceCallMode({
         setCallState('speaking');
         if (isSpeakerOff) {
           if (pushToTalkRef.current) setCallState('waiting');
-          else setTimeout(() => startListening(), 300);
+          else setTimeout(() => startListeningUnified(), 300);
         } else {
           speak(response, {
             voice: ttsVoice, rate: ttsRate,
             onEnd: () => {
               if (isCallActiveRef.current) {
                 if (pushToTalkRef.current) setCallState('waiting');
-                else setTimeout(() => startListening(), 300);
+                else setTimeout(() => startListeningUnified(), 300);
               }
             },
           });
@@ -897,7 +897,7 @@ export function VoiceCallMode({
           )}
           {callState === 'waiting' && pushToTalk && !isMuted && (
             <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5"
-              onMouseDown={() => { setIsHoldingSpace(true); startListening(); }}
+              onMouseDown={() => { setIsHoldingSpace(true); startListeningUnified(); }}
               onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}
               onMouseLeave={() => { if (isHoldingSpace) { setIsHoldingSpace(false); stopListeningManually(); } }}>
               <Mic className="w-4 h-4" /> Hold to Talk
