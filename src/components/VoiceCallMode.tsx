@@ -120,9 +120,14 @@ export function VoiceCallMode({
     localStorage.setItem('voice-push-to-talk', String(pushToTalk));
   }, [pushToTalk]);
 
+  const [useBrowserSpeech, setUseBrowserSpeech] = useState(() => localStorage.getItem('voice-browser-speech') !== 'false');
+  const speechRecognitionRef = useRef<any>(null);
+  const browserTranscriptRef = useRef('');
+
   const whisperReady = isVoiceReady();
   const ttsReady = isTTSSupported();
-  const canMakeCall = whisperReady; // TTS is optional (speaker-off mode works without it)
+  const browserSpeechSupported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  const canMakeCall = (useBrowserSpeech && browserSpeechSupported) || whisperReady;
 
   // Scroll chat to bottom
   useEffect(() => {
