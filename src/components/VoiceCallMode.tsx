@@ -115,6 +115,10 @@ export function VoiceCallMode({
     }
   }, [existingMessages]);
 
+  const [useBrowserSpeech, setUseBrowserSpeech] = useState(() => localStorage.getItem('voice-browser-speech') !== 'false');
+  const speechRecognitionRef = useRef<any>(null);
+  const browserTranscriptRef = useRef('');
+
   useEffect(() => {
     pushToTalkRef.current = pushToTalk;
     localStorage.setItem('voice-push-to-talk', String(pushToTalk));
@@ -123,10 +127,6 @@ export function VoiceCallMode({
   useEffect(() => {
     localStorage.setItem('voice-browser-speech', String(useBrowserSpeech));
   }, [useBrowserSpeech]);
-
-  const [useBrowserSpeech, setUseBrowserSpeech] = useState(() => localStorage.getItem('voice-browser-speech') !== 'false');
-  const speechRecognitionRef = useRef<any>(null);
-  const browserTranscriptRef = useRef('');
 
   const whisperReady = isVoiceReady();
   const ttsReady = isTTSSupported();
