@@ -120,6 +120,10 @@ export function VoiceCallMode({
     localStorage.setItem('voice-push-to-talk', String(pushToTalk));
   }, [pushToTalk]);
 
+  useEffect(() => {
+    localStorage.setItem('voice-browser-speech', String(useBrowserSpeech));
+  }, [useBrowserSpeech]);
+
   const [useBrowserSpeech, setUseBrowserSpeech] = useState(() => localStorage.getItem('voice-browser-speech') !== 'false');
   const speechRecognitionRef = useRef<any>(null);
   const browserTranscriptRef = useRef('');
@@ -420,14 +424,143 @@ export function VoiceCallMode({
   }, [onSendMessage, ttsVoice, ttsRate, detectSilence, isMuted, onNewMessages]);
 
   /* ---------------------------------------------------------------- */
+  /*  Browser SpeechRecognition-based listening                        */
+  /* ---------------------------------------------------------------- */
+  const startBrowserListening = useCallback(async () => {
+    if (!isCallActiveRef.current || isMuted) return;
+    setCallState('listening');
+    setTranscript('');
+    browserTranscriptRef.current = '';
+
+    try {
+      // Also get mic for waveform viz
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      streamRef.current = stream;
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      const analyser = audioContext.createAnalyser();
+      analyserRef.current = analyser;
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+      analyser.fftSize = 512;
+
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = !pushToTalkRef.current;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      speechRecognitionRef.current = recognition;
+
+      recognition.onresult = (event: any) => {
+        let finalText = '';
+        let interimText = '';
+        for (let i = 0; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) finalText += t;
+          else interimText += t;
+        }
+        setTranscript((finalText || '') + (interimText ? ' ' + interimText : ''));
+        if (finalText.trim()) browserTranscriptRef.current = finalText.trim();
+      };
+
+      recognition.onend = async () => {
+        // Clean up audio
+        stream.getTracks().forEach(t => t.stop());
+        if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+
+        if (!isCallActiveRef.current) return;
+        const text = browserTranscriptRef.current.trim();
+
+        const NOISE_PATTERNS = /^\s*(\[.*?\]|\(.*?\)|\*.*?\*|music|laughter|applause|silence|noise|background)\s*$/i;
+        if (!text || NOISE_PATTERNS.test(text) || text.length <= 1) {
+          if (isCallActiveRef.current) {
+            if (pushToTalkRef.current) setCallState('waiting');
+            else setTimeout(() => startBrowserListening(), 500);
+          }
+          return;
+        }
+
+        setCallState('processing');
+        const screenshot = latestScreenshotRef.current || undefined;
+        const userMsg: VoiceMessage = {
+          id: crypto.randomUUID(), role: 'user', content: text,
+          timestamp: Date.now(), isVoice: true, screenshot,
+        };
+        setCallMessages(prev => [...prev, userMsg]);
+
+        try {
+          const response = await onSendMessage(text, screenshot);
+          if (response && isCallActiveRef.current) {
+            const assistantMsg: VoiceMessage = {
+              id: crypto.randomUUID(), role: 'assistant', content: response,
+              timestamp: Date.now(), isVoice: true,
+            };
+            setCallMessages(prev => [...prev, assistantMsg]);
+            onNewMessages?.(userMsg, assistantMsg);
+
+            setCallState('speaking');
+            if (isSpeakerOff) {
+              if (pushToTalkRef.current) setCallState('waiting');
+              else setTimeout(() => startBrowserListening(), 300);
+            } else {
+              speak(response, {
+                voice: ttsVoice, rate: ttsRate,
+                onEnd: () => {
+                  if (isCallActiveRef.current) {
+                    if (pushToTalkRef.current) setCallState('waiting');
+                    else setTimeout(() => startBrowserListening(), 300);
+                  }
+                },
+              });
+            }
+          } else if (isCallActiveRef.current) {
+            if (pushToTalkRef.current) setCallState('waiting');
+            else setTimeout(() => startBrowserListening(), 500);
+          }
+        } catch (error) {
+          console.error('Voice call error:', error);
+          toast.error('Voice processing failed. Retrying...');
+          if (pushToTalkRef.current) setCallState('waiting');
+          else setTimeout(() => startBrowserListening(), 1000);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('SpeechRecognition error:', event.error);
+        if (event.error === 'no-speech' && isCallActiveRef.current) {
+          if (pushToTalkRef.current) setCallState('waiting');
+          else setTimeout(() => startBrowserListening(), 500);
+        }
+      };
+
+      recognition.start();
+    } catch (error) {
+      console.error('Failed to start browser speech:', error);
+      toast.error('Microphone access failed');
+      if (isCallActiveRef.current) setTimeout(() => startBrowserListening(), 1000);
+    }
+  }, [onSendMessage, ttsVoice, ttsRate, isMuted, isSpeakerOff, onNewMessages]);
+
+  /* ---------------------------------------------------------------- */
+  /*  Unified start listening                                          */
+  /* ---------------------------------------------------------------- */
+  const startListeningUnified = useCallback(() => {
+    if (useBrowserSpeech && browserSpeechSupported) startBrowserListening();
+    else startListening();
+  }, [useBrowserSpeech, browserSpeechSupported, startBrowserListening, startListening]);
+
+  /* ---------------------------------------------------------------- */
   /*  Start / End Call                                                  */
   /* ---------------------------------------------------------------- */
   const startCall = useCallback(async () => {
-    if (!canMakeCall) {
+    const usingBrowser = useBrowserSpeech && browserSpeechSupported;
+    if (!usingBrowser && !whisperReady) {
       const downloaded = getDownloadedModels();
       if (downloaded.length === 0) {
         toast.error('No voice model downloaded', {
-          description: 'Go to Settings → Voice Models to download Whisper.',
+          description: 'Go to Settings → Voice Models to download Whisper, or enable Browser Speech.',
           action: { label: 'Open Settings', onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })) },
           duration: 5000,
         });
@@ -448,7 +581,7 @@ export function VoiceCallMode({
     setCallStartTime(Date.now());
     setIsMinimized(false);
 
-    if (!isWhisperLoaded()) {
+    if (!usingBrowser && !isWhisperLoaded()) {
       setCallState('loading');
       setLoadingMessage('Loading speech recognition...');
       const success = await loadWhisperModel(getSelectedWhisperModel(), (p) => { if (p.message) setLoadingMessage(p.message); });
@@ -459,9 +592,9 @@ export function VoiceCallMode({
       }
     }
 
-    toast.success(`Voice call started — ${pushToTalk ? 'Hold Space to talk' : 'Speak anytime'}`, { duration: 2000 });
-    if (pushToTalk) setCallState('waiting'); else startListening();
-  }, [canMakeCall, startListening, pushToTalk]);
+    toast.success(`Voice call started — ${pushToTalk ? 'Hold Space to talk' : 'Speak anytime'}${usingBrowser ? ' (Browser Speech)' : ' (Whisper)'}`, { duration: 2000 });
+    if (pushToTalk) setCallState('waiting'); else { if (usingBrowser) startBrowserListening(); else startListening(); }
+  }, [canMakeCall, startListening, startBrowserListening, pushToTalk, useBrowserSpeech, browserSpeechSupported, whisperReady]);
 
   const endCall = useCallback(() => {
     isCallActiveRef.current = false;
