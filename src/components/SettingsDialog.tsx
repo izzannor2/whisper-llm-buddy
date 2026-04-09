@@ -1234,7 +1234,39 @@ export function SettingsDialog({
               <p className="text-[10px] text-muted-foreground">Exports conversations, memories, settings, feedback, and tool stats as a single JSON file.</p>
             </div>
           </TabsContent>
+
+          <TabsContent value="plugins" className="mt-4">
+            <PluginManager plugins={plugins} onPluginsChange={setPlugins} />
+          </TabsContent>
+
+          <TabsContent value="updates" className="mt-4">
+            <UpdatePanel />
+          </TabsContent>
         </Tabs>
+
+        {/* Restart AI Engine */}
+        <div className="flex items-center justify-between mt-2 p-3 rounded-lg border border-border bg-muted/30">
+          <div>
+            <p className="text-sm font-medium">Restart AI Engine</p>
+            <p className="text-[10px] text-muted-foreground">Ping local backends to warm them up</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={async () => {
+            const ollamaUrl = localSettings.ollamaUrl || 'http://localhost:11434';
+            const llamaUrl = localSettings.localUrl || 'http://127.0.0.1:8081';
+            let ok = false;
+            try {
+              const r = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(3000) });
+              if (r.ok) { ok = true; toast.success('Ollama is responding'); }
+            } catch {}
+            try {
+              const r = await fetch(`${llamaUrl}/health`, { signal: AbortSignal.timeout(3000) });
+              if (r.ok) { ok = true; toast.success('Llama.cpp is responding'); }
+            } catch {}
+            if (!ok) toast.error('No local backends responding');
+          }}>
+            <RotateCw className="w-3 h-3 mr-1.5" />Restart
+          </Button>
+        </div>
 
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
