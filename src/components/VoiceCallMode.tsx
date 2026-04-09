@@ -712,7 +712,7 @@ export function VoiceCallMode({
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, [isInCall, callState, isHoldingSpace, stopListeningManually, startListening, endCall]);
+  }, [isInCall, callState, isHoldingSpace, stopListeningManually, startListeningUnified, endCall]);
 
   /* ---------------------------------------------------------------- */
   /*  Render: Idle (just the phone button)                             */
