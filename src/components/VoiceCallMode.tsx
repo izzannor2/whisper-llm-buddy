@@ -670,8 +670,10 @@ export function VoiceCallMode({
   /* ---------------------------------------------------------------- */
   const handlePhoneClick = () => {
     if (!canMakeCall) {
-      toast.info('Download a voice model first', {
-        description: 'Go to Settings → Voice Models to download Whisper for offline speech recognition.',
+      toast.info('Setup required for voice calls', {
+        description: browserSpeechSupported
+          ? 'Enable "Browser" toggle in call settings for instant voice calls, or download a Whisper model for offline use.'
+          : 'Go to Settings → Voice Models to download Whisper for speech recognition.',
         action: {
           label: 'Open Settings',
           onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })),
