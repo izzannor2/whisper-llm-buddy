@@ -60,7 +60,7 @@ export function SettingsDialog({
   const [systemHealth, setSystemHealth] = useState<SystemHealthStatus>({
     ollama: 'checking', llamaCpp: 'checking', ollamaModel: '', llamaCppModel: ''
   });
-  const [plugins, setPlugins] = useState<Plugin[]>(() => getPlugins());
+  const [plugins, setPlugins] = useState<Plugin[]>([]);
 
   // Auto-scan system health when settings dialog opens
   useEffect(() => {
