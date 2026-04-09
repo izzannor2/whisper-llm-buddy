@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug, Shield, Upload, FileDown } from 'lucide-react';
+import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug, Shield, Upload, FileDown, Plug, Package, RotateCw } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,9 @@ import { toast } from 'sonner';
 import { handleExport, handleImportFromFile } from '@/lib/export-import';
 import { getPermissions, savePermissions, toggleSafeMode } from '@/lib/permissions';
 import { runSelfTests, formatTestResults, TestResult } from '@/lib/self-test';
+import { UpdatePanel } from '@/components/UpdatePanel';
+import { PluginManager } from '@/components/ide/PluginManager';
+import { type Plugin } from '@/lib/ide-types';
 
 interface SystemHealthStatus {
   ollama: 'online' | 'offline' | 'checking';
@@ -57,6 +60,7 @@ export function SettingsDialog({
   const [systemHealth, setSystemHealth] = useState<SystemHealthStatus>({
     ollama: 'checking', llamaCpp: 'checking', ollamaModel: '', llamaCppModel: ''
   });
+  const [plugins, setPlugins] = useState<Plugin[]>([]);
 
   // Auto-scan system health when settings dialog opens
   useEffect(() => {
@@ -299,6 +303,14 @@ export function SettingsDialog({
             <TabsTrigger value="debug" className="text-xs flex items-center gap-1">
               <Bug className="w-3 h-3" />
               <span className="hidden sm:inline">Debug</span>
+            </TabsTrigger>
+            <TabsTrigger value="plugins" className="text-xs flex items-center gap-1">
+              <Plug className="w-3 h-3" />
+              <span className="hidden sm:inline">Plugins</span>
+            </TabsTrigger>
+            <TabsTrigger value="updates" className="text-xs flex items-center gap-1">
+              <Package className="w-3 h-3" />
+              <span className="hidden sm:inline">Updates</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1222,7 +1234,39 @@ export function SettingsDialog({
               <p className="text-[10px] text-muted-foreground">Exports conversations, memories, settings, feedback, and tool stats as a single JSON file.</p>
             </div>
           </TabsContent>
+
+          <TabsContent value="plugins" className="mt-4">
+            <PluginManager plugins={plugins} onPluginsChange={setPlugins} />
+          </TabsContent>
+
+          <TabsContent value="updates" className="mt-4">
+            <UpdatePanel />
+          </TabsContent>
         </Tabs>
+
+        {/* Restart AI Engine */}
+        <div className="flex items-center justify-between mt-2 p-3 rounded-lg border border-border bg-muted/30">
+          <div>
+            <p className="text-sm font-medium">Restart AI Engine</p>
+            <p className="text-[10px] text-muted-foreground">Ping local backends to warm them up</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={async () => {
+            const ollamaUrl = localSettings.ollamaUrl || 'http://localhost:11434';
+            const llamaUrl = localSettings.localUrl || 'http://127.0.0.1:8081';
+            let ok = false;
+            try {
+              const r = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(3000) });
+              if (r.ok) { ok = true; toast.success('Ollama is responding'); }
+            } catch {}
+            try {
+              const r = await fetch(`${llamaUrl}/health`, { signal: AbortSignal.timeout(3000) });
+              if (r.ok) { ok = true; toast.success('Llama.cpp is responding'); }
+            } catch {}
+            if (!ok) toast.error('No local backends responding');
+          }}>
+            <RotateCw className="w-3 h-3 mr-1.5" />Restart
+          </Button>
+        </div>
 
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

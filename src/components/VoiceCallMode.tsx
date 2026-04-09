@@ -115,14 +115,23 @@ export function VoiceCallMode({
     }
   }, [existingMessages]);
 
+  const [useBrowserSpeech, setUseBrowserSpeech] = useState(() => localStorage.getItem('voice-browser-speech') !== 'false');
+  const speechRecognitionRef = useRef<any>(null);
+  const browserTranscriptRef = useRef('');
+
   useEffect(() => {
     pushToTalkRef.current = pushToTalk;
     localStorage.setItem('voice-push-to-talk', String(pushToTalk));
   }, [pushToTalk]);
 
+  useEffect(() => {
+    localStorage.setItem('voice-browser-speech', String(useBrowserSpeech));
+  }, [useBrowserSpeech]);
+
   const whisperReady = isVoiceReady();
   const ttsReady = isTTSSupported();
-  const canMakeCall = whisperReady; // TTS is optional (speaker-off mode works without it)
+  const browserSpeechSupported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  const canMakeCall = (useBrowserSpeech && browserSpeechSupported) || whisperReady;
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -415,14 +424,143 @@ export function VoiceCallMode({
   }, [onSendMessage, ttsVoice, ttsRate, detectSilence, isMuted, onNewMessages]);
 
   /* ---------------------------------------------------------------- */
+  /*  Browser SpeechRecognition-based listening                        */
+  /* ---------------------------------------------------------------- */
+  const startBrowserListening = useCallback(async () => {
+    if (!isCallActiveRef.current || isMuted) return;
+    setCallState('listening');
+    setTranscript('');
+    browserTranscriptRef.current = '';
+
+    try {
+      // Also get mic for waveform viz
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      streamRef.current = stream;
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      const analyser = audioContext.createAnalyser();
+      analyserRef.current = analyser;
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+      analyser.fftSize = 512;
+
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = !pushToTalkRef.current;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      speechRecognitionRef.current = recognition;
+
+      recognition.onresult = (event: any) => {
+        let finalText = '';
+        let interimText = '';
+        for (let i = 0; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) finalText += t;
+          else interimText += t;
+        }
+        setTranscript((finalText || '') + (interimText ? ' ' + interimText : ''));
+        if (finalText.trim()) browserTranscriptRef.current = finalText.trim();
+      };
+
+      recognition.onend = async () => {
+        // Clean up audio
+        stream.getTracks().forEach(t => t.stop());
+        if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+
+        if (!isCallActiveRef.current) return;
+        const text = browserTranscriptRef.current.trim();
+
+        const NOISE_PATTERNS = /^\s*(\[.*?\]|\(.*?\)|\*.*?\*|music|laughter|applause|silence|noise|background)\s*$/i;
+        if (!text || NOISE_PATTERNS.test(text) || text.length <= 1) {
+          if (isCallActiveRef.current) {
+            if (pushToTalkRef.current) setCallState('waiting');
+            else setTimeout(() => startBrowserListening(), 500);
+          }
+          return;
+        }
+
+        setCallState('processing');
+        const screenshot = latestScreenshotRef.current || undefined;
+        const userMsg: VoiceMessage = {
+          id: crypto.randomUUID(), role: 'user', content: text,
+          timestamp: Date.now(), isVoice: true, screenshot,
+        };
+        setCallMessages(prev => [...prev, userMsg]);
+
+        try {
+          const response = await onSendMessage(text, screenshot);
+          if (response && isCallActiveRef.current) {
+            const assistantMsg: VoiceMessage = {
+              id: crypto.randomUUID(), role: 'assistant', content: response,
+              timestamp: Date.now(), isVoice: true,
+            };
+            setCallMessages(prev => [...prev, assistantMsg]);
+            onNewMessages?.(userMsg, assistantMsg);
+
+            setCallState('speaking');
+            if (isSpeakerOff) {
+              if (pushToTalkRef.current) setCallState('waiting');
+              else setTimeout(() => startBrowserListening(), 300);
+            } else {
+              speak(response, {
+                voice: ttsVoice, rate: ttsRate,
+                onEnd: () => {
+                  if (isCallActiveRef.current) {
+                    if (pushToTalkRef.current) setCallState('waiting');
+                    else setTimeout(() => startBrowserListening(), 300);
+                  }
+                },
+              });
+            }
+          } else if (isCallActiveRef.current) {
+            if (pushToTalkRef.current) setCallState('waiting');
+            else setTimeout(() => startBrowserListening(), 500);
+          }
+        } catch (error) {
+          console.error('Voice call error:', error);
+          toast.error('Voice processing failed. Retrying...');
+          if (pushToTalkRef.current) setCallState('waiting');
+          else setTimeout(() => startBrowserListening(), 1000);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('SpeechRecognition error:', event.error);
+        if (event.error === 'no-speech' && isCallActiveRef.current) {
+          if (pushToTalkRef.current) setCallState('waiting');
+          else setTimeout(() => startBrowserListening(), 500);
+        }
+      };
+
+      recognition.start();
+    } catch (error) {
+      console.error('Failed to start browser speech:', error);
+      toast.error('Microphone access failed');
+      if (isCallActiveRef.current) setTimeout(() => startBrowserListening(), 1000);
+    }
+  }, [onSendMessage, ttsVoice, ttsRate, isMuted, isSpeakerOff, onNewMessages]);
+
+  /* ---------------------------------------------------------------- */
+  /*  Unified start listening                                          */
+  /* ---------------------------------------------------------------- */
+  const startListeningUnified = useCallback(() => {
+    if (useBrowserSpeech && browserSpeechSupported) startBrowserListening();
+    else startListening();
+  }, [useBrowserSpeech, browserSpeechSupported, startBrowserListening, startListening]);
+
+  /* ---------------------------------------------------------------- */
   /*  Start / End Call                                                  */
   /* ---------------------------------------------------------------- */
   const startCall = useCallback(async () => {
-    if (!canMakeCall) {
+    const usingBrowser = useBrowserSpeech && browserSpeechSupported;
+    if (!usingBrowser && !whisperReady) {
       const downloaded = getDownloadedModels();
       if (downloaded.length === 0) {
         toast.error('No voice model downloaded', {
-          description: 'Go to Settings → Voice Models to download Whisper.',
+          description: 'Go to Settings → Voice Models to download Whisper, or enable Browser Speech.',
           action: { label: 'Open Settings', onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })) },
           duration: 5000,
         });
@@ -443,7 +581,7 @@ export function VoiceCallMode({
     setCallStartTime(Date.now());
     setIsMinimized(false);
 
-    if (!isWhisperLoaded()) {
+    if (!usingBrowser && !isWhisperLoaded()) {
       setCallState('loading');
       setLoadingMessage('Loading speech recognition...');
       const success = await loadWhisperModel(getSelectedWhisperModel(), (p) => { if (p.message) setLoadingMessage(p.message); });
@@ -454,9 +592,9 @@ export function VoiceCallMode({
       }
     }
 
-    toast.success(`Voice call started — ${pushToTalk ? 'Hold Space to talk' : 'Speak anytime'}`, { duration: 2000 });
-    if (pushToTalk) setCallState('waiting'); else startListening();
-  }, [canMakeCall, startListening, pushToTalk]);
+    toast.success(`Voice call started — ${pushToTalk ? 'Hold Space to talk' : 'Speak anytime'}${usingBrowser ? ' (Browser Speech)' : ' (Whisper)'}`, { duration: 2000 });
+    if (pushToTalk) setCallState('waiting'); else { if (usingBrowser) startBrowserListening(); else startListening(); }
+  }, [canMakeCall, startListening, startBrowserListening, pushToTalk, useBrowserSpeech, browserSpeechSupported, whisperReady]);
 
   const endCall = useCallback(() => {
     isCallActiveRef.current = false;
@@ -472,12 +610,14 @@ export function VoiceCallMode({
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (speechRecognitionRef.current) { try { speechRecognitionRef.current.abort(); } catch {} speechRecognitionRef.current = null; }
     stopSpeaking();
   }, [stopScreenShare, onEnd]);
 
   const stopListeningManually = useCallback(() => {
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
     if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+    if (speechRecognitionRef.current) { try { speechRecognitionRef.current.stop(); } catch {} }
   }, []);
 
   /* ---------------------------------------------------------------- */
@@ -509,14 +649,14 @@ export function VoiceCallMode({
         setCallState('speaking');
         if (isSpeakerOff) {
           if (pushToTalkRef.current) setCallState('waiting');
-          else setTimeout(() => startListening(), 300);
+          else setTimeout(() => startListeningUnified(), 300);
         } else {
           speak(response, {
             voice: ttsVoice, rate: ttsRate,
             onEnd: () => {
               if (isCallActiveRef.current) {
                 if (pushToTalkRef.current) setCallState('waiting');
-                else setTimeout(() => startListening(), 300);
+                else setTimeout(() => startListeningUnified(), 300);
               }
             },
           });
@@ -530,8 +670,10 @@ export function VoiceCallMode({
   /* ---------------------------------------------------------------- */
   const handlePhoneClick = () => {
     if (!canMakeCall) {
-      toast.info('Download a voice model first', {
-        description: 'Go to Settings → Voice Models to download Whisper for offline speech recognition.',
+      toast.info('Setup required for voice calls', {
+        description: browserSpeechSupported
+          ? 'Enable "Browser" toggle in call settings for instant voice calls, or download a Whisper model for offline use.'
+          : 'Go to Settings → Voice Models to download Whisper for speech recognition.',
         action: {
           label: 'Open Settings',
           onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })),
@@ -553,11 +695,11 @@ export function VoiceCallMode({
       if (e.code === 'Space') {
         e.preventDefault();
         if (pushToTalkRef.current) {
-          if (callState === 'waiting' && !isHoldingSpace) { setIsHoldingSpace(true); startListening(); }
-          else if (callState === 'speaking') { stopSpeaking(); setIsHoldingSpace(true); startListening(); }
+          if (callState === 'waiting' && !isHoldingSpace) { setIsHoldingSpace(true); startListeningUnified(); }
+          else if (callState === 'speaking') { stopSpeaking(); setIsHoldingSpace(true); startListeningUnified(); }
         } else {
           if (callState === 'listening') stopListeningManually();
-          else if (callState === 'speaking') { stopSpeaking(); startListening(); }
+          else if (callState === 'speaking') { stopSpeaking(); startListeningUnified(); }
         }
       }
       if (e.code === 'Escape') { e.preventDefault(); endCall(); }
@@ -572,7 +714,7 @@ export function VoiceCallMode({
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, [isInCall, callState, isHoldingSpace, stopListeningManually, startListening, endCall]);
+  }, [isInCall, callState, isHoldingSpace, stopListeningManually, startListeningUnified, endCall]);
 
   /* ---------------------------------------------------------------- */
   /*  Render: Idle (just the phone button)                             */
@@ -689,6 +831,14 @@ export function VoiceCallMode({
             <Label htmlFor="ptt-toggle" className="text-xs text-muted-foreground cursor-pointer">PTT</Label>
             <Switch id="ptt-toggle" checked={pushToTalk} onCheckedChange={setPushToTalk} className="scale-75" />
           </div>
+
+          {browserSpeechSupported && (
+            <div className="flex items-center gap-1.5 bg-muted/30 rounded-full px-3 py-1 border border-border/30">
+              <Mic className="w-3 h-3 text-muted-foreground" />
+              <Label htmlFor="browser-speech-toggle" className="text-xs text-muted-foreground cursor-pointer">Browser</Label>
+              <Switch id="browser-speech-toggle" checked={useBrowserSpeech} onCheckedChange={setUseBrowserSpeech} className="scale-75" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -749,7 +899,7 @@ export function VoiceCallMode({
           )}
           {callState === 'waiting' && pushToTalk && !isMuted && (
             <Button variant="secondary" size="sm" className="rounded-full px-5 gap-1.5"
-              onMouseDown={() => { setIsHoldingSpace(true); startListening(); }}
+              onMouseDown={() => { setIsHoldingSpace(true); startListeningUnified(); }}
               onMouseUp={() => { setIsHoldingSpace(false); stopListeningManually(); }}
               onMouseLeave={() => { if (isHoldingSpace) { setIsHoldingSpace(false); stopListeningManually(); } }}>
               <Mic className="w-4 h-4" /> Hold to Talk

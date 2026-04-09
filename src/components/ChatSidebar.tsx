@@ -387,6 +387,9 @@ export function ChatSidebar({
 
       {/* Footer */}
       <div className="p-2 border-t border-sidebar-border space-y-0.5">
+        <div className="px-3 py-1">
+          <span className="text-[10px] font-mono text-muted-foreground">{(() => { try { return localStorage.getItem('localdev-app-version') || 'v1.0.0'; } catch { return 'v1.0.0'; } })()}</span>
+        </div>
         <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal text-muted-foreground" onClick={() => window.close()}>
           <Power className="w-4 h-4 mr-3" />Quit LocalDev
         </Button>
