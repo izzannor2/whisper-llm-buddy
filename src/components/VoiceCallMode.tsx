@@ -829,6 +829,14 @@ export function VoiceCallMode({
             <Label htmlFor="ptt-toggle" className="text-xs text-muted-foreground cursor-pointer">PTT</Label>
             <Switch id="ptt-toggle" checked={pushToTalk} onCheckedChange={setPushToTalk} className="scale-75" />
           </div>
+
+          {browserSpeechSupported && (
+            <div className="flex items-center gap-1.5 bg-muted/30 rounded-full px-3 py-1 border border-border/30">
+              <Mic className="w-3 h-3 text-muted-foreground" />
+              <Label htmlFor="browser-speech-toggle" className="text-xs text-muted-foreground cursor-pointer">Browser</Label>
+              <Switch id="browser-speech-toggle" checked={useBrowserSpeech} onCheckedChange={setUseBrowserSpeech} className="scale-75" />
+            </div>
+          )}
         </div>
       </div>
 
