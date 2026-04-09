@@ -610,12 +610,14 @@ export function VoiceCallMode({
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (speechRecognitionRef.current) { try { speechRecognitionRef.current.abort(); } catch {} speechRecognitionRef.current = null; }
     stopSpeaking();
   }, [stopScreenShare, onEnd]);
 
   const stopListeningManually = useCallback(() => {
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
     if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+    if (speechRecognitionRef.current) { try { speechRecognitionRef.current.stop(); } catch {} }
   }, []);
 
   /* ---------------------------------------------------------------- */
@@ -691,11 +693,11 @@ export function VoiceCallMode({
       if (e.code === 'Space') {
         e.preventDefault();
         if (pushToTalkRef.current) {
-          if (callState === 'waiting' && !isHoldingSpace) { setIsHoldingSpace(true); startListening(); }
-          else if (callState === 'speaking') { stopSpeaking(); setIsHoldingSpace(true); startListening(); }
+          if (callState === 'waiting' && !isHoldingSpace) { setIsHoldingSpace(true); startListeningUnified(); }
+          else if (callState === 'speaking') { stopSpeaking(); setIsHoldingSpace(true); startListeningUnified(); }
         } else {
           if (callState === 'listening') stopListeningManually();
-          else if (callState === 'speaking') { stopSpeaking(); startListening(); }
+          else if (callState === 'speaking') { stopSpeaking(); startListeningUnified(); }
         }
       }
       if (e.code === 'Escape') { e.preventDefault(); endCall(); }
