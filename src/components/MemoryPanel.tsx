@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Brain, Search, Trash2, Plus, X, Tag, Clock } from 'lucide-react';
+import { Brain, Search, Trash2, Plus, X, Tag, Clock, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Memory, listMemories, storeMemory, deleteMemory, searchMemories } from '@/lib/memory-store';
+import { useAuth } from '@/components/AuthProvider';
 
 interface MemoryPanelProps {
   open: boolean;
@@ -14,6 +15,7 @@ interface MemoryPanelProps {
 }
 
 export function MemoryPanel({ open, onOpenChange }: MemoryPanelProps) {
+  const { user } = useAuth();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
