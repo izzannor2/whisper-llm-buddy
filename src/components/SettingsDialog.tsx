@@ -1248,6 +1248,34 @@ export function SettingsDialog({
           <TabsContent value="updates" className="mt-4">
             <UpdatePanel />
           </TabsContent>
+
+          <TabsContent value="account" className="mt-4 space-y-4">
+            {(() => {
+              const auth = useAuth();
+              if (auth.user) {
+                return (
+                  <div className="space-y-4">
+                    <div className="border rounded-lg p-4 space-y-2">
+                      <p className="text-sm font-medium">Signed in as</p>
+                      <p className="text-sm text-muted-foreground">{auth.user.email}</p>
+                    </div>
+                    <Button variant="outline" onClick={() => auth.signOut()}>
+                      <LogOut className="w-4 h-4 mr-2" /> Sign Out
+                    </Button>
+                  </div>
+                );
+              }
+              return (
+                <div className="border rounded-lg p-4 space-y-3 text-center">
+                  <User className="w-8 h-8 mx-auto text-muted-foreground" />
+                  <p className="text-sm">Sign in to sync your memories and settings across devices.</p>
+                  <Button onClick={() => { onOpenChange(false); window.location.href = '/auth'; }}>
+                    Sign In
+                  </Button>
+                </div>
+              );
+            })()}
+          </TabsContent>
         </Tabs>
 
         {/* Restart AI Engine */}
@@ -1277,11 +1305,14 @@ export function SettingsDialog({
           </Button>
         </div>
 
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>Save Settings</Button>
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-[10px] text-muted-foreground">LocalDev AI v1.0.0</p>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>Save Settings</Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
