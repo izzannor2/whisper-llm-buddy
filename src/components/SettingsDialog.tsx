@@ -63,6 +63,7 @@ export function SettingsDialog({
   });
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [isRestarting, setIsRestarting] = useState(false);
+  const auth = useAuth();
 
   // Auto-scan system health when settings dialog opens
   useEffect(() => {
