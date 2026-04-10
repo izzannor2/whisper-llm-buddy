@@ -472,7 +472,7 @@ async function streamAnthropicResponse(response: Response, onChunk: (chunk: stri
   return fullContent;
 }
 
-// Google AI API (direct client-side call with user's key)
+// Google AI API with streaming support
 async function sendGoogleMessage(
   messages: ChatMessage[],
   settings: ChatSettings,
@@ -483,24 +483,26 @@ async function sendGoogleMessage(
     throw new Error('Google AI API key not configured. Add your key in Settings → API Keys.');
   }
 
-  // Convert to Google AI format
   const contents = messages
     .filter(m => m.role !== 'system')
     .map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
+      parts: [{ text: typeof m.content === 'string' ? m.content : getTextContent(m.content) }],
     }));
 
   const systemInstruction = messages.find(m => m.role === 'system')?.content;
 
+  const endpoint = onChunk ? 'streamGenerateContent' : 'generateContent';
+  const streamParam = onChunk ? '&alt=sse' : '';
+  
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:${endpoint}?key=${apiKey}${streamParam}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+        systemInstruction: systemInstruction ? { parts: [{ text: typeof systemInstruction === 'string' ? systemInstruction : '' }] } : undefined,
         generationConfig: {
           temperature: settings.temperature,
           topP: settings.topP,
@@ -513,6 +515,35 @@ async function sendGoogleMessage(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error?.message || `Google AI API error: ${response.status}`);
+  }
+
+  if (onChunk && response.body) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullContent = '';
+    let buffer = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (!data || data === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(data);
+            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) { fullContent += text; onChunk(text); }
+          } catch { /* partial JSON */ }
+        }
+      }
+    } finally {
+      try { reader.cancel(); } catch {}
+    }
+    return fullContent;
   }
 
   const data = await response.json();
