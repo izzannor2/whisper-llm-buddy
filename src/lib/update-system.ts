@@ -1,12 +1,21 @@
 /**
  * Update / Patch System
- * Client-side versioning, patch application, rollback, and backup.
+ * Client-side versioning, patch application, rollback, backup,
+ * and local update management via IndexedDB.
  */
 
 export const APP_VERSION_KEY = 'localdev-app-version';
 export const UPDATE_HISTORY_KEY = 'localdev-update-history';
 export const BACKUP_KEY = 'localdev-update-backup';
 export const DEFAULT_VERSION = '1.0.0';
+
+const IDB_NAME = 'localdev-updates';
+const IDB_STORE = 'local-updates';
+const IDB_VERSION = 1;
+
+/* ------------------------------------------------------------------ */
+/*  Interfaces                                                         */
+/* ------------------------------------------------------------------ */
 
 export interface AppVersion {
   major: number;
@@ -24,7 +33,7 @@ export interface UpdateManifest {
 export interface PatchEntry {
   file: string;
   action: 'update' | 'create' | 'delete';
-  content?: string; // base64 or raw for settings/config patches
+  content?: string;
 }
 
 export interface AppliedUpdate {
@@ -32,12 +41,20 @@ export interface AppliedUpdate {
   description: string;
   appliedAt: number;
   patchCount: number;
+  source?: 'online' | 'local' | 'manual';
 }
 
 export interface UpdateBackup {
   version: string;
-  settings: string; // JSON snapshot of settings
+  settings: string;
   timestamp: number;
+}
+
+export interface LocalUpdate {
+  version: string;
+  changes: string[];
+  timestamp: string;
+  patches?: PatchEntry[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -108,7 +125,6 @@ export function getUpdateHistory(): AppliedUpdate[] {
 function addToHistory(update: AppliedUpdate): void {
   const history = getUpdateHistory();
   history.unshift(update);
-  // Keep last 50 entries
   localStorage.setItem(UPDATE_HISTORY_KEY, JSON.stringify(history.slice(0, 50)));
 }
 
@@ -139,27 +155,25 @@ export function rollback(): { success: boolean; restoredVersion: string } {
   const backup = getBackup();
   if (!backup) return { success: false, restoredVersion: '' };
 
-  // Restore settings
   try {
     localStorage.setItem('localdev-settings', backup.settings);
   } catch { /* ignore */ }
 
-  // Restore version
   setCurrentVersion(backup.version);
 
-  // Log rollback in history
   addToHistory({
     version: backup.version,
     description: `Rolled back to ${backup.version}`,
     appliedAt: Date.now(),
     patchCount: 0,
+    source: 'manual',
   });
 
   return { success: true, restoredVersion: backup.version };
 }
 
 /* ------------------------------------------------------------------ */
-/*  Check for updates                                                  */
+/*  Check for updates (online)                                         */
 /* ------------------------------------------------------------------ */
 
 export async function checkForUpdates(manifestUrl: string): Promise<{
@@ -182,7 +196,6 @@ export async function checkForUpdates(manifestUrl: string): Promise<{
       return { available: false, error: 'Invalid manifest JSON' };
     }
 
-    // Validate manifest structure
     if (!manifest.version || typeof manifest.version !== 'string') {
       return { available: false, error: 'Manifest missing valid version field' };
     }
@@ -204,20 +217,19 @@ export async function checkForUpdates(manifestUrl: string): Promise<{
 /*  Apply update                                                       */
 /* ------------------------------------------------------------------ */
 
-export function applyUpdate(manifest: UpdateManifest): {
+export function applyUpdate(manifest: UpdateManifest, source: 'online' | 'local' = 'online'): {
   success: boolean;
   appliedPatches: number;
   error?: string;
 } {
   try {
-    // Create backup first
     createBackup();
 
     let appliedPatches = 0;
 
     for (const patch of manifest.patches) {
       try {
-        if (!patch.file || !patch.action) continue; // skip invalid entries
+        if (!patch.file || !patch.action) continue;
         if (patch.action === 'update' || patch.action === 'create') {
           if (patch.file === 'settings' && patch.content) {
             try {
@@ -236,20 +248,18 @@ export function applyUpdate(manifest: UpdateManifest): {
           appliedPatches++;
         }
       } catch {
-        // Individual patch failed — continue with remaining patches
         console.warn(`Skipping failed patch for ${patch.file}`);
       }
     }
 
-    // Update version
     setCurrentVersion(manifest.version);
 
-    // Log to history
     addToHistory({
       version: manifest.version,
       description: manifest.description,
       appliedAt: Date.now(),
       patchCount: appliedPatches,
+      source,
     });
 
     return { success: true, appliedPatches };
@@ -259,7 +269,7 @@ export function applyUpdate(manifest: UpdateManifest): {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Manual version bump (for local dev)                                */
+/*  Manual version bump                                                */
 /* ------------------------------------------------------------------ */
 
 export function bumpVersion(type: 'major' | 'minor' | 'patch'): string {
@@ -276,6 +286,135 @@ export function bumpVersion(type: 'major' | 'minor' | 'patch'): string {
     description: `Manual ${type} bump`,
     appliedAt: Date.now(),
     patchCount: 0,
+    source: 'manual',
   });
   return newVersion;
+}
+
+/* ================================================================== */
+/*  LOCAL UPDATE SYSTEM (IndexedDB)                                    */
+/* ================================================================== */
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: 'version' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getLocalUpdates(): Promise<LocalUpdate[]> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const updates = (req.result as LocalUpdate[]).sort(
+          (a, b) => compareVersions(b.version, a.version)
+        );
+        resolve(updates);
+      };
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => db.close();
+    });
+  } catch (err) {
+    console.warn('Failed to read local updates from IndexedDB:', err);
+    return [];
+  }
+}
+
+export async function saveLocalUpdate(update: LocalUpdate): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    store.put(update);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+export async function removeLocalUpdate(version: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    store.delete(version);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+/** Fetch bundled updates from public/updates/manifest.json */
+export async function scanBundledUpdates(): Promise<LocalUpdate[]> {
+  try {
+    const res = await fetch('/updates/manifest.json', { cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const updates: LocalUpdate[] = Array.isArray(data.updates) ? data.updates : [];
+    // Persist bundled updates into IndexedDB (won't overwrite user-imported ones with same version)
+    for (const u of updates) {
+      if (u.version && u.timestamp) {
+        await saveLocalUpdate(u);
+      }
+    }
+    return updates;
+  } catch {
+    return [];
+  }
+}
+
+/** Validate and import a user-selected .json file */
+export async function importLocalUpdateFile(file: File): Promise<{ success: boolean; update?: LocalUpdate; error?: string }> {
+  try {
+    const text = await file.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return { success: false, error: 'Invalid JSON file' };
+    }
+
+    if (!data.version || typeof data.version !== 'string') {
+      return { success: false, error: 'Missing "version" field' };
+    }
+    if (!data.timestamp || typeof data.timestamp !== 'string') {
+      return { success: false, error: 'Missing "timestamp" field (YYYY-MM-DD)' };
+    }
+
+    const update: LocalUpdate = {
+      version: data.version,
+      changes: Array.isArray(data.changes) ? data.changes : [],
+      timestamp: data.timestamp,
+      patches: Array.isArray(data.patches) ? data.patches : undefined,
+    };
+
+    await saveLocalUpdate(update);
+    return { success: true, update };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to import file' };
+  }
+}
+
+/** Convert a LocalUpdate to an UpdateManifest and apply it */
+export function applyLocalUpdate(update: LocalUpdate): {
+  success: boolean;
+  appliedPatches: number;
+  error?: string;
+} {
+  const manifest: UpdateManifest = {
+    version: update.version,
+    description: update.changes.join('; ') || `Local update ${update.version}`,
+    releaseDate: update.timestamp,
+    patches: update.patches || [],
+  };
+  return applyUpdate(manifest, 'local');
 }
