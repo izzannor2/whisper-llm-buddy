@@ -393,7 +393,7 @@ async function sendOpenAIMessage(
   return data.choices?.[0]?.message?.content || '';
 }
 
-// Anthropic API (direct client-side call with user's key)
+// Anthropic API with streaming support
 async function sendAnthropicMessage(
   messages: ChatMessage[],
   settings: ChatSettings,
@@ -404,7 +404,6 @@ async function sendAnthropicMessage(
     throw new Error('Anthropic API key not configured. Add your key in Settings → API Keys.');
   }
 
-  // Extract system message if present
   const systemMessage = messages.find(m => m.role === 'system')?.content;
   const chatMessages = messages.filter(m => m.role !== 'system');
 
@@ -419,11 +418,9 @@ async function sendAnthropicMessage(
     body: JSON.stringify({
       model: settings.model,
       max_tokens: settings.maxTokens,
+      stream: !!onChunk,
       system: systemMessage,
-      messages: chatMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: chatMessages.map(m => ({ role: m.role, content: m.content })),
     }),
   });
 
@@ -432,8 +429,47 @@ async function sendAnthropicMessage(
     throw new Error(errorData.error?.message || `Anthropic API error: ${response.status}`);
   }
 
+  if (onChunk && response.body) {
+    return streamAnthropicResponse(response, onChunk);
+  }
+
   const data = await response.json();
   return data.content?.[0]?.text || '';
+}
+
+async function streamAnthropicResponse(response: Response, onChunk: (chunk: string) => void): Promise<string> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            fullContent += parsed.delta.text;
+            onChunk(parsed.delta.text);
+          }
+        } catch {
+          console.warn('[Anthropic SSE] Malformed line:', line);
+        }
+      }
+    }
+  } finally {
+    try { reader.cancel(); } catch {}
+  }
+  return fullContent;
 }
 
 // Google AI API (direct client-side call with user's key)
