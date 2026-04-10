@@ -45,7 +45,7 @@ fi
 echo "[$(date)] === LocalDev AI Starting ===" >> logs/app.log
 
 # Step 1: Check Node.js (portable first)
-echo "[1/5] Checking Node.js..."
+echo "[1/6] Checking Node.js..."
 
 if [ -x "$SCRIPT_DIR/bin/node/bin/node" ]; then
     export PATH="$SCRIPT_DIR/bin/node/bin:$PATH"
@@ -90,13 +90,13 @@ echo -e "      ${GREEN}[OK] Node.js $(node --version)${NC}"
 PKG_CMD="npm"
 if command -v bun &> /dev/null; then
     PKG_CMD="bun"
-    echo -e "[2/5] ${GREEN}[OK] Using Bun${NC}"
+    echo -e "[2/6] ${GREEN}[OK] Using Bun${NC}"
 else
-    echo "[2/5] [OK] Using npm"
+    echo "[2/6] [OK] Using npm"
 fi
 
 # Step 3: Dependencies (self-healing)
-echo "[3/5] Checking dependencies..."
+echo "[3/6] Checking dependencies..."
 
 if [ -d "node_modules" ] && { [ ! -d "node_modules/react" ] || [ ! -d "node_modules/vite" ]; }; then
     echo -e "      ${YELLOW}[!] node_modules incomplete, reinstalling...${NC}"
@@ -121,8 +121,27 @@ else
     echo -e "      ${GREEN}[OK] Dependencies ready${NC}"
 fi
 
-# Step 4: Detect and start AI engines
-echo "[4/5] Setting up AI engines..."
+# Step 4: Start Agent Server
+echo "[4/6] Starting agent server..."
+if [ -f "server/index.js" ]; then
+    node server/index.js &
+    AGENT_PID=$!
+    echo "[$(date)] Started agent server (PID $AGENT_PID)" >> logs/app.log
+    
+    # Wait for agent server to be ready
+    for i in $(seq 1 10); do
+        if curl -s http://localhost:3847/status &> /dev/null; then
+            echo -e "      ${GREEN}[OK] Agent server ready on port 3847${NC}"
+            break
+        fi
+        sleep 1
+    done
+else
+    echo "      [*] No agent server found, skipping"
+fi
+
+# Step 5: Detect and start AI engines
+echo "[5/6] Setting up AI engines..."
 
 OLLAMA_CMD=""
 LLAMA_SERVER_CMD=""
@@ -200,11 +219,12 @@ elif [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
     echo "      [*] No local AI engine found - using Cloud backend"
 fi
 
-# Step 5: Start dev server
-echo "[5/5] Starting development server..."
+# Step 6: Start dev server
+echo "[6/6] Starting development server..."
 echo ""
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 echo " App:     http://localhost:8080"
+echo " Agent:   http://localhost:3847"
 [ -n "$GGUF_MODEL" ] && echo " Llama:   http://localhost:8081"
 [ -n "$OLLAMA_CMD" ] && echo " Ollama:  http://localhost:11434"
 echo " Models:  $SCRIPT_DIR/models/"
