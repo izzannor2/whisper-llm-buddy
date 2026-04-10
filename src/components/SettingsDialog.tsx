@@ -61,6 +61,7 @@ export function SettingsDialog({
     ollama: 'checking', llamaCpp: 'checking', ollamaModel: '', llamaCppModel: ''
   });
   const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [isRestarting, setIsRestarting] = useState(false);
 
   // Auto-scan system health when settings dialog opens
   useEffect(() => {
@@ -1245,36 +1246,31 @@ export function SettingsDialog({
         </Tabs>
 
         {/* Restart AI Engine */}
-        {(() => {
-          const [isRestarting, setIsRestarting] = useState(false);
-          return (
-            <div className="flex items-center justify-between mt-2 p-3 rounded-lg border border-border bg-muted/30">
-              <div>
-                <p className="text-sm font-medium">Restart AI Engine</p>
-                <p className="text-[10px] text-muted-foreground">Ping local backends to warm them up</p>
-              </div>
-              <Button variant="outline" size="sm" disabled={isRestarting} onClick={async () => {
-                setIsRestarting(true);
-                const ollamaUrl = localSettings.ollamaUrl || 'http://localhost:11434';
-                const llamaUrl = localSettings.localUrl || 'http://127.0.0.1:8081';
-                let ok = false;
-                try {
-                  const r = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(3000) });
-                  if (r.ok) { ok = true; toast.success('Ollama is responding'); }
-                } catch {}
-                try {
-                  const r = await fetch(`${llamaUrl}/health`, { signal: AbortSignal.timeout(3000) });
-                  if (r.ok) { ok = true; toast.success('Llama.cpp is responding'); }
-                } catch {}
-                if (!ok) toast.error('No local backends responding');
-                setIsRestarting(false);
-              }}>
-                {isRestarting ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <RotateCw className="w-3 h-3 mr-1.5" />}
-                {isRestarting ? 'Checking...' : 'Restart'}
-              </Button>
-            </div>
-          );
-        })()}
+        <div className="flex items-center justify-between mt-2 p-3 rounded-lg border border-border bg-muted/30">
+          <div>
+            <p className="text-sm font-medium">Restart AI Engine</p>
+            <p className="text-[10px] text-muted-foreground">Ping local backends to warm them up</p>
+          </div>
+          <Button variant="outline" size="sm" disabled={isRestarting} onClick={async () => {
+            setIsRestarting(true);
+            const ollamaUrl = localSettings.ollamaUrl || 'http://localhost:11434';
+            const llamaUrl = localSettings.localUrl || 'http://127.0.0.1:8081';
+            let ok = false;
+            try {
+              const r = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(3000) });
+              if (r.ok) { ok = true; toast.success('Ollama is responding'); }
+            } catch {}
+            try {
+              const r = await fetch(`${llamaUrl}/health`, { signal: AbortSignal.timeout(3000) });
+              if (r.ok) { ok = true; toast.success('Llama.cpp is responding'); }
+            } catch {}
+            if (!ok) toast.error('No local backends responding');
+            setIsRestarting(false);
+          }}>
+            <RotateCw className={cn("w-3 h-3 mr-1.5", isRestarting && "animate-spin")} />
+            {isRestarting ? 'Checking...' : 'Restart'}
+          </Button>
+        </div>
 
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
