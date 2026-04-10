@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Plus, Search, MessageSquare, Trash2, Settings, FolderOpen,
@@ -26,6 +26,7 @@ import { useNetworkStatus } from '@/hooks/use-network-status';
 import { useToast } from '@/hooks/use-toast';
 import { IDEMode } from '@/lib/ide-types';
 import { getModeTheme } from '@/lib/mode-themes';
+import { getCurrentVersion } from '@/lib/update-system';
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -388,7 +389,7 @@ export function ChatSidebar({
       {/* Footer */}
       <div className="p-2 border-t border-sidebar-border space-y-0.5">
         <div className="px-3 py-1">
-          <span className="text-[10px] font-mono text-muted-foreground">{(() => { try { return localStorage.getItem('localdev-app-version') || 'v1.0.0'; } catch { return 'v1.0.0'; } })()}</span>
+          <span className="text-[10px] font-mono text-muted-foreground">{getCurrentVersion()}</span>
         </div>
         <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal text-muted-foreground" onClick={() => window.close()}>
           <Power className="w-4 h-4 mr-3" />Quit LocalDev

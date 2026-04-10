@@ -175,19 +175,36 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     };
 
     // ── Live SpeechRecognition (primary, online) ──
+    // Cleanup recognition + media on unmount
+    useEffect(() => {
+      return () => {
+        if (recognitionRef.current) {
+          try { recognitionRef.current.abort(); } catch {}
+          recognitionRef.current = null;
+        }
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          try { mediaRecorderRef.current.stop(); } catch {}
+        }
+      };
+    }, []);
+
     const startLiveTranscription = useCallback(() => {
       const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognitionCtor) {
-        // No browser support — fall back to Whisper batch
         startWhisperRecording();
         return;
+      }
+      // Abort any existing instance first
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch {}
+        recognitionRef.current = null;
       }
       try {
         const recognition = new SpeechRecognitionCtor();
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = 'en-US';
-        finalTranscriptRef.current = message; // preserve existing text
+        finalTranscriptRef.current = message;
 
         recognition.onresult = (event: any) => {
           let interim = '';
@@ -217,7 +234,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         };
 
         recognition.onend = () => {
-          // Only reset if we didn't manually stop (prevents auto-restart issues)
           if (recognitionRef.current === recognition) {
             setIsRecording(false);
             recognitionRef.current = null;
@@ -280,10 +296,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
     const stopRecording = useCallback(() => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try { recognitionRef.current.stop(); } catch {}
         recognitionRef.current = null;
       }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        try { mediaRecorderRef.current.stop(); } catch {}
+      }
       setIsRecording(false);
     }, []);
 

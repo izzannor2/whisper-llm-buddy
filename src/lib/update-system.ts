@@ -41,6 +41,26 @@ export interface UpdateBackup {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Deep merge utility                                                 */
+/* ------------------------------------------------------------------ */
+
+function isPlainObject(val: unknown): val is Record<string, unknown> {
+  return typeof val === 'object' && val !== null && !Array.isArray(val);
+}
+
+export function deepMerge<T extends Record<string, unknown>>(target: T, source: Record<string, unknown>): T {
+  const result = { ...target } as Record<string, unknown>;
+  for (const key of Object.keys(source)) {
+    if (isPlainObject(result[key]) && isPlainObject(source[key])) {
+      result[key] = deepMerge(result[key] as Record<string, unknown>, source[key] as Record<string, unknown>);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result as T;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Version helpers                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -155,7 +175,21 @@ export async function checkForUpdates(manifestUrl: string): Promise<{
 
     if (!res.ok) return { available: false, error: `Server returned ${res.status}` };
 
-    const manifest: UpdateManifest = await res.json();
+    let manifest: UpdateManifest;
+    try {
+      manifest = await res.json();
+    } catch {
+      return { available: false, error: 'Invalid manifest JSON' };
+    }
+
+    // Validate manifest structure
+    if (!manifest.version || typeof manifest.version !== 'string') {
+      return { available: false, error: 'Manifest missing valid version field' };
+    }
+    if (!Array.isArray(manifest.patches)) {
+      return { available: false, error: 'Manifest missing patches array' };
+    }
+
     const current = getCurrentVersion();
     const isNewer = compareVersions(manifest.version, current) > 0;
 
@@ -182,24 +216,28 @@ export function applyUpdate(manifest: UpdateManifest): {
     let appliedPatches = 0;
 
     for (const patch of manifest.patches) {
-      if (patch.action === 'update' || patch.action === 'create') {
-        // For client-side patches, we handle settings/config changes
-        if (patch.file === 'settings' && patch.content) {
-          try {
-            const currentSettings = JSON.parse(localStorage.getItem('localdev-settings') || '{}');
-            const patchData = JSON.parse(patch.content);
-            const merged = { ...currentSettings, ...patchData };
-            localStorage.setItem('localdev-settings', JSON.stringify(merged));
+      try {
+        if (!patch.file || !patch.action) continue; // skip invalid entries
+        if (patch.action === 'update' || patch.action === 'create') {
+          if (patch.file === 'settings' && patch.content) {
+            try {
+              const currentSettings = JSON.parse(localStorage.getItem('localdev-settings') || '{}');
+              const patchData = JSON.parse(patch.content);
+              const merged = deepMerge(currentSettings, patchData);
+              localStorage.setItem('localdev-settings', JSON.stringify(merged));
+              appliedPatches++;
+            } catch { /* skip malformed patch */ }
+          } else if (patch.file.startsWith('config/') && patch.content) {
+            localStorage.setItem(`localdev-patch-${patch.file}`, patch.content);
             appliedPatches++;
-          } catch { /* skip malformed patch */ }
-        } else if (patch.file.startsWith('config/') && patch.content) {
-          // Store arbitrary config patches
-          localStorage.setItem(`localdev-patch-${patch.file}`, patch.content);
+          }
+        } else if (patch.action === 'delete') {
+          localStorage.removeItem(`localdev-patch-${patch.file}`);
           appliedPatches++;
         }
-      } else if (patch.action === 'delete') {
-        localStorage.removeItem(`localdev-patch-${patch.file}`);
-        appliedPatches++;
+      } catch {
+        // Individual patch failed — continue with remaining patches
+        console.warn(`Skipping failed patch for ${patch.file}`);
       }
     }
 

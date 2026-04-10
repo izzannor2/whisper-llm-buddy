@@ -432,9 +432,16 @@ export function VoiceCallMode({
     setTranscript('');
     browserTranscriptRef.current = '';
 
+    // Abort any existing recognition instance
+    if (speechRecognitionRef.current) {
+      try { speechRecognitionRef.current.abort(); } catch {}
+      speechRecognitionRef.current = null;
+    }
+
+    let stream: MediaStream | null = null;
     try {
       // Also get mic for waveform viz
-      const stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
       streamRef.current = stream;
@@ -467,7 +474,7 @@ export function VoiceCallMode({
 
       recognition.onend = async () => {
         // Clean up audio
-        stream.getTracks().forEach(t => t.stop());
+        stream?.getTracks().forEach(t => t.stop());
         if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
 
         if (!isCallActiveRef.current) return;
@@ -529,15 +536,34 @@ export function VoiceCallMode({
 
       recognition.onerror = (event: any) => {
         console.error('SpeechRecognition error:', event.error);
-        if (event.error === 'no-speech' && isCallActiveRef.current) {
+        // Clean up stream on error
+        stream?.getTracks().forEach(t => t.stop());
+        if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+
+        if (['no-speech', 'aborted'].includes(event.error) && isCallActiveRef.current) {
           if (pushToTalkRef.current) setCallState('waiting');
           else setTimeout(() => startBrowserListening(), 500);
+        } else if (['audio-capture', 'not-allowed'].includes(event.error)) {
+          toast.error('Microphone access failed');
+          setCallState('waiting');
+        } else if (event.error === 'network') {
+          toast.error('Network error during speech recognition');
+          if (isCallActiveRef.current) setTimeout(() => startBrowserListening(), 2000);
         }
       };
 
-      recognition.start();
+      try {
+        recognition.start();
+      } catch (startErr) {
+        // If start() throws, clean up the stream
+        stream.getTracks().forEach(t => t.stop());
+        if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+        throw startErr;
+      }
     } catch (error) {
       console.error('Failed to start browser speech:', error);
+      // Ensure stream cleanup on any failure
+      if (stream) stream.getTracks().forEach(t => t.stop());
       toast.error('Microphone access failed');
       if (isCallActiveRef.current) setTimeout(() => startBrowserListening(), 1000);
     }

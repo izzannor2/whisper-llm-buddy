@@ -61,6 +61,7 @@ export function SettingsDialog({
     ollama: 'checking', llamaCpp: 'checking', ollamaModel: '', llamaCppModel: ''
   });
   const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [isRestarting, setIsRestarting] = useState(false);
 
   // Auto-scan system health when settings dialog opens
   useEffect(() => {
@@ -1250,7 +1251,8 @@ export function SettingsDialog({
             <p className="text-sm font-medium">Restart AI Engine</p>
             <p className="text-[10px] text-muted-foreground">Ping local backends to warm them up</p>
           </div>
-          <Button variant="outline" size="sm" onClick={async () => {
+          <Button variant="outline" size="sm" disabled={isRestarting} onClick={async () => {
+            setIsRestarting(true);
             const ollamaUrl = localSettings.ollamaUrl || 'http://localhost:11434';
             const llamaUrl = localSettings.localUrl || 'http://127.0.0.1:8081';
             let ok = false;
@@ -1263,8 +1265,10 @@ export function SettingsDialog({
               if (r.ok) { ok = true; toast.success('Llama.cpp is responding'); }
             } catch {}
             if (!ok) toast.error('No local backends responding');
+            setIsRestarting(false);
           }}>
-            <RotateCw className="w-3 h-3 mr-1.5" />Restart
+            <RotateCw className={cn("w-3 h-3 mr-1.5", isRestarting && "animate-spin")} />
+            {isRestarting ? 'Checking...' : 'Restart'}
           </Button>
         </div>
 
