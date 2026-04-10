@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug, Shield, Upload, FileDown, Plug, Package, RotateCw } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
+import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug, Shield, Upload, FileDown, Plug, Package, RotateCw, User, LogOut } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
