@@ -24,7 +24,7 @@ export interface Conversation {
   modeKey?: string;
 }
 
-const DB_NAME = 'AraChat';
+const DB_NAME = 'LocalDevAI';
 const DB_VERSION = 1;
 const STORE_NAME = 'conversations';
 

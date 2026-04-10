@@ -104,7 +104,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   temperature: 0.7,
   topP: 0.9,
   maxTokens: 2048,
-  systemPrompt: 'You are AraChat, a helpful, harmless, and honest AI assistant. Be concise and clear in your responses.',
+  systemPrompt: 'You are LocalDev AI, a helpful, harmless, and honest AI assistant. Be concise and clear in your responses.',
   autoPlayTTS: false,
   ttsVoice: '',
   ttsRate: 1.0,
@@ -126,7 +126,7 @@ export const CLOUD_MODELS = [
   { id: 'gemini-pro', name: 'Gemini 2.5 Pro', backend: 'cloud' },
 ];
 
-// These are shown only when API keys are configured
+// Last verified: April 2026
 export const OPENAI_MODELS = [
   { id: 'gpt-4o', name: 'GPT-4o', backend: 'openai' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', backend: 'openai' },
@@ -134,14 +134,14 @@ export const OPENAI_MODELS = [
 ];
 
 export const ANTHROPIC_MODELS = [
-  { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', backend: 'anthropic' },
-  { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', backend: 'anthropic' },
-  { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', backend: 'anthropic' },
+  { id: 'claude-opus-4-5', name: 'Claude Opus 4.5', backend: 'anthropic' },
+  { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', backend: 'anthropic' },
+  { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', backend: 'anthropic' },
 ];
 
 export const GOOGLE_MODELS = [
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', backend: 'google' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', backend: 'google' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', backend: 'google' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', backend: 'google' },
 ];
 
 // Legacy export for backwards compatibility - will be removed
@@ -535,11 +535,30 @@ async function streamResponse(
   return fullContent;
 }
 
+/** Validate and clamp settings to safe values */
+export function validateSettings(settings: Partial<ChatSettings>): ChatSettings {
+  const merged = { ...DEFAULT_SETTINGS, ...settings };
+  
+  // Clamp numeric values
+  merged.temperature = Math.max(0, Math.min(2, Number(merged.temperature) || DEFAULT_SETTINGS.temperature));
+  merged.topP = Math.max(0, Math.min(1, Number(merged.topP) || DEFAULT_SETTINGS.topP));
+  merged.maxTokens = Math.max(1, Math.min(32000, Math.floor(Number(merged.maxTokens) || DEFAULT_SETTINGS.maxTokens)));
+  merged.ttsRate = Math.max(0.5, Math.min(2, Number(merged.ttsRate) || DEFAULT_SETTINGS.ttsRate));
+  
+  // Ensure correct types
+  if (typeof merged.backend !== 'string') merged.backend = DEFAULT_SETTINGS.backend;
+  if (typeof merged.systemPrompt !== 'string') merged.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
+  if (typeof merged.apiKeys !== 'object' || !merged.apiKeys) merged.apiKeys = DEFAULT_API_KEYS;
+  
+  return merged;
+}
+
 export function loadSettings(): ChatSettings {
   try {
-    const saved = localStorage.getItem('arachat-settings');
+    // Try new key first, fall back to legacy key
+    const saved = localStorage.getItem('localdev-settings') || localStorage.getItem('arachat-settings');
     if (saved) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      return validateSettings(JSON.parse(saved));
     }
   } catch {
     // Ignore
@@ -548,5 +567,5 @@ export function loadSettings(): ChatSettings {
 }
 
 export function saveSettings(settings: ChatSettings): void {
-  localStorage.setItem('arachat-settings', JSON.stringify(settings));
+  localStorage.setItem('localdev-settings', JSON.stringify(settings));
 }
