@@ -1,6 +1,6 @@
 {
-  "name": "AraChat - Offline AI Assistant",
-  "short_name": "AraChat",
+  "name": "LocalDev AI — Offline AI Assistant",
+  "short_name": "LocalDev AI",
   "description": "A privacy-first AI chat application that works offline with local LLMs",
   "start_url": "/",
   "display": "standalone",

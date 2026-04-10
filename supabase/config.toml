@@ -5,3 +5,15 @@ verify_jwt = false
 
 [functions.memory]
 verify_jwt = false
+
+[functions.models]
+verify_jwt = false
+
+[functions.plugins]
+verify_jwt = false
+
+[functions.run-tool]
+verify_jwt = false
+
+[functions.web-search]
+verify_jwt = false
