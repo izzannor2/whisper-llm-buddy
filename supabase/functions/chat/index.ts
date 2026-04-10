@@ -1,11 +1,8 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Tool schemas for function calling
 const toolSchemas = [
   {
     type: "function",
@@ -14,9 +11,7 @@ const toolSchemas = [
       description: "Search the web for information",
       parameters: {
         type: "object",
-        properties: {
-          query: { type: "string", description: "Search query" },
-        },
+        properties: { query: { type: "string", description: "Search query" } },
         required: ["query"],
       },
     },
@@ -53,46 +48,102 @@ const toolSchemas = [
   },
 ];
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { messages, model, temperature, top_p, max_tokens, stream, enableTools, agentMode } = await req.json();
-    
+
+    // Try GOOGLE_API_KEY first for self-hosted, fallback to Lovable AI Gateway
+    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+
+    if (!GOOGLE_API_KEY && !LOVABLE_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "No AI backend configured. Set GOOGLE_API_KEY or LOVABLE_API_KEY as a secret." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Map model names to Lovable AI models
+    // Model mapping
     const modelMap: Record<string, string> = {
-      'gemini-flash': 'google/gemini-2.5-flash',
-      'gemini-pro': 'google/gemini-2.5-pro',
+      'gemini-flash': 'gemini-2.5-flash',
+      'gemini-pro': 'gemini-2.5-pro',
     };
-    
-    const aiModel = modelMap[model] || 'google/gemini-2.5-flash';
 
-    console.log(`Chat request - Model: ${aiModel}, Stream: ${stream}, Messages: ${messages.length}, Agent: ${agentMode || 'chat'}`);
+    if (GOOGLE_API_KEY) {
+      // Direct Google Generative Language API
+      const googleModel = modelMap[model] || 'gemini-2.5-flash';
+      console.log(`Chat request (Google Direct) - Model: ${googleModel}, Stream: ${stream}`);
 
-    // Process messages: support multimodal (image_url) content for vision models
-    const processedMessages = messages.map((msg: Record<string, unknown>) => {
-      // If content is already an array (multimodal), pass through
-      if (Array.isArray(msg.content)) return msg;
-      return msg;
-    });
+      const contents = (messages || [])
+        .filter((m: any) => m.role !== 'system')
+        .map((m: any) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
+        }));
+
+      const systemMsg = (messages || []).find((m: any) => m.role === 'system');
+
+      const endpoint = stream ? 'streamGenerateContent' : 'generateContent';
+      const streamParam = stream ? '&alt=sse' : '';
+
+      const googleResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${googleModel}:${endpoint}?key=${GOOGLE_API_KEY}${streamParam}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents,
+            systemInstruction: systemMsg ? { parts: [{ text: typeof systemMsg.content === 'string' ? systemMsg.content : '' }] } : undefined,
+            generationConfig: {
+              temperature: temperature ?? 0.7,
+              topP: top_p ?? 0.9,
+              maxOutputTokens: max_tokens ?? 2048,
+            },
+          }),
+        }
+      );
+
+      if (!googleResponse.ok) {
+        const errText = await googleResponse.text();
+        console.error("Google API error:", googleResponse.status, errText);
+        return new Response(JSON.stringify({ error: `Google API error: ${googleResponse.status}` }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (stream) {
+        return new Response(googleResponse.body, {
+          headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        });
+      }
+
+      const data = await googleResponse.json();
+      // Convert Google format to OpenAI-compatible format
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      return new Response(JSON.stringify({
+        choices: [{ message: { role: 'assistant', content: text } }],
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Fallback: Lovable AI Gateway
+    const aiModel = (modelMap[model] ? `google/${modelMap[model]}` : 'google/gemini-2.5-flash');
+    console.log(`Chat request (Lovable Gateway) - Model: ${aiModel}, Stream: ${stream}`);
 
     const requestBody: Record<string, unknown> = {
       model: aiModel,
-      messages: processedMessages,
+      messages,
       temperature: temperature ?? 0.7,
       top_p: top_p ?? 0.9,
       max_tokens: max_tokens ?? 2048,
       stream: stream ?? false,
     };
 
-    // Add tools if agent mode is enabled
     if (enableTools && agentMode !== 'chat') {
       requestBody.tools = toolSchemas;
       requestBody.tool_choice = "auto";
@@ -110,34 +161,27 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: "Usage limit reached. Please add credits to continue." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      
       return new Response(JSON.stringify({ error: `AI gateway error: ${response.status}` }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // For streaming, pass through the response body
     if (stream) {
       return new Response(response.body, {
         headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
     }
 
-    // For non-streaming, return JSON (includes tool_calls if present)
     const data = await response.json();
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -145,8 +189,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Chat function error:", error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

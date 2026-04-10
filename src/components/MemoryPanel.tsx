@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Brain, Search, Trash2, Plus, X, Tag, Clock } from 'lucide-react';
+import { Brain, Search, Trash2, Plus, X, Tag, Clock, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Memory, listMemories, storeMemory, deleteMemory, searchMemories } from '@/lib/memory-store';
+import { useAuth } from '@/components/AuthProvider';
 
 interface MemoryPanelProps {
   open: boolean;
@@ -14,6 +15,7 @@ interface MemoryPanelProps {
 }
 
 export function MemoryPanel({ open, onOpenChange }: MemoryPanelProps) {
+  const { user } = useAuth();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -84,7 +86,16 @@ export function MemoryPanel({ open, onOpenChange }: MemoryPanelProps) {
           </DialogTitle>
         </DialogHeader>
 
-        {/* Search + Add */}
+        {!user && (
+          <div className="flex items-center gap-2 p-2 rounded-lg border border-primary/20 bg-primary/5 text-sm">
+            <LogIn className="w-4 h-4 text-primary flex-shrink-0" />
+            <span className="text-muted-foreground">Sign in to sync memories across devices.</span>
+            <Button variant="link" size="sm" className="ml-auto p-0 h-auto" onClick={() => { onOpenChange(false); window.location.href = '/auth'; }}>
+              Sign in
+            </Button>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

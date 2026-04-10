@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug, Shield, Upload, FileDown, Plug, Package, RotateCw } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
+import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug, Shield, Upload, FileDown, Plug, Package, RotateCw, User, LogOut } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -62,6 +63,7 @@ export function SettingsDialog({
   });
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [isRestarting, setIsRestarting] = useState(false);
+  const auth = useAuth();
 
   // Auto-scan system health when settings dialog opens
   useEffect(() => {
@@ -312,6 +314,10 @@ export function SettingsDialog({
             <TabsTrigger value="updates" className="text-xs flex items-center gap-1">
               <Package className="w-3 h-3" />
               <span className="hidden sm:inline">Updates</span>
+            </TabsTrigger>
+            <TabsTrigger value="account" className="text-xs flex items-center gap-1">
+              <User className="w-3 h-3" />
+              <span className="hidden sm:inline">Account</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1243,6 +1249,28 @@ export function SettingsDialog({
           <TabsContent value="updates" className="mt-4">
             <UpdatePanel />
           </TabsContent>
+
+          <TabsContent value="account" className="mt-4 space-y-4">
+            {auth.user ? (
+              <div className="space-y-4">
+                <div className="border rounded-lg p-4 space-y-2">
+                  <p className="text-sm font-medium">Signed in as</p>
+                  <p className="text-sm text-muted-foreground">{auth.user.email}</p>
+                </div>
+                <Button variant="outline" onClick={() => auth.signOut()}>
+                  <LogOut className="w-4 h-4 mr-2" /> Sign Out
+                </Button>
+              </div>
+            ) : (
+              <div className="border rounded-lg p-4 space-y-3 text-center">
+                <User className="w-8 h-8 mx-auto text-muted-foreground" />
+                <p className="text-sm">Sign in to sync your memories and settings across devices.</p>
+                <Button onClick={() => { onOpenChange(false); window.location.href = '/auth'; }}>
+                  Sign In
+                </Button>
+              </div>
+            )}
+          </TabsContent>
         </Tabs>
 
         {/* Restart AI Engine */}
@@ -1272,11 +1300,14 @@ export function SettingsDialog({
           </Button>
         </div>
 
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>Save Settings</Button>
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-[10px] text-muted-foreground">LocalDev AI v1.0.0</p>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>Save Settings</Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

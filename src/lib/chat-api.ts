@@ -104,7 +104,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   temperature: 0.7,
   topP: 0.9,
   maxTokens: 2048,
-  systemPrompt: 'You are AraChat, a helpful, harmless, and honest AI assistant. Be concise and clear in your responses.',
+  systemPrompt: 'You are LocalDev AI, a helpful, harmless, and honest AI assistant. Be concise and clear in your responses.',
   autoPlayTTS: false,
   ttsVoice: '',
   ttsRate: 1.0,
@@ -126,7 +126,7 @@ export const CLOUD_MODELS = [
   { id: 'gemini-pro', name: 'Gemini 2.5 Pro', backend: 'cloud' },
 ];
 
-// These are shown only when API keys are configured
+// Last verified: April 2026
 export const OPENAI_MODELS = [
   { id: 'gpt-4o', name: 'GPT-4o', backend: 'openai' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', backend: 'openai' },
@@ -134,14 +134,14 @@ export const OPENAI_MODELS = [
 ];
 
 export const ANTHROPIC_MODELS = [
-  { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', backend: 'anthropic' },
-  { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', backend: 'anthropic' },
-  { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', backend: 'anthropic' },
+  { id: 'claude-opus-4-5', name: 'Claude Opus 4.5', backend: 'anthropic' },
+  { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', backend: 'anthropic' },
+  { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', backend: 'anthropic' },
 ];
 
 export const GOOGLE_MODELS = [
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', backend: 'google' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', backend: 'google' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', backend: 'google' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', backend: 'google' },
 ];
 
 // Legacy export for backwards compatibility - will be removed
@@ -149,6 +149,12 @@ export const AVAILABLE_MODELS = [...CLOUD_MODELS];
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+export interface ChatResult {
+  response: string;
+  usedFallback: boolean;
+  fallbackReason?: string;
+}
 
 export async function sendChatMessage(
   messages: ChatMessage[],
@@ -164,6 +170,29 @@ export async function sendChatMessage(
     ? [{ role: 'system' as const, content: settings.systemPrompt }, ...messages]
     : messages;
 
+  try {
+    const response = await dispatchToBackend(allMessages, settings, onChunk);
+    return response;
+  } catch (err) {
+    // Model fallback: if primary fails and it's not cloud, retry with cloud
+    if (settings.backend !== 'cloud' && SUPABASE_URL && SUPABASE_KEY) {
+      console.warn(`[Fallback] ${settings.backend} failed, switching to cloud:`, err);
+      try {
+        const { toast } = await import('sonner');
+        toast.warning('Primary model failed, switching to cloud backup');
+      } catch {}
+      const fallbackSettings = { ...settings, backend: 'cloud' as const, model: 'gemini-flash' };
+      return sendCloudMessage(allMessages, fallbackSettings, onChunk);
+    }
+    throw err;
+  }
+}
+
+function dispatchToBackend(
+  allMessages: ChatMessage[],
+  settings: ChatSettings,
+  onChunk?: (chunk: string) => void
+): Promise<string> {
   switch (settings.backend) {
     case 'local':
       return sendLocalMessage(allMessages, settings, onChunk);
@@ -364,7 +393,7 @@ async function sendOpenAIMessage(
   return data.choices?.[0]?.message?.content || '';
 }
 
-// Anthropic API (direct client-side call with user's key)
+// Anthropic API with streaming support
 async function sendAnthropicMessage(
   messages: ChatMessage[],
   settings: ChatSettings,
@@ -375,7 +404,6 @@ async function sendAnthropicMessage(
     throw new Error('Anthropic API key not configured. Add your key in Settings → API Keys.');
   }
 
-  // Extract system message if present
   const systemMessage = messages.find(m => m.role === 'system')?.content;
   const chatMessages = messages.filter(m => m.role !== 'system');
 
@@ -390,11 +418,9 @@ async function sendAnthropicMessage(
     body: JSON.stringify({
       model: settings.model,
       max_tokens: settings.maxTokens,
+      stream: !!onChunk,
       system: systemMessage,
-      messages: chatMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: chatMessages.map(m => ({ role: m.role, content: m.content })),
     }),
   });
 
@@ -403,11 +429,50 @@ async function sendAnthropicMessage(
     throw new Error(errorData.error?.message || `Anthropic API error: ${response.status}`);
   }
 
+  if (onChunk && response.body) {
+    return streamAnthropicResponse(response, onChunk);
+  }
+
   const data = await response.json();
   return data.content?.[0]?.text || '';
 }
 
-// Google AI API (direct client-side call with user's key)
+async function streamAnthropicResponse(response: Response, onChunk: (chunk: string) => void): Promise<string> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            fullContent += parsed.delta.text;
+            onChunk(parsed.delta.text);
+          }
+        } catch {
+          console.warn('[Anthropic SSE] Malformed line:', line);
+        }
+      }
+    }
+  } finally {
+    try { reader.cancel(); } catch {}
+  }
+  return fullContent;
+}
+
+// Google AI API with streaming support
 async function sendGoogleMessage(
   messages: ChatMessage[],
   settings: ChatSettings,
@@ -418,24 +483,26 @@ async function sendGoogleMessage(
     throw new Error('Google AI API key not configured. Add your key in Settings → API Keys.');
   }
 
-  // Convert to Google AI format
   const contents = messages
     .filter(m => m.role !== 'system')
     .map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
+      parts: [{ text: typeof m.content === 'string' ? m.content : getTextContent(m.content) }],
     }));
 
   const systemInstruction = messages.find(m => m.role === 'system')?.content;
 
+  const endpoint = onChunk ? 'streamGenerateContent' : 'generateContent';
+  const streamParam = onChunk ? '&alt=sse' : '';
+  
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:${endpoint}?key=${apiKey}${streamParam}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+        systemInstruction: systemInstruction ? { parts: [{ text: typeof systemInstruction === 'string' ? systemInstruction : '' }] } : undefined,
         generationConfig: {
           temperature: settings.temperature,
           topP: settings.topP,
@@ -448,6 +515,35 @@ async function sendGoogleMessage(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error?.message || `Google AI API error: ${response.status}`);
+  }
+
+  if (onChunk && response.body) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullContent = '';
+    let buffer = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (!data || data === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(data);
+            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) { fullContent += text; onChunk(text); }
+          } catch { /* partial JSON */ }
+        }
+      }
+    } finally {
+      try { reader.cancel(); } catch {}
+    }
+    return fullContent;
   }
 
   const data = await response.json();
@@ -535,11 +631,30 @@ async function streamResponse(
   return fullContent;
 }
 
+/** Validate and clamp settings to safe values */
+export function validateSettings(settings: Partial<ChatSettings>): ChatSettings {
+  const merged = { ...DEFAULT_SETTINGS, ...settings };
+  
+  // Clamp numeric values
+  merged.temperature = Math.max(0, Math.min(2, Number(merged.temperature) || DEFAULT_SETTINGS.temperature));
+  merged.topP = Math.max(0, Math.min(1, Number(merged.topP) || DEFAULT_SETTINGS.topP));
+  merged.maxTokens = Math.max(1, Math.min(32000, Math.floor(Number(merged.maxTokens) || DEFAULT_SETTINGS.maxTokens)));
+  merged.ttsRate = Math.max(0.5, Math.min(2, Number(merged.ttsRate) || DEFAULT_SETTINGS.ttsRate));
+  
+  // Ensure correct types
+  if (typeof merged.backend !== 'string') merged.backend = DEFAULT_SETTINGS.backend;
+  if (typeof merged.systemPrompt !== 'string') merged.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
+  if (typeof merged.apiKeys !== 'object' || !merged.apiKeys) merged.apiKeys = DEFAULT_API_KEYS;
+  
+  return merged;
+}
+
 export function loadSettings(): ChatSettings {
   try {
-    const saved = localStorage.getItem('arachat-settings');
+    // Try new key first, fall back to legacy key
+    const saved = localStorage.getItem('localdev-settings') || localStorage.getItem('arachat-settings');
     if (saved) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      return validateSettings(JSON.parse(saved));
     }
   } catch {
     // Ignore
@@ -548,5 +663,5 @@ export function loadSettings(): ChatSettings {
 }
 
 export function saveSettings(settings: ChatSettings): void {
-  localStorage.setItem('arachat-settings', JSON.stringify(settings));
+  localStorage.setItem('localdev-settings', JSON.stringify(settings));
 }

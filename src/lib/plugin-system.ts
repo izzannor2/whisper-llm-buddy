@@ -206,6 +206,19 @@ function initBuiltins() {
   }
 }
 
+// ===== Error Tracking =====
+const pluginErrors = new Map<string, number>();
+const PLUGIN_TIMEOUT = 5000;
+const MAX_CONSECUTIVE_ERRORS = 3;
+
+export interface PluginStatus {
+  id: string;
+  name: string;
+  enabled: boolean;
+  errorCount: number;
+  status: 'active' | 'disabled' | 'error';
+}
+
 // ===== Public API =====
 
 export function getPlugins(): Plugin[] {
@@ -223,12 +236,28 @@ export function togglePlugin(id: string, enabled: boolean): void {
   const plugin = pluginRegistry.get(id);
   if (plugin) {
     plugin.enabled = enabled;
+    if (enabled) pluginErrors.set(id, 0); // reset errors on re-enable
   }
 }
 
 export function registerPlugin(plugin: Plugin): void {
   initBuiltins();
   pluginRegistry.set(plugin.manifest.id, plugin);
+  pluginErrors.set(plugin.manifest.id, 0);
+}
+
+export function getPluginStatuses(): PluginStatus[] {
+  initBuiltins();
+  return Array.from(pluginRegistry.values()).map(p => {
+    const errors = pluginErrors.get(p.manifest.id) || 0;
+    return {
+      id: p.manifest.id,
+      name: p.manifest.name,
+      enabled: p.enabled,
+      errorCount: errors,
+      status: !p.enabled ? 'disabled' : errors >= MAX_CONSECUTIVE_ERRORS ? 'error' : 'active',
+    };
+  });
 }
 
 export async function executePluginAction(
@@ -244,5 +273,28 @@ export async function executePluginAction(
   const action = plugin.actions.find(a => a.name === actionName);
   if (!action) throw new Error(`Action not found: ${actionName} in ${pluginId}`);
 
-  return action.handler(params);
+  // Execute with timeout and error tracking
+  try {
+    const result = await Promise.race([
+      action.handler(params),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`Plugin timeout after ${PLUGIN_TIMEOUT}ms`)), PLUGIN_TIMEOUT)),
+    ]);
+    // Reset error count on success
+    pluginErrors.set(pluginId, 0);
+    return result;
+  } catch (err) {
+    const errorCount = (pluginErrors.get(pluginId) || 0) + 1;
+    pluginErrors.set(pluginId, errorCount);
+    console.error(`[Plugin ${pluginId}] Error (${errorCount}/${MAX_CONSECUTIVE_ERRORS}):`, err);
+    
+    if (errorCount >= MAX_CONSECUTIVE_ERRORS) {
+      plugin.enabled = false;
+      console.warn(`[Plugin ${pluginId}] Auto-disabled after ${MAX_CONSECUTIVE_ERRORS} consecutive failures`);
+      try {
+        const { toast } = await import('sonner');
+        toast.error(`Plugin "${plugin.manifest.name}" disabled after repeated failures`);
+      } catch {}
+    }
+    throw err;
+  }
 }
