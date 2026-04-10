@@ -314,6 +314,10 @@ export function SettingsDialog({
               <Package className="w-3 h-3" />
               <span className="hidden sm:inline">Updates</span>
             </TabsTrigger>
+            <TabsTrigger value="account" className="text-xs flex items-center gap-1">
+              <User className="w-3 h-3" />
+              <span className="hidden sm:inline">Account</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="backend" className="space-y-4 mt-4">
