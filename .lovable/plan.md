@@ -1,114 +1,68 @@
 
 
-# Complete System Upgrade — End-to-End Functional AI Companion
+# Stability & Correctness Pass — Fix Real Issues Only
 
-## Assessment: What Already Works
-After a full audit, this project is **surprisingly complete**. Most of the 12 items listed are already implemented:
+## Issues Found
 
-- **Microphone**: ✅ Live SpeechRecognition + Whisper fallback, start/stop, live transcription, error handling — all working
-- **AI Backend**: ✅ 7 providers (Cloud/Ollama/Llama.cpp/OpenAI/Anthropic/Google/HuggingFace), streaming, memory, fallback — all working
-- **Phone/Call**: ✅ Full VoiceCallMode with mic streaming, silence detection, waveform viz, push-to-talk, screen share — working (uses Whisper+TTS, not WebRTC since there's no remote peer)
-- **TTS**: ✅ Browser SpeechSynthesis with voice selection, auto-play, read-back — working
-- **Chat API**: ✅ Edge function at `/functions/v1/chat`, streaming, sessions via IndexedDB, memory store — working
-- **Plugin System**: ✅ Registry with 3 built-in plugins, enable/disable, action execution — working
-- **Memory**: ✅ Short-term (conversation) + long-term (memories table + localStorage fallback), retrieval for context injection — working
-- **Export/Import**: ✅ Full JSON export/import of conversations, settings, memories, feedback, tool stats — working
-- **Settings/Debug**: ✅ Full settings dialog with backend switching, voice models, API keys, debug panel with health checks — working
+### 1. Update System
+- **Version persists correctly** — uses `localStorage`, already works across reloads
+- **Rollback works** — restores settings + version from backup
+- **Settings merge is shallow** (`{...current, ...patch}`) — nested objects get overwritten. Need deep merge.
+- **No validation of manifest JSON** — malformed/missing fields will silently fail or crash
 
-## What's Actually Missing or Incomplete
+### 2. SpeechRecognition (ChatInput)
+- **Multiple instances possible**: `startLiveTranscription` creates a new `SpeechRecognition` without stopping/aborting a previous one if `recognitionRef.current` already exists
+- **`onend` auto-restart gap**: When browser auto-ends recognition (e.g., silence timeout), `onend` fires and sets `isRecording=false` but doesn't auto-restart — this is fine for ChatInput (user manually toggles), but needs guarding against stale refs
+- **No cleanup of `recognitionRef` on component unmount** — missing cleanup effect
 
-### 1. Update/Patch System (NOT built — critical request)
-No versioning, patching, rollback, or update mechanism exists anywhere.
+### 3. SpeechRecognition (VoiceCallMode)
+- **Multiple instances possible**: `startBrowserListening` creates a new recognition without aborting previous `speechRecognitionRef.current`
+- **Error handler incomplete**: Only handles `no-speech`, not `aborted`, `network`, `audio-capture` errors
+- **Stream leak on error**: If `recognition.start()` throws, the `getUserMedia` stream is never stopped
 
-### 2. Voice Call lacks browser SpeechRecognition option
-VoiceCallMode only uses Whisper (requires model download). It should also support browser SpeechRecognition for zero-setup calls.
+### 4. Plugin System Reactivity
+- Plugin registry uses an in-memory `Map` — `togglePlugin()` mutates it but nothing triggers a React re-render. The PluginManager UI needs to use local state + force update after toggle.
 
-### 3. Plugin UI in Settings is basic
-The PluginManager component exists but isn't wired into the Settings dialog tabs.
+### 5. Restart AI Engine
+- Already makes real network requests with `AbortSignal.timeout(3000)` — **this is correct**
+- Missing: visual loading state on the button during the request
 
-### 4. Dead UI: "Restart AI Engine" button mentioned in settings but not implemented
-### 5. Missing version display in UI
+### 6. Version Badge (ChatSidebar)
+- Uses raw `localStorage.getItem('localdev-app-version')` inline — correct key, but hardcoded fallback `'v1.0.0'` should use `getCurrentVersion()` for consistency and to respect `DEFAULT_VERSION`
 
----
+## Plan
 
-## Implementation Plan
+### File: `src/lib/update-system.ts`
+- Add `deepMerge` utility for settings patching (replace shallow spread)
+- Add manifest validation in `applyUpdate` — check `version`, `patches` array exist, skip invalid entries gracefully
+- Add try/catch around individual patch applications so one bad patch doesn't abort all
 
-### Phase 1: Update/Patch System (NEW — `src/lib/update-system.ts` + UI)
+### File: `src/components/ChatInput.tsx`
+- In `startLiveTranscription`: abort existing `recognitionRef.current` before creating new instance
+- Add cleanup `useEffect` that aborts recognition + stops media recorder on unmount
+- Guard `stopRecording` against already-stopped state
 
-Create a complete client-side update system:
+### File: `src/components/VoiceCallMode.tsx`
+- In `startBrowserListening`: abort existing `speechRecognitionRef.current` before creating new one
+- Add error handling for `audio-capture`, `network`, `aborted` errors
+- Wrap `recognition.start()` in try/catch that cleans up the stream on failure
 
-**`src/lib/update-system.ts`**:
-- `AppVersion` interface with semantic versioning
-- `currentVersion()` — reads from `localStorage` (default `1.0.0`)
-- `checkForUpdates(manifestUrl)` — fetches a `version.json` manifest from a configurable URL
-- `applyUpdate(patch)` — applies a patch object (changed settings, new plugin configs)
-- `rollback()` — restores from backup saved before last update
-- `getUpdateHistory()` — returns list of applied updates
-- Automatic backup before every update (stores previous state in IndexedDB)
+### File: `src/components/ChatSidebar.tsx`
+- Import `getCurrentVersion` from update-system and use it instead of raw localStorage read
 
-**`src/components/UpdatePanel.tsx`**:
-- Current version display
-- "Check for Updates" button
-- Update history list with rollback buttons
-- Manual version bump for local development
+### File: `src/components/SettingsDialog.tsx`
+- Add loading state (`isRestarting`) to the Restart AI Engine button so it shows a spinner during the request
 
-**Wire into Settings dialog** as a new "Updates" tab.
-
-### Phase 2: VoiceCallMode — Add Browser SpeechRecognition Option
-
-**`src/components/VoiceCallMode.tsx`**:
-- Add a toggle: "Use Browser Speech" vs "Use Whisper (Offline)"
-- When browser speech is selected, use `SpeechRecognition` API (same as ChatInput) instead of requiring Whisper download
-- This removes the barrier: users can make voice calls immediately without downloading a model
-- Keep Whisper as the offline fallback
-
-### Phase 3: Wire Plugin Manager into Settings
-
-**`src/components/SettingsDialog.tsx`**:
-- Add "Plugins" tab that renders the existing `PluginManager` component
-- Add a "Restart AI Engine" button in the System Status section that:
-  - Hits Ollama `/api/tags` to warm it up
-  - Shows success/failure toast
-
-### Phase 4: Version Display + Polish
-
-**`src/pages/Index.tsx`**:
-- Add version badge in the sidebar footer (e.g., "v1.0.0")
-
-**`src/components/ChatSidebar.tsx`**:
-- Show app version at bottom of sidebar
-
-### Phase 5: Stability Hardening
-
-**`src/components/VoiceCallMode.tsx`**:
-- Add retry logic when Whisper transcription fails (already partially there)
-- Add graceful degradation message when no voice model and no browser SpeechRecognition
-
-**`src/lib/chat-api.ts`**:
-- Add toast feedback on 429/402 errors (already handled in edge function, ensure client surfaces them)
-
----
-
-## Files to Create
-| File | Purpose |
-|------|---------|
-| `src/lib/update-system.ts` | Version tracking, patch application, rollback, backup |
-| `src/components/UpdatePanel.tsx` | Update UI with version display, history, rollback |
+### File: `src/components/ide/PluginManager.tsx`
+- Check current toggle behavior — ensure it uses local state that re-renders on toggle (may need `useState` + callback pattern instead of relying on the mutable Map)
 
 ## Files to Modify
 | File | Change |
 |------|--------|
-| `src/components/SettingsDialog.tsx` | Add "Updates" and "Plugins" tabs, "Restart AI Engine" button |
-| `src/components/VoiceCallMode.tsx` | Add browser SpeechRecognition option alongside Whisper |
-| `src/components/ChatSidebar.tsx` | Show version badge |
-| `src/pages/Index.tsx` | Minor wiring for version display |
-
-## What Won't Change
-- Chat API layer (already complete with all 7 backends)
-- Microphone in ChatInput (already fully working)
-- TTS system (already complete)
-- Memory system (already complete)
-- Export/Import (already complete)
-- Plugin registry (already complete, just needs UI wiring)
-- Edge functions (already deployed and working)
+| `src/lib/update-system.ts` | Deep merge for settings, manifest validation |
+| `src/components/ChatInput.tsx` | Prevent duplicate SpeechRecognition, add unmount cleanup |
+| `src/components/VoiceCallMode.tsx` | Prevent duplicate SpeechRecognition, better error handling, stream cleanup |
+| `src/components/ChatSidebar.tsx` | Use `getCurrentVersion()` import |
+| `src/components/SettingsDialog.tsx` | Loading state on Restart button |
+| `src/components/ide/PluginManager.tsx` | Ensure toggle triggers re-render |
 
