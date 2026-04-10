@@ -1,68 +1,70 @@
 
 
-# Stability & Correctness Pass — Fix Real Issues Only
+# Local + Manual Update System Extension
 
-## Issues Found
+## Summary
+Extend the existing online-only update system to also support **local JSON update files** loaded via file upload (browser) or IndexedDB cache. Since this is a web app (not Electron/Node), we can't use `fs` to scan a `/updates` folder — instead we use a file input for importing local `.json` update files and persist them in IndexedDB as the "local updates library."
 
-### 1. Update System
-- **Version persists correctly** — uses `localStorage`, already works across reloads
-- **Rollback works** — restores settings + version from backup
-- **Settings merge is shallow** (`{...current, ...patch}`) — nested objects get overwritten. Need deep merge.
-- **No validation of manifest JSON** — malformed/missing fields will silently fail or crash
+## Approach
 
-### 2. SpeechRecognition (ChatInput)
-- **Multiple instances possible**: `startLiveTranscription` creates a new `SpeechRecognition` without stopping/aborting a previous one if `recognitionRef.current` already exists
-- **`onend` auto-restart gap**: When browser auto-ends recognition (e.g., silence timeout), `onend` fires and sets `isRecording=false` but doesn't auto-restart — this is fine for ChatInput (user manually toggles), but needs guarding against stale refs
-- **No cleanup of `recognitionRef` on component unmount** — missing cleanup effect
+### Why not filesystem scanning?
+This is a browser-based Vite/React app. There's no Node.js `fs` access at runtime. The `/updates` folder can exist in the project for bundling sample update files, but runtime "scanning" must use one of:
+- **File input** — user picks `.json` files from their local `/updates` folder
+- **IndexedDB** — persist imported local updates so they survive reload
+- **Fetch from `/updates/*.json`** — if we place static JSON files in `public/updates/`, Vite serves them and we can fetch a known manifest
 
-### 3. SpeechRecognition (VoiceCallMode)
-- **Multiple instances possible**: `startBrowserListening` creates a new recognition without aborting previous `speechRecognitionRef.current`
-- **Error handler incomplete**: Only handles `no-speech`, not `aborted`, `network`, `audio-capture` errors
-- **Stream leak on error**: If `recognition.start()` throws, the `getUserMedia` stream is never stopped
+**Strategy**: Use all three. Ship a `public/updates/manifest.json` that lists available local update files. On startup, fetch that manifest. Users can also import additional `.json` files via a file picker. All local updates are cached in IndexedDB.
 
-### 4. Plugin System Reactivity
-- Plugin registry uses an in-memory `Map` — `togglePlugin()` mutates it but nothing triggers a React re-render. The PluginManager UI needs to use local state + force update after toggle.
+## Changes
 
-### 5. Restart AI Engine
-- Already makes real network requests with `AbortSignal.timeout(3000)` — **this is correct**
-- Missing: visual loading state on the button during the request
+### 1. Create `public/updates/manifest.json` (sample)
+```json
+{
+  "updates": []
+}
+```
+A static file listing bundled local updates. Users can add files here when building the project.
 
-### 6. Version Badge (ChatSidebar)
-- Uses raw `localStorage.getItem('localdev-app-version')` inline — correct key, but hardcoded fallback `'v1.0.0'` should use `getCurrentVersion()` for consistency and to respect `DEFAULT_VERSION`
+### 2. Extend `src/lib/update-system.ts`
+Add:
+- `LocalUpdate` interface: `{ version, changes, timestamp, patches? }`
+- `getLocalUpdates()` — reads from IndexedDB store `local-updates`
+- `saveLocalUpdate(update)` — saves to IndexedDB
+- `removeLocalUpdate(version)` — removes from IndexedDB
+- `scanBundledUpdates()` — fetches `public/updates/manifest.json`, loads listed files
+- `importLocalUpdateFile(file: File)` — parses a `.json` file, validates, saves to IndexedDB
+- `getMergedUpdateList()` — combines local + applied history into one sorted list
+- `applyLocalUpdate(update)` — converts a `LocalUpdate` to an `UpdateManifest` and applies it
 
-## Plan
+### 3. Rewrite `src/components/UpdatePanel.tsx`
+Reorganize into three sections with tab-like headers:
+- **Current Version** — existing version display + bump buttons
+- **Online Updates** — existing manifest URL + check button (unchanged)
+- **Local Updates** — new section:
+  - List of imported local update files (from IndexedDB) sorted by version
+  - "Import Update File" button (file input for `.json`)
+  - Each local update shows version, timestamp, changes list, and "Apply" / "Remove" buttons
+  - Applied updates are marked
+- **Reload Updates** button — re-scans bundled updates + refreshes IndexedDB list
+- **Rollback** — existing rollback section (unchanged)
+- **History** — existing history section, now shows source tag (local vs online)
 
-### File: `src/lib/update-system.ts`
-- Add `deepMerge` utility for settings patching (replace shallow spread)
-- Add manifest validation in `applyUpdate` — check `version`, `patches` array exist, skip invalid entries gracefully
-- Add try/catch around individual patch applications so one bad patch doesn't abort all
+### 4. Fallback logic
+In `handleCheck` (online check):
+- If online fetch fails, automatically load local updates and show them as available
+- Toast: "Online check failed — showing local updates"
 
-### File: `src/components/ChatInput.tsx`
-- In `startLiveTranscription`: abort existing `recognitionRef.current` before creating new instance
-- Add cleanup `useEffect` that aborts recognition + stops media recorder on unmount
-- Guard `stopRecording` against already-stopped state
+## Files
 
-### File: `src/components/VoiceCallMode.tsx`
-- In `startBrowserListening`: abort existing `speechRecognitionRef.current` before creating new one
-- Add error handling for `audio-capture`, `network`, `aborted` errors
-- Wrap `recognition.start()` in try/catch that cleans up the stream on failure
-
-### File: `src/components/ChatSidebar.tsx`
-- Import `getCurrentVersion` from update-system and use it instead of raw localStorage read
-
-### File: `src/components/SettingsDialog.tsx`
-- Add loading state (`isRestarting`) to the Restart AI Engine button so it shows a spinner during the request
-
-### File: `src/components/ide/PluginManager.tsx`
-- Check current toggle behavior — ensure it uses local state that re-renders on toggle (may need `useState` + callback pattern instead of relying on the mutable Map)
-
-## Files to Modify
-| File | Change |
+| File | Action |
 |------|--------|
-| `src/lib/update-system.ts` | Deep merge for settings, manifest validation |
-| `src/components/ChatInput.tsx` | Prevent duplicate SpeechRecognition, add unmount cleanup |
-| `src/components/VoiceCallMode.tsx` | Prevent duplicate SpeechRecognition, better error handling, stream cleanup |
-| `src/components/ChatSidebar.tsx` | Use `getCurrentVersion()` import |
-| `src/components/SettingsDialog.tsx` | Loading state on Restart button |
-| `src/components/ide/PluginManager.tsx` | Ensure toggle triggers re-render |
+| `public/updates/manifest.json` | Create — empty bundled updates manifest |
+| `src/lib/update-system.ts` | Extend — add IndexedDB local update store, import/scan/merge functions |
+| `src/components/UpdatePanel.tsx` | Extend — add Local Updates section, import button, reload button |
+
+## What stays the same
+- All existing online update logic (checkForUpdates, applyUpdate, rollback, backup, history)
+- Version tracking and persistence
+- Deep merge patching
+- Settings dialog wiring
 
