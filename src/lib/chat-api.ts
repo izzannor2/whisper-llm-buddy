@@ -150,6 +150,12 @@ export const AVAILABLE_MODELS = [...CLOUD_MODELS];
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+export interface ChatResult {
+  response: string;
+  usedFallback: boolean;
+  fallbackReason?: string;
+}
+
 export async function sendChatMessage(
   messages: ChatMessage[],
   settings: ChatSettings,
@@ -164,6 +170,29 @@ export async function sendChatMessage(
     ? [{ role: 'system' as const, content: settings.systemPrompt }, ...messages]
     : messages;
 
+  try {
+    const response = await dispatchToBackend(allMessages, settings, onChunk);
+    return response;
+  } catch (err) {
+    // Model fallback: if primary fails and it's not cloud, retry with cloud
+    if (settings.backend !== 'cloud' && SUPABASE_URL && SUPABASE_KEY) {
+      console.warn(`[Fallback] ${settings.backend} failed, switching to cloud:`, err);
+      try {
+        const { toast } = await import('sonner');
+        toast.warning('Primary model failed, switching to cloud backup');
+      } catch {}
+      const fallbackSettings = { ...settings, backend: 'cloud' as const, model: 'gemini-flash' };
+      return sendCloudMessage(allMessages, fallbackSettings, onChunk);
+    }
+    throw err;
+  }
+}
+
+function dispatchToBackend(
+  allMessages: ChatMessage[],
+  settings: ChatSettings,
+  onChunk?: (chunk: string) => void
+): Promise<string> {
   switch (settings.backend) {
     case 'local':
       return sendLocalMessage(allMessages, settings, onChunk);
