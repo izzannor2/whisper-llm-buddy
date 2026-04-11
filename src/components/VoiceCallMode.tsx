@@ -155,10 +155,19 @@ export function VoiceCallMode({
     return () => clearInterval(interval);
   }, [isInCall, callStartTime]);
 
-  // Auto-start
+  // Auto-start: show full UI immediately, then attempt mic/STT setup
   useEffect(() => {
-    if (autoStart && !isInCall && canMakeCall) {
-      startCall();
+    if (autoStart && !isInCall) {
+      // Show the full-screen call UI right away — don't wait for mic permission
+      isCallActiveRef.current = true;
+      setIsInCall(true);
+      setCallStartTime(Date.now());
+      setIsMinimized(false);
+      setTranscript('');
+      setLoadingMessage('');
+
+      // Now attempt actual call setup (mic, STT) — failures stay in the UI
+      startCall(true);
     }
   }, [autoStart]);
 
