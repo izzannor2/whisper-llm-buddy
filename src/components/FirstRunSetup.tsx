@@ -70,9 +70,14 @@ export function FirstRunSetup({ open, onComplete }: FirstRunSetupProps) {
     onComplete(settings);
   };
 
+  const handleSkip = () => {
+    localStorage.setItem('localdev-first-run-complete', 'true');
+    onComplete(settings);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent className="max-w-md" onPointerDownOutside={e => e.preventDefault()}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleSkip(); }}>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Welcome to LocalDev AI</DialogTitle>
           <p className="text-sm text-muted-foreground">Let's get you set up in a few seconds.</p>
@@ -140,7 +145,7 @@ export function FirstRunSetup({ open, onComplete }: FirstRunSetupProps) {
 
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep('backend')}>Back</Button>
-              <Button onClick={handleFinish} disabled={testStatus !== 'success'}>
+              <Button onClick={handleFinish}>
                 Finish Setup
               </Button>
             </div>
