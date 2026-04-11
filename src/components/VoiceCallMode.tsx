@@ -155,10 +155,19 @@ export function VoiceCallMode({
     return () => clearInterval(interval);
   }, [isInCall, callStartTime]);
 
-  // Auto-start
+  // Auto-start: show full UI immediately, then attempt mic/STT setup
   useEffect(() => {
-    if (autoStart && !isInCall && canMakeCall) {
-      startCall();
+    if (autoStart && !isInCall) {
+      // Show the full-screen call UI right away — don't wait for mic permission
+      isCallActiveRef.current = true;
+      setIsInCall(true);
+      setCallStartTime(Date.now());
+      setIsMinimized(false);
+      setTranscript('');
+      setLoadingMessage('');
+
+      // Now attempt actual call setup (mic, STT) — failures stay in the UI
+      startCall(true);
     }
   }, [autoStart]);
 
@@ -580,7 +589,7 @@ export function VoiceCallMode({
   /* ---------------------------------------------------------------- */
   /*  Start / End Call                                                  */
   /* ---------------------------------------------------------------- */
-  const startCall = useCallback(async () => {
+  const startCall = useCallback(async (uiAlreadyShown = false) => {
     const usingBrowser = useBrowserSpeech && browserSpeechSupported;
     if (!usingBrowser && !whisperReady) {
       const downloaded = getDownloadedModels();
@@ -590,22 +599,44 @@ export function VoiceCallMode({
           action: { label: 'Open Settings', onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })) },
           duration: 5000,
         });
+        if (!uiAlreadyShown) return;
+        // If UI already shown (autoStart), stay in the call UI but in waiting state
+        setCallState('waiting');
+        setIsMuted(true);
+        toast.info('Mic unavailable — tap Mute to retry when ready');
+        return;
       } else {
         toast.error('Voice model not ready. Try again.');
+        if (!uiAlreadyShown) return;
+        setCallState('waiting');
+        return;
       }
-      return;
     }
+
+    // Test mic access
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(t => t.stop());
-    } catch { toast.error('Microphone access required for voice calls'); return; }
+    } catch {
+      if (!uiAlreadyShown) {
+        toast.error('Microphone access required for voice calls');
+        return;
+      }
+      // UI already shown — stay visible but muted
+      toast.warning('Microphone unavailable — call active without mic');
+      setIsMuted(true);
+      setCallState('waiting');
+      return;
+    }
 
-    isCallActiveRef.current = true;
-    setIsInCall(true);
+    if (!uiAlreadyShown) {
+      isCallActiveRef.current = true;
+      setIsInCall(true);
+      setCallStartTime(Date.now());
+      setIsMinimized(false);
+    }
     setTranscript('');
     setLoadingMessage('');
-    setCallStartTime(Date.now());
-    setIsMinimized(false);
 
     if (!usingBrowser && !isWhisperLoaded()) {
       setCallState('loading');
@@ -613,7 +644,11 @@ export function VoiceCallMode({
       const success = await loadWhisperModel(getSelectedWhisperModel(), (p) => { if (p.message) setLoadingMessage(p.message); });
       if (!success) {
         toast.error('Failed to load speech model');
-        isCallActiveRef.current = false; setIsInCall(false); setCallState('idle');
+        if (!uiAlreadyShown) {
+          isCallActiveRef.current = false; setIsInCall(false); setCallState('idle');
+        } else {
+          setCallState('waiting');
+        }
         return;
       }
     }
@@ -745,7 +780,7 @@ export function VoiceCallMode({
   /* ---------------------------------------------------------------- */
   /*  Render: Idle (just the phone button)                             */
   /* ---------------------------------------------------------------- */
-  if (!isInCall) {
+  if (!isInCall && !autoStart) {
     return (
       <Button
         variant="ghost" size="icon"
