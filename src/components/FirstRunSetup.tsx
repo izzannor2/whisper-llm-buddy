@@ -145,7 +145,7 @@ export function FirstRunSetup({ open, onComplete }: FirstRunSetupProps) {
 
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep('backend')}>Back</Button>
-              <Button onClick={handleFinish} disabled={testStatus !== 'success'}>
+              <Button onClick={handleFinish}>
                 Finish Setup
               </Button>
             </div>
