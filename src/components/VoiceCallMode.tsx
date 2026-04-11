@@ -138,9 +138,18 @@ export function VoiceCallMode({
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [callMessages]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — release resources but do NOT call onEnd (parent controls mounting)
   useEffect(() => {
-    return () => { endCall(); };
+    return () => {
+      isCallActiveRef.current = false;
+      if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
+      if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+      if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (speechRecognitionRef.current) { try { speechRecognitionRef.current.abort(); } catch {} speechRecognitionRef.current = null; }
+      stopSpeaking();
+    };
   }, []);
 
   // Call timer
