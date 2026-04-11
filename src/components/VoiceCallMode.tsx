@@ -780,7 +780,7 @@ export function VoiceCallMode({
   /* ---------------------------------------------------------------- */
   /*  Render: Idle (just the phone button)                             */
   /* ---------------------------------------------------------------- */
-  if (!isInCall) {
+  if (!isInCall && !autoStart) {
     return (
       <Button
         variant="ghost" size="icon"
