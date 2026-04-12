@@ -1,40 +1,76 @@
 
 
-# Fix Voice Call Button — Show Full Call UI Immediately
+# Fix App Builder Preview — Make It Work Like a Real Live Preview
 
-## Problem
-When the phone button is clicked in the main chat, `VoiceCallMode` renders with `autoStart` but:
-1. Component starts with `isInCall = false` → renders only a tiny phone icon button
-2. `startCall()` calls `getUserMedia` for mic permission check
-3. If mic permission fails (common in iframe/preview), the function returns early without setting `isInCall = true`
-4. The full-screen call UI (mute, hang up, speaker off, minimize) never appears
-5. User only sees a toast saying "Speak anytime" and a small button
+## Current Problems
 
-## Fix
+1. **Auto-preview fires but often shows errors** — The regex-based TypeScript stripping in `preview-builder.ts` is fragile. It breaks on:
+   - Arrow function components (`const App = () => ...` with `export default App` at bottom)
+   - Destructured props with type annotations (`{ name, count }: Props`)
+   - Generic components (`function List<T>(...)`)
+   - Multi-line type annotations and complex union types
+   - `React.FC<Props>` type annotations
+   - Enum declarations
 
-### File: `src/components/VoiceCallMode.tsx`
+2. **No dependency resolution** — Components reference each other by name, but the ordering logic only sorts `App` to last. If `PageA` imports `Header`, `Header` must come first — but there's no dependency graph.
 
-**1. Show full-screen UI immediately when `autoStart` is true**
-- Change the idle check: when `autoStart` is passed, skip rendering the small phone button and show the full-screen call UI right away
-- Set `isInCall = true` at the start of `startCall()` BEFORE the mic permission check
-- If mic permission fails, stay in the full-screen UI with a "Mic unavailable" state instead of silently reverting
+3. **Missing shims** — Common patterns like `lucide-react` icons, `react-router-dom` hooks, `framer-motion`, `uuid` are not shimmed, causing immediate runtime errors.
 
-**2. Make `startCall` resilient to mic failure**
-- Move `isCallActiveRef.current = true` and `setIsInCall(true)` to happen BEFORE the `getUserMedia` check
-- If mic fails, show an error state within the full-screen UI (e.g., muted state with retry option) instead of returning early
-- The hang up button will still work to dismiss the call
+4. **Preview doesn't auto-refresh smoothly** — Blob URL changes cause a full iframe reload with a white flash instead of a smooth transition.
 
-**3. Auto-show on mount with autoStart**
-- In the `autoStart` useEffect, immediately set `isInCall(true)` so the UI renders, then call `startCall()` for mic/STT setup
+5. **No loading state** — When the preview is being generated, the user sees nothing.
 
-### Result
-- Click phone → full-screen overlay appears instantly with mute, hang up, speaker controls
-- If mic access fails, user sees the call UI with a "Mic unavailable — tap to retry" message
-- Hang up always works to dismiss
-- No change to the existing call flow when mic works correctly
+## Plan
 
-## File Changes
+### 1. Rewrite `src/lib/preview-builder.ts` — Better TS Stripping + Dependency Sorting
+
+**TypeScript stripping improvements:**
+- Handle `const X: React.FC<Props> = ...` → strip the `: React.FC<Props>` part
+- Handle arrow function default exports: `export default App` at end of file → keep the variable, remove the export line
+- Handle `interface X { ... }` blocks properly using brace-counting instead of regex lookahead
+- Handle `type X = ...;` single-line types
+- Handle `as const` assertions
+- Handle generic arrow functions `const fn = <T,>(x: T) => ...` → `const fn = (x) => ...`
+- Handle optional chaining types `x?: Type` → `x`
+- Handle return type annotations `(): ReturnType => ...` → `() => ...`
+
+**Dependency sorting:**
+- Build a simple dependency graph: scan each file for references to function/const names defined in other files
+- Topological sort so dependencies render before dependents
+- App.tsx always last
+
+**Library shims — add stubs for commonly used packages:**
+- `lucide-react`: Shim all icon names as simple SVG placeholder components
+- `react-router-dom`: Shim `Link`, `useNavigate`, `useParams`, `BrowserRouter`, `Routes`, `Route`, `Outlet`
+- `framer-motion`: Shim `motion.div` etc. as passthrough divs
+- `@/lib/utils` and `@/components/ui/*`: Already handled by `cn` shim, extend with more shadcn stubs
+- `uuid`/`nanoid`: Simple random string generators
+- `date-fns`/`dayjs`: Basic `format()` shim
+
+### 2. Update `src/components/ide/PreviewPane.tsx` — Smoother UX
+
+- Add a brief loading spinner overlay during preview generation
+- Use `iframe.srcdoc` instead of blob URLs to avoid white flash on refresh (set HTML directly)
+- Show a small "Last updated: Xs ago" in the status bar
+- When preview has an error, show a friendly inline error with the component name that failed
+
+### 3. Update `src/pages/IDE.tsx` — Preview Trigger Improvements
+
+- Keep the existing 600ms debounce auto-preview
+- Add a "hot reload" mode: when a single file changes, only re-process that file's code and post a message to the iframe to re-render (avoid full page reload)
+- Ensure `generatePreview` is called after every code block application from AI
+
+## Files Changed
+
 | File | Change |
 |------|--------|
-| `src/components/VoiceCallMode.tsx` | Show full UI immediately on autoStart; make startCall resilient to mic failure |
+| `src/lib/preview-builder.ts` | Rewrite TS stripping, add dependency graph sorting, add library shims |
+| `src/components/ide/PreviewPane.tsx` | Switch to `srcdoc`, add loading state, smoother refresh |
+| `src/pages/IDE.tsx` | Minor: ensure preview triggers correctly on all code changes |
+
+## What Stays the Same
+- All existing IDE layout, file tree, code editor, chat panel
+- The dev server start/stop flow (for real local agent)
+- The "Generate Preview" button behavior
+- Device size toggles and responsive preview frame
 
