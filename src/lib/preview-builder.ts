@@ -698,6 +698,54 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
 </body></html>`;
   }
 
+  // ----- Static analysis: find undefined components and generate stubs -----
+  function generateComponentStubs(code: string): string {
+    // Find all capitalized identifiers used as component references
+    // Patterns: React.createElement(Name  or  <Name  (in case Babel leaves JSX)
+    const referencedSet = new Set<string>();
+    const refPatterns = [
+      /React\.createElement\(\s*([A-Z][a-zA-Z0-9]*)/g,
+      /<([A-Z][a-zA-Z0-9]*)/g,
+    ];
+    for (const pat of refPatterns) {
+      let m: RegExpExecArray | null;
+      while ((m = pat.exec(code)) !== null) {
+        referencedSet.add(m[1]);
+      }
+    }
+
+    // Find all declared names: const/let/var/function Name
+    const declaredSet = new Set<string>();
+    const declPat = /(?:const|let|var|function)\s+([A-Z][a-zA-Z0-9]*)/g;
+    let dm: RegExpExecArray | null;
+    while ((dm = declPat.exec(code)) !== null) {
+      declaredSet.add(dm[1]);
+    }
+
+    // Known shim names (from LIBRARY_SHIMS) — extract from the shims string too
+    const shimCode = LIBRARY_SHIMS;
+    const shimDeclPat = /(?:const|let|var|function)\s+([A-Z][a-zA-Z0-9]*)/g;
+    let sm: RegExpExecArray | null;
+    while ((sm = shimDeclPat.exec(shimCode)) !== null) {
+      declaredSet.add(sm[1]);
+    }
+    // Also add React built-ins
+    ['React', 'ReactDOM', 'Fragment', 'Suspense', 'Proxy', 'Promise', 'Map', 'Set', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Error', 'TypeError', 'ReferenceError', 'JSON', 'Math', 'Date', 'RegExp', 'Symbol', 'Int8Array', 'Uint8Array', 'Float32Array', 'Float64Array', 'ArrayBuffer', 'DataView', 'URL', 'URLSearchParams', 'FormData', 'Headers', 'Request', 'Response', 'Event', 'CustomEvent', 'AbortController', 'MutationObserver', 'IntersectionObserver', 'ResizeObserver', 'MessageChannel', 'MessagePort', 'Worker', 'Blob', 'FileReader', 'XMLHttpRequest', 'WebSocket', 'HTMLElement', 'SVGElement', 'Node', 'NodeList', 'Document', 'Window', 'Console', 'Intl'].forEach(n => declaredSet.add(n));
+
+    // Compute missing
+    const missing = [...referencedSet].filter(name => !declaredSet.has(name));
+
+    if (missing.length === 0) return '// No undefined components detected';
+
+    return missing.map(name => `
+    var ${name} = function ${name}_Stub(props) {
+      return React.createElement('div', {
+        style: { padding: '16px', border: '1px dashed rgba(234,179,8,0.3)', borderRadius: '8px', margin: '4px 0' },
+        'data-stub-component': '${name}'
+      }, props && props.children ? props.children : React.createElement('span', { style: { color: 'rgba(234,179,8,0.5)', fontSize: '12px' } }, '\\u26A0 ${name}'));
+    };`).join('\n');
+  }
+
   // Topological sort
   const sorted = topologicalSort(components);
   const processedComponents = sorted.map(c => c.processed).join('\n\n');
