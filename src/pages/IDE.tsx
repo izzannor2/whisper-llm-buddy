@@ -134,10 +134,10 @@ export default function IDE() {
     if (!project || project.files.length === 0) return;
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     previewTimerRef.current = setTimeout(() => {
-      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+      setIsPreviewGenerating(true);
       const html = buildPreviewHTML(project.files);
-      const url = createPreviewBlobUrl(html);
-      setPreviewBlobUrl(url);
+      setPreviewHtml(html);
+      setIsPreviewGenerating(false);
     }, 600);
     return () => { if (previewTimerRef.current) clearTimeout(previewTimerRef.current); };
   }, [project?.updatedAt]);
@@ -360,13 +360,12 @@ export default function IDE() {
   const generatePreview = useCallback((files?: ProjectFile[]) => {
     const filesToUse = files || project?.files;
     if (!filesToUse || filesToUse.length === 0) return;
-    // Revoke old blob URL
-    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+    setIsPreviewGenerating(true);
     const html = buildPreviewHTML(filesToUse);
-    const url = createPreviewBlobUrl(html);
-    setPreviewBlobUrl(url);
+    setPreviewHtml(html);
+    setIsPreviewGenerating(false);
     setRightPanelTab('preview');
-  }, [project, previewBlobUrl]);
+  }, [project]);
 
   const handleDownloadZip = async () => { if (!project) return; try { await downloadProjectAsZip(project); toast.success('Project downloaded'); } catch { toast.error('Failed to download'); } };
   const handleDownloadStartupScript = (platform: 'windows' | 'linux' | 'macos') => { downloadStartupScript(settings, platform); toast.success(`Script for ${platform} downloaded`); };
