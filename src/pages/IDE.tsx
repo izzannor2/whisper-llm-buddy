@@ -19,7 +19,7 @@ import { sendChatMessage as sendChat, loadSettings as loadChatSettings } from '@
 import { SystemCommand, parseCommandFromAIResponse, executeCommand as executeSystemCommand } from '@/lib/system-commands';
 import { downloadProjectAsZip, downloadStartupScript, generateDocumentation } from '@/lib/project-export';
 import { parseCodeBlocks, applyCodeBlocks, isBuildTrigger, getAppBuilderBuildPrompt, getAppBuilderPlanPrompt } from '@/lib/code-parser';
-import { buildPreviewHTML, createPreviewBlobUrl } from '@/lib/preview-builder';
+import { buildPreviewHTML } from '@/lib/preview-builder';
 import { checkAgentStatus, downloadAgentScript, startDevServer, stopDevServer, AgentStatus, onOutput } from '@/lib/local-backend-agent';
 import { onOpenClawEventForIDE } from '@/lib/openclaw-bridge';
 import { initTTS, speakAIResponse, getTTSSettings } from '@/lib/tts-engine';
@@ -58,6 +58,8 @@ export default function IDE() {
   const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins'>('preview');
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | undefined>();
+  const [previewHtml, setPreviewHtml] = useState<string | undefined>();
+  const [isPreviewGenerating, setIsPreviewGenerating] = useState(false);
   const [fileDialog, setFileDialog] = useState<{ open: boolean; parentPath: string; isDirectory: boolean }>({ open: false, parentPath: '/', isDirectory: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; path: string }>({ open: false, path: '' });
 
@@ -132,10 +134,10 @@ export default function IDE() {
     if (!project || project.files.length === 0) return;
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     previewTimerRef.current = setTimeout(() => {
-      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+      setIsPreviewGenerating(true);
       const html = buildPreviewHTML(project.files);
-      const url = createPreviewBlobUrl(html);
-      setPreviewBlobUrl(url);
+      setPreviewHtml(html);
+      setIsPreviewGenerating(false);
     }, 600);
     return () => { if (previewTimerRef.current) clearTimeout(previewTimerRef.current); };
   }, [project?.updatedAt]);
@@ -358,13 +360,12 @@ export default function IDE() {
   const generatePreview = useCallback((files?: ProjectFile[]) => {
     const filesToUse = files || project?.files;
     if (!filesToUse || filesToUse.length === 0) return;
-    // Revoke old blob URL
-    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+    setIsPreviewGenerating(true);
     const html = buildPreviewHTML(filesToUse);
-    const url = createPreviewBlobUrl(html);
-    setPreviewBlobUrl(url);
+    setPreviewHtml(html);
+    setIsPreviewGenerating(false);
     setRightPanelTab('preview');
-  }, [project, previewBlobUrl]);
+  }, [project]);
 
   const handleDownloadZip = async () => { if (!project) return; try { await downloadProjectAsZip(project); toast.success('Project downloaded'); } catch { toast.error('Failed to download'); } };
   const handleDownloadStartupScript = (platform: 'windows' | 'linux' | 'macos') => { downloadStartupScript(settings, platform); toast.success(`Script for ${platform} downloaded`); };
@@ -445,7 +446,8 @@ export default function IDE() {
                 <TabsTrigger value="plugins" className="gap-1"><Plug className="h-3 w-3" />Plugins</TabsTrigger>
               </TabsList>
               <TabsContent value="preview" className="flex-1 m-0">
-                <PreviewPane previewUrl={previewUrl} previewBlobUrl={previewBlobUrl} isServerRunning={isServerRunning} logs={logs} errors={errors}
+                <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
+                  isServerRunning={isServerRunning} isGenerating={isPreviewGenerating} logs={logs} errors={errors}
                   onRefresh={() => {}} onStartServer={handleStartServer} onStopServer={handleStopServer}
                   onGeneratePreview={() => generatePreview()} />
               </TabsContent>
