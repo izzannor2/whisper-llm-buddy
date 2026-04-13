@@ -451,7 +451,6 @@ export default function IDE() {
                   onRefresh={() => {}} onStartServer={handleStartServer} onStopServer={handleStopServer}
                   onGeneratePreview={() => generatePreview()} />
               </TabsContent>
-              </TabsContent>
               <TabsContent value="terminal" className="flex-1 m-0"><Terminal className="h-full" /></TabsContent>
               <TabsContent value="commands" className="flex-1 m-0">
                 <SystemCommandPanel commands={systemCommands} onApprove={handleApproveCommand}
