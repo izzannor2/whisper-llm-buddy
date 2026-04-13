@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
-import { RefreshCw, ExternalLink, Terminal, Play, Square, Maximize2, Minimize2, Eye, Smartphone, Tablet, Monitor, RotateCcw } from 'lucide-react';
+import { RefreshCw, ExternalLink, Terminal, Play, Square, Maximize2, Minimize2, Eye, Smartphone, Tablet, Monitor, RotateCcw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -15,13 +15,15 @@ type DeviceSize = 'mobile' | 'tablet' | 'desktop';
 const DEVICE_SIZES: Record<DeviceSize, { width: number; height: number; label: string }> = {
   mobile: { width: 375, height: 812, label: '375×812' },
   tablet: { width: 768, height: 1024, label: '768×1024' },
-  desktop: { width: 0, height: 0, label: 'Full width' }, // 0 = fill container
+  desktop: { width: 0, height: 0, label: 'Full width' },
 };
 
 interface PreviewPaneProps {
   previewUrl?: string;
+  previewHtml?: string;
   previewBlobUrl?: string;
   isServerRunning: boolean;
+  isGenerating?: boolean;
   logs: string[];
   errors: string[];
   onRefresh: () => void;
@@ -34,8 +36,10 @@ interface PreviewPaneProps {
 
 export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   previewUrl,
+  previewHtml,
   previewBlobUrl,
   isServerRunning,
+  isGenerating,
   logs,
   errors,
   onRefresh,
@@ -49,10 +53,37 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   const [isMaximized, setIsMaximized] = useState(false);
   const [deviceSize, setDeviceSize] = useState<DeviceSize>('desktop');
   const [isLandscape, setIsLandscape] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [timeSinceUpdate, setTimeSinceUpdate] = useState('');
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
 
-  const displayUrl = isServerRunning && previewUrl ? previewUrl : previewBlobUrl;
+  // Use server URL when running, otherwise srcdoc (previewHtml) or blob URL fallback
+  const useServerUrl = isServerRunning && previewUrl;
+  const hasSrcdoc = !useServerUrl && !!previewHtml;
+  const displayUrl = useServerUrl ? previewUrl : (!previewHtml ? previewBlobUrl : undefined);
+  const hasPreview = !!(useServerUrl || previewHtml || previewBlobUrl);
+
+  // Track last updated timestamp
+  useEffect(() => {
+    if (previewHtml || previewBlobUrl) {
+      setLastUpdated(Date.now());
+    }
+  }, [previewHtml, previewBlobUrl]);
+
+  // Update "X seconds ago" timer
+  useEffect(() => {
+    if (!lastUpdated) return;
+    const update = () => {
+      const seconds = Math.floor((Date.now() - lastUpdated) / 1000);
+      if (seconds < 5) setTimeSinceUpdate('just now');
+      else if (seconds < 60) setTimeSinceUpdate(`${seconds}s ago`);
+      else setTimeSinceUpdate(`${Math.floor(seconds / 60)}m ago`);
+    };
+    update();
+    const interval = setInterval(update, 5000);
+    return () => clearInterval(interval);
+  }, [lastUpdated]);
 
   useEffect(() => {
     if (consoleRef.current) {
@@ -61,8 +92,13 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   }, [logs, errors]);
 
   const handleRefresh = () => {
-    if (iframeRef.current && displayUrl) {
-      iframeRef.current.src = displayUrl;
+    if (iframeRef.current) {
+      if (hasSrcdoc && previewHtml) {
+        // Re-set srcdoc to force reload without white flash
+        iframeRef.current.srcdoc = previewHtml;
+      } else if (displayUrl) {
+        iframeRef.current.src = displayUrl;
+      }
     }
     onRefresh();
   };
@@ -72,6 +108,23 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
     ? { width: baseDevice.height, height: baseDevice.width, label: `${baseDevice.height}×${baseDevice.width}` }
     : baseDevice;
   const isResponsive = deviceSize !== 'desktop';
+
+  const renderIframe = () => {
+    const commonProps = {
+      ref: iframeRef,
+      className: 'w-full h-full border-0',
+      title: 'Preview',
+      sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals',
+    };
+
+    if (hasSrcdoc && previewHtml) {
+      return <iframe {...commonProps} srcDoc={previewHtml} />;
+    }
+    if (displayUrl) {
+      return <iframe {...commonProps} src={displayUrl} />;
+    }
+    return null;
+  };
 
   return (
     <div ref={ref} className={cn('flex flex-col h-full bg-card', isMaximized && 'fixed inset-0 z-50', className)}>
@@ -156,11 +209,11 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
           )}
 
           {onGeneratePreview && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onGeneratePreview} title="Generate Preview">
-              <Eye className="h-4 w-4 text-primary" />
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onGeneratePreview} title="Generate Preview" disabled={isGenerating}>
+              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Eye className="h-4 w-4 text-primary" />}
             </Button>
           )}
-          {displayUrl && (
+          {hasPreview && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRefresh} title="Refresh">
               <RefreshCw className="h-4 w-4" />
             </Button>
@@ -184,35 +237,33 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 relative">
+        {/* Loading overlay */}
+        {isGenerating && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">Generating preview…</span>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'preview' ? (
           <div className={cn(
             'h-full',
             isResponsive ? 'flex items-start justify-center overflow-auto bg-muted/30 p-4' : ''
           )}>
-            {displayUrl ? (
+            {hasPreview ? (
               isResponsive ? (
                 <div
                   className="bg-background rounded-lg shadow-2xl border border-border overflow-hidden flex-shrink-0 transition-all duration-300"
                   style={{ width: device.width, height: device.height, maxHeight: '100%' }}
                 >
-                  <iframe
-                    ref={iframeRef}
-                    src={displayUrl}
-                    className="w-full h-full border-0"
-                    title="Preview"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                  />
+                  {renderIframe()}
                 </div>
               ) : (
                 <div className="h-full bg-background">
-                  <iframe
-                    ref={iframeRef}
-                    src={displayUrl}
-                    className="w-full h-full border-0"
-                    title="Preview"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                  />
+                  {renderIframe()}
                 </div>
               )
             ) : (
@@ -275,10 +326,11 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
       {/* Status bar */}
       <div className="flex items-center justify-between px-3 py-1 border-t border-border text-xs text-muted-foreground bg-card">
         <div className="flex items-center gap-2">
-          <span className={cn('w-2 h-2 rounded-full', displayUrl ? 'bg-accent' : 'bg-muted')} />
-          <span>{isServerRunning ? 'Server running' : previewBlobUrl ? 'Instant preview' : 'No preview'}</span>
+          <span className={cn('w-2 h-2 rounded-full', hasPreview ? 'bg-accent' : 'bg-muted')} />
+          <span>{isServerRunning ? 'Server running' : hasPreview ? 'Instant preview' : 'No preview'}</span>
         </div>
         <div className="flex items-center gap-2">
+          {lastUpdated && timeSinceUpdate && <span>Updated {timeSinceUpdate}</span>}
           {isResponsive && <span className="font-mono">{device.label}</span>}
           {isServerRunning && previewUrl && <span className="font-mono">{previewUrl}</span>}
         </div>
