@@ -777,44 +777,21 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
 
     ${LIBRARY_SHIMS}
 
-    // Safety net: auto-stub any undefined component (uppercase name) as a placeholder
-    if (typeof Proxy !== 'undefined') {
-      window.__stubCache = {};
-      window.__origGet = window.__lookupGetter__ ? null : null;
-      const handler = {
-        get(target, prop, receiver) {
-          if (typeof prop === 'string' && /^[A-Z][a-zA-Z0-9]*$/.test(prop) && !(prop in target) && !(prop in window.__stubCache)) {
-            const Stub = function(props) {
-              return React.createElement('div', {
-                style: { padding: '16px', border: '1px dashed rgba(234,179,8,0.3)', borderRadius: '8px', margin: '4px 0' },
-                'data-stub-component': prop
-              }, props && props.children ? props.children : React.createElement('span', { style: { color: 'rgba(234,179,8,0.5)', fontSize: '12px' } }, '⚠ ' + prop));
-            };
-            Stub.displayName = prop + '_Stub';
-            window[prop] = Stub;
-            window.__stubCache[prop] = true;
-            return Stub;
-          }
-          return Reflect.get(target, prop, receiver);
-        }
-      };
-      try { window.__proxyRef = new Proxy(window, handler); } catch(e) {}
-      // Wrap eval/script execution to catch undefined refs and auto-stub
-      window.addEventListener('error', function(e) {
-        const m = e.message && e.message.match(/^(?:Uncaught )?ReferenceError: ([A-Z][a-zA-Z0-9]*) is not defined/);
-        if (m && m[1]) {
-          const name = m[1];
-          if (!window[name]) {
-            window[name] = function(props) {
-              return React.createElement('div', {
-                style: { padding: '16px', border: '1px dashed rgba(234,179,8,0.3)', borderRadius: '8px', margin: '4px 0' },
-                'data-stub-component': name
-              }, props && props.children ? props.children : React.createElement('span', { style: { color: 'rgba(234,179,8,0.5)', fontSize: '12px' } }, '⚠ ' + name));
-            };
-          }
-        }
-      });
-    }
+    ${generateComponentStubs(processedComponents)}
+
+    // Last-resort error listener for edge cases
+    window.addEventListener('error', function(e) {
+      const m = e.message && e.message.match(/^(?:Uncaught )?ReferenceError: ([A-Z][a-zA-Z0-9]*) is not defined/);
+      if (m && m[1] && !window['__stub_' + m[1]]) {
+        window['__stub_' + m[1]] = true;
+        window[m[1]] = function(props) {
+          return React.createElement('div', {
+            style: { padding: '16px', border: '1px dashed rgba(234,179,8,0.3)', borderRadius: '8px', margin: '4px 0' },
+            'data-stub-component': m[1]
+          }, props && props.children ? props.children : React.createElement('span', { style: { color: 'rgba(234,179,8,0.5)', fontSize: '12px' } }, '\u26A0 ' + m[1]));
+        };
+      }
+    });
 
     ${processedComponents}
 
