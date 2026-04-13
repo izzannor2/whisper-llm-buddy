@@ -446,9 +446,11 @@ export default function IDE() {
                 <TabsTrigger value="plugins" className="gap-1"><Plug className="h-3 w-3" />Plugins</TabsTrigger>
               </TabsList>
               <TabsContent value="preview" className="flex-1 m-0">
-                <PreviewPane previewUrl={previewUrl} previewBlobUrl={previewBlobUrl} isServerRunning={isServerRunning} logs={logs} errors={errors}
+                <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
+                  isServerRunning={isServerRunning} isGenerating={isPreviewGenerating} logs={logs} errors={errors}
                   onRefresh={() => {}} onStartServer={handleStartServer} onStopServer={handleStopServer}
                   onGeneratePreview={() => generatePreview()} />
+              </TabsContent>
               </TabsContent>
               <TabsContent value="terminal" className="flex-1 m-0"><Terminal className="h-full" /></TabsContent>
               <TabsContent value="commands" className="flex-1 m-0">
