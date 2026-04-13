@@ -733,7 +733,7 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
     ['React', 'ReactDOM', 'Fragment', 'Suspense', 'Proxy', 'Promise', 'Map', 'Set', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Error', 'TypeError', 'ReferenceError', 'JSON', 'Math', 'Date', 'RegExp', 'Symbol', 'Int8Array', 'Uint8Array', 'Float32Array', 'Float64Array', 'ArrayBuffer', 'DataView', 'URL', 'URLSearchParams', 'FormData', 'Headers', 'Request', 'Response', 'Event', 'CustomEvent', 'AbortController', 'MutationObserver', 'IntersectionObserver', 'ResizeObserver', 'MessageChannel', 'MessagePort', 'Worker', 'Blob', 'FileReader', 'XMLHttpRequest', 'WebSocket', 'HTMLElement', 'SVGElement', 'Node', 'NodeList', 'Document', 'Window', 'Console', 'Intl'].forEach(n => declaredSet.add(n));
 
     // Compute missing
-    const missing = [...referencedSet].filter(name => !declaredSet.has(name));
+    const missing = Array.from(referencedSet).filter(name => !declaredSet.has(name));
 
     if (missing.length === 0) return '// No undefined components detected';
 
