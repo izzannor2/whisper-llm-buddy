@@ -878,6 +878,29 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
         }
       }
     });
+
+    // Bridge console.error and window.onerror to parent for debug panel
+    (function() {
+      var origError = console.error;
+      console.error = function() {
+        origError.apply(console, arguments);
+        try {
+          var msg = Array.prototype.map.call(arguments, function(a) { return typeof a === 'string' ? a : JSON.stringify(a); }).join(' ');
+          window.parent.postMessage({ type: 'preview-error', message: msg }, '*');
+        } catch(e) {}
+      };
+      var origLog = console.log;
+      console.log = function() {
+        origLog.apply(console, arguments);
+        try {
+          var msg = Array.prototype.map.call(arguments, function(a) { return typeof a === 'string' ? a : JSON.stringify(a); }).join(' ');
+          window.parent.postMessage({ type: 'preview-log', message: msg }, '*');
+        } catch(e) {}
+      };
+      window.onerror = function(msg) {
+        window.parent.postMessage({ type: 'preview-error', message: String(msg) }, '*');
+      };
+    })();
   <\/script>
 </body>
 </html>`;

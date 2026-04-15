@@ -14,7 +14,7 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { ChatSettings, DEFAULT_SETTINGS, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, DEFAULT_API_KEYS } from '@/lib/chat-api';
+import { ChatSettings, DEFAULT_SETTINGS, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, BLACKBOX_MODELS, DEFAULT_API_KEYS } from '@/lib/chat-api';
 import { getAvailableVoices, speak, isTTSSupported } from '@/lib/tts';
 import { ModelManager } from '@/components/ModelManager';
 import { VoiceModelManager } from '@/components/VoiceModelManager';
@@ -248,6 +248,8 @@ export function SettingsDialog({
         return localSettings.apiKeys.anthropic ? ANTHROPIC_MODELS : [];
       case 'google':
         return localSettings.apiKeys.google ? GOOGLE_MODELS : [];
+      case 'blackbox':
+        return localSettings.apiKeys.blackbox ? BLACKBOX_MODELS : [];
       case 'local':
         return localModels.map(m => ({ id: m, name: m, backend: 'local' }));
       case 'ollama':
@@ -278,6 +280,7 @@ export function SettingsDialog({
       case 'anthropic': return 'Anthropic';
       case 'google': return 'Google AI';
       case 'huggingface': return 'Hugging Face';
+      case 'blackbox': return 'Blackbox AI';
       default: return backend;
     }
   };
@@ -452,6 +455,22 @@ export function SettingsDialog({
                 <p className="font-medium text-sm">HuggingFace</p>
                 <p className="text-[10px] text-muted-foreground">Any model</p>
               </button>
+
+              <button
+                className={cn(
+                  'p-3 rounded-xl border-2 transition-all text-left',
+                  localSettings.backend === 'blackbox'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border hover:border-muted-foreground'
+                )}
+                onClick={() =>
+                  setLocalSettings({ ...localSettings, backend: 'blackbox', model: 'blackbox-ai' })
+                }
+              >
+                <Bot className="w-5 h-5 mb-1 text-foreground" />
+                <p className="font-medium text-sm">Blackbox</p>
+                <p className="text-[10px] text-muted-foreground">AI coding</p>
+              </button>
             </div>
 
             {localSettings.backend === 'local' && (
@@ -564,12 +583,13 @@ export function SettingsDialog({
               </div>
             )}
 
-            {['openai', 'anthropic', 'google', 'huggingface'].includes(localSettings.backend) && (
+            {['openai', 'anthropic', 'google', 'huggingface', 'blackbox'].includes(localSettings.backend) && (
               <div className="p-3 rounded-lg bg-muted/50 border border-border">
                 <p className="text-xs text-muted-foreground">
                   <Key className="w-3 h-3 inline mr-1" />
                   Using your own API key. Add it in the API Keys tab.
                   {localSettings.backend === 'huggingface' && ' Supports any model from Hugging Face Hub.'}
+                  {localSettings.backend === 'blackbox' && ' Get your key at blackbox.ai.'}
                 </p>
               </div>
             )}
@@ -804,6 +824,23 @@ export function SettingsDialog({
                 />
                 <p className="text-[10px] text-muted-foreground">
                   Get your token at huggingface.co/settings/tokens
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Bot className="w-4 h-4 text-foreground" />
+                  Blackbox AI API Key
+                </Label>
+                <Input
+                  type="password"
+                  value={localSettings.apiKeys.blackbox}
+                  onChange={(e) => updateApiKey('blackbox', e.target.value)}
+                  placeholder="bb-..."
+                  className="bg-muted font-mono text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Get your key at blackbox.ai
                 </p>
               </div>
             </div>

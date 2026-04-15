@@ -56,13 +56,14 @@ Deno.serve(async (req) => {
   try {
     const { messages, model, temperature, top_p, max_tokens, stream, enableTools, agentMode } = await req.json();
 
-    // Try GOOGLE_API_KEY first for self-hosted, fallback to Lovable AI Gateway
+    // Try GOOGLE_API_KEY first for self-hosted, then BLACKBOX_API_KEY, fallback to Lovable AI Gateway
     const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+    const BLACKBOX_API_KEY = Deno.env.get("BLACKBOX_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!GOOGLE_API_KEY && !LOVABLE_API_KEY) {
+    if (!GOOGLE_API_KEY && !BLACKBOX_API_KEY && !LOVABLE_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "No AI backend configured. Set GOOGLE_API_KEY or LOVABLE_API_KEY as a secret." }),
+        JSON.stringify({ error: "No AI backend configured. Set GOOGLE_API_KEY, BLACKBOX_API_KEY, or LOVABLE_API_KEY as a secret." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -127,6 +128,46 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({
         choices: [{ message: { role: 'assistant', content: text } }],
       }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Blackbox AI routing
+    if (BLACKBOX_API_KEY && (model === 'blackbox-ai' || model === 'blackbox-ai-pro')) {
+      console.log(`Chat request (Blackbox) - Model: ${model}, Stream: ${stream}`);
+
+      const bbResponse = await fetch('https://api.blackbox.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${BLACKBOX_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: temperature ?? 0.7,
+          top_p: top_p ?? 0.9,
+          max_tokens: max_tokens ?? 2048,
+          stream: stream ?? false,
+        }),
+      });
+
+      if (!bbResponse.ok) {
+        const errText = await bbResponse.text();
+        console.error("Blackbox API error:", bbResponse.status, errText);
+        return new Response(JSON.stringify({ error: `Blackbox API error: ${bbResponse.status}` }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (stream) {
+        return new Response(bbResponse.body, {
+          headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        });
+      }
+
+      const bbData = await bbResponse.json();
+      return new Response(JSON.stringify(bbData), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

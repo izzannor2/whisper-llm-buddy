@@ -26,7 +26,7 @@ import { initTTS, speakAIResponse, getTTSSettings } from '@/lib/tts-engine';
 import { speak, isTTSSupported } from '@/lib/tts';
 import { loadSettings } from '@/lib/chat-api';
 import { Button } from '@/components/ui/button';
-import { Settings, FolderPlus, Download, FileText, Play, Square, Terminal as TerminalIcon, Plug, Home, Bot, MonitorDown } from 'lucide-react';
+import { Settings, FolderPlus, Download, FileText, Play, Square, Terminal as TerminalIcon, Plug, Home, Bot, MonitorDown, Bug, Send } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -55,13 +55,27 @@ export default function IDE() {
   const [errors, setErrors] = useState<string[]>([]);
   const [systemCommands, setSystemCommands] = useState<SystemCommand[]>([]);
   const [plugins, setPlugins] = useState<Plugin[]>([]);
-  const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins'>('preview');
+  const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins' | 'debug'>('preview');
+  const [debugLogs, setDebugLogs] = useState<Array<{ type: 'error' | 'info'; message: string; timestamp: number }>>([]);
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | undefined>();
   const [previewHtml, setPreviewHtml] = useState<string | undefined>();
   const [isPreviewGenerating, setIsPreviewGenerating] = useState(false);
   const [fileDialog, setFileDialog] = useState<{ open: boolean; parentPath: string; isDirectory: boolean }>({ open: false, parentPath: '/', isDirectory: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; path: string }>({ open: false, path: '' });
+
+  // Listen for debug messages from preview iframe
+  useEffect(() => {
+    const handlePreviewMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'preview-error') {
+        setDebugLogs(prev => [...prev.slice(-99), { type: 'error', message: event.data.message, timestamp: Date.now() }]);
+      } else if (event.data?.type === 'preview-log') {
+        setDebugLogs(prev => [...prev.slice(-99), { type: 'info', message: event.data.message, timestamp: Date.now() }]);
+      }
+    };
+    window.addEventListener('message', handlePreviewMessage);
+    return () => window.removeEventListener('message', handlePreviewMessage);
+  }, []);
 
   useEffect(() => {
     setSettings(getIDESettings());
@@ -278,7 +292,29 @@ export default function IDE() {
       }
       
       let fullResponse = '';
-      await sendChat(chatMessages, effectiveSettings, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
+      const appliedBlockKeys = new Set<string>();
+      const isAppBuilder = (settings.mode === 'app-builder' || settings.mode === 'ai-improvement') && !isPlan;
+      
+      await sendChat(chatMessages, effectiveSettings, (chunk) => {
+        fullResponse += chunk;
+        setStreamingContent(fullResponse);
+        
+        // Live preview: apply code blocks as they stream in
+        if (isAppBuilder && project) {
+          const blocks = parseCodeBlocks(fullResponse);
+          const newBlocks = blocks.filter(b => !appliedBlockKeys.has(b.filePath + ':' + b.content.length));
+          if (newBlocks.length > 0) {
+            newBlocks.forEach(b => appliedBlockKeys.add(b.filePath + ':' + b.content.length));
+            const currentProject = project;
+            const { files: updatedFiles } = applyCodeBlocks(currentProject.files, newBlocks);
+            const updatedProject = { ...currentProject, files: updatedFiles, updatedAt: Date.now() };
+            setProject(updatedProject);
+            saveProject(updatedProject);
+            // Trigger live preview update
+            generatePreview(updatedFiles);
+          }
+        }
+      });
 
       const assistantMessage: Message = { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() };
       setMessages(prev => [...prev, assistantMessage]);
@@ -444,11 +480,17 @@ export default function IDE() {
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="plugins" className="gap-1"><Plug className="h-3 w-3" />Plugins</TabsTrigger>
+                <TabsTrigger value="debug" className="gap-1">
+                  <Bug className="h-3 w-3" />Debug
+                  {debugLogs.filter(l => l.type === 'error').length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-destructive text-destructive-foreground rounded-full">{debugLogs.filter(l => l.type === 'error').length}</span>
+                  )}
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="preview" className="flex-1 m-0">
                 <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
                   isServerRunning={isServerRunning} isGenerating={isPreviewGenerating} logs={logs} errors={errors}
-                  onRefresh={() => {}} onStartServer={handleStartServer} onStopServer={handleStopServer}
+                  onRefresh={() => generatePreview()} onStartServer={handleStartServer} onStopServer={handleStopServer}
                   onGeneratePreview={() => generatePreview()} />
               </TabsContent>
               <TabsContent value="terminal" className="flex-1 m-0"><Terminal className="h-full" /></TabsContent>
@@ -457,6 +499,27 @@ export default function IDE() {
                   onReject={handleRejectCommand} onExecute={handleExecuteCommand} onClear={handleClearCommands} />
               </TabsContent>
               <TabsContent value="plugins" className="flex-1 m-0"><PluginManager plugins={plugins} onPluginsChange={setPlugins} /></TabsContent>
+              <TabsContent value="debug" className="flex-1 m-0">
+                <div className="h-full flex flex-col">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                    <span className="text-xs font-medium">Preview Debug Console</span>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setDebugLogs([])}>Clear</Button>
+                  </div>
+                  <div className="flex-1 overflow-auto p-3 font-mono text-xs space-y-1">
+                    {debugLogs.length === 0 ? (
+                      <div className="text-muted-foreground">No debug output yet. Errors from the preview will appear here.</div>
+                    ) : (
+                      debugLogs.map((log, i) => (
+                        <div key={i} className={log.type === 'error' ? 'text-destructive' : 'text-muted-foreground'}>
+                          <span className="opacity-50">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
+                          <span className={log.type === 'error' ? 'text-destructive' : 'text-accent'}>[{log.type}]</span>{' '}
+                          {log.message}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
             </Tabs>
           </div>
         </ResizablePanel>

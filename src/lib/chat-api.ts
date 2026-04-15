@@ -43,10 +43,11 @@ export interface APIKeys {
   anthropic: string;
   google: string;
   huggingface: string;
+  blackbox: string;
 }
 
 export interface ChatSettings {
-  backend: 'cloud' | 'local' | 'ollama' | 'openai' | 'anthropic' | 'google' | 'huggingface';
+  backend: 'cloud' | 'local' | 'ollama' | 'openai' | 'anthropic' | 'google' | 'huggingface' | 'blackbox';
   localUrl: string;
   ollamaUrl: string;
   ollamaModel: string;
@@ -92,6 +93,7 @@ export const DEFAULT_API_KEYS: APIKeys = {
   anthropic: '',
   google: '',
   huggingface: '',
+  blackbox: '',
 };
 
 export const DEFAULT_SETTINGS: ChatSettings = {
@@ -142,6 +144,11 @@ export const ANTHROPIC_MODELS = [
 export const GOOGLE_MODELS = [
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', backend: 'google' },
   { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', backend: 'google' },
+];
+
+export const BLACKBOX_MODELS = [
+  { id: 'blackbox-ai', name: 'Blackbox AI', backend: 'blackbox' },
+  { id: 'blackbox-ai-pro', name: 'Blackbox AI Pro', backend: 'blackbox' },
 ];
 
 // Legacy export for backwards compatibility - will be removed
@@ -206,6 +213,8 @@ function dispatchToBackend(
       return sendGoogleMessage(allMessages, settings, onChunk);
     case 'huggingface':
       return sendHuggingFaceMessage(allMessages, settings, onChunk);
+    case 'blackbox':
+      return sendBlackboxMessage(allMessages, settings, onChunk);
     case 'cloud':
     default:
       return sendCloudMessage(allMessages, settings, onChunk);
@@ -582,6 +591,46 @@ async function sendHuggingFaceMessage(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || `Hugging Face API error: ${response.status}`);
+  }
+
+  if (onChunk && response.body) {
+    return streamResponse(response, onChunk);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+// Blackbox AI API (OpenAI-compatible)
+async function sendBlackboxMessage(
+  messages: ChatMessage[],
+  settings: ChatSettings,
+  onChunk?: (chunk: string) => void
+): Promise<string> {
+  const apiKey = settings.apiKeys.blackbox;
+  if (!apiKey) {
+    throw new Error('Blackbox API key not configured. Add your key in Settings → API Keys.');
+  }
+
+  const response = await fetch('https://api.blackbox.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: settings.model || 'blackbox-ai',
+      messages,
+      temperature: settings.temperature,
+      top_p: settings.topP,
+      max_tokens: settings.maxTokens,
+      stream: !!onChunk,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Blackbox API error: ${response.status}`);
   }
 
   if (onChunk && response.body) {
