@@ -480,11 +480,17 @@ export default function IDE() {
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="plugins" className="gap-1"><Plug className="h-3 w-3" />Plugins</TabsTrigger>
+                <TabsTrigger value="debug" className="gap-1">
+                  <Bug className="h-3 w-3" />Debug
+                  {debugLogs.filter(l => l.type === 'error').length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-destructive text-destructive-foreground rounded-full">{debugLogs.filter(l => l.type === 'error').length}</span>
+                  )}
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="preview" className="flex-1 m-0">
                 <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
                   isServerRunning={isServerRunning} isGenerating={isPreviewGenerating} logs={logs} errors={errors}
-                  onRefresh={() => {}} onStartServer={handleStartServer} onStopServer={handleStopServer}
+                  onRefresh={() => generatePreview()} onStartServer={handleStartServer} onStopServer={handleStopServer}
                   onGeneratePreview={() => generatePreview()} />
               </TabsContent>
               <TabsContent value="terminal" className="flex-1 m-0"><Terminal className="h-full" /></TabsContent>
@@ -493,6 +499,27 @@ export default function IDE() {
                   onReject={handleRejectCommand} onExecute={handleExecuteCommand} onClear={handleClearCommands} />
               </TabsContent>
               <TabsContent value="plugins" className="flex-1 m-0"><PluginManager plugins={plugins} onPluginsChange={setPlugins} /></TabsContent>
+              <TabsContent value="debug" className="flex-1 m-0">
+                <div className="h-full flex flex-col">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                    <span className="text-xs font-medium">Preview Debug Console</span>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setDebugLogs([])}>Clear</Button>
+                  </div>
+                  <div className="flex-1 overflow-auto p-3 font-mono text-xs space-y-1">
+                    {debugLogs.length === 0 ? (
+                      <div className="text-muted-foreground">No debug output yet. Errors from the preview will appear here.</div>
+                    ) : (
+                      debugLogs.map((log, i) => (
+                        <div key={i} className={log.type === 'error' ? 'text-destructive' : 'text-muted-foreground'}>
+                          <span className="opacity-50">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
+                          <span className={log.type === 'error' ? 'text-destructive' : 'text-accent'}>[{log.type}]</span>{' '}
+                          {log.message}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
             </Tabs>
           </div>
         </ResizablePanel>
