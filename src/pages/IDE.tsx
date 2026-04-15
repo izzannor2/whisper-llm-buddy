@@ -64,6 +64,19 @@ export default function IDE() {
   const [fileDialog, setFileDialog] = useState<{ open: boolean; parentPath: string; isDirectory: boolean }>({ open: false, parentPath: '/', isDirectory: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; path: string }>({ open: false, path: '' });
 
+  // Listen for debug messages from preview iframe
+  useEffect(() => {
+    const handlePreviewMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'preview-error') {
+        setDebugLogs(prev => [...prev.slice(-99), { type: 'error', message: event.data.message, timestamp: Date.now() }]);
+      } else if (event.data?.type === 'preview-log') {
+        setDebugLogs(prev => [...prev.slice(-99), { type: 'info', message: event.data.message, timestamp: Date.now() }]);
+      }
+    };
+    window.addEventListener('message', handlePreviewMessage);
+    return () => window.removeEventListener('message', handlePreviewMessage);
+  }, []);
+
   useEffect(() => {
     setSettings(getIDESettings());
     setPlugins(getPlugins());
