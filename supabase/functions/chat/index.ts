@@ -56,13 +56,14 @@ Deno.serve(async (req) => {
   try {
     const { messages, model, temperature, top_p, max_tokens, stream, enableTools, agentMode } = await req.json();
 
-    // Try GOOGLE_API_KEY first for self-hosted, fallback to Lovable AI Gateway
+    // Try GOOGLE_API_KEY first for self-hosted, then BLACKBOX_API_KEY, fallback to Lovable AI Gateway
     const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+    const BLACKBOX_API_KEY = Deno.env.get("BLACKBOX_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!GOOGLE_API_KEY && !LOVABLE_API_KEY) {
+    if (!GOOGLE_API_KEY && !BLACKBOX_API_KEY && !LOVABLE_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "No AI backend configured. Set GOOGLE_API_KEY or LOVABLE_API_KEY as a secret." }),
+        JSON.stringify({ error: "No AI backend configured. Set GOOGLE_API_KEY, BLACKBOX_API_KEY, or LOVABLE_API_KEY as a secret." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
