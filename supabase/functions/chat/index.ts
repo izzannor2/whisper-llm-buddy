@@ -132,6 +132,46 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Blackbox AI routing
+    if (BLACKBOX_API_KEY && (model === 'blackbox-ai' || model === 'blackbox-ai-pro')) {
+      console.log(`Chat request (Blackbox) - Model: ${model}, Stream: ${stream}`);
+
+      const bbResponse = await fetch('https://api.blackbox.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${BLACKBOX_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: temperature ?? 0.7,
+          top_p: top_p ?? 0.9,
+          max_tokens: max_tokens ?? 2048,
+          stream: stream ?? false,
+        }),
+      });
+
+      if (!bbResponse.ok) {
+        const errText = await bbResponse.text();
+        console.error("Blackbox API error:", bbResponse.status, errText);
+        return new Response(JSON.stringify({ error: `Blackbox API error: ${bbResponse.status}` }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (stream) {
+        return new Response(bbResponse.body, {
+          headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        });
+      }
+
+      const bbData = await bbResponse.json();
+      return new Response(JSON.stringify(bbData), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Fallback: Lovable AI Gateway
     const aiModel = (modelMap[model] ? `google/${modelMap[model]}` : 'google/gemini-2.5-flash');
     console.log(`Chat request (Lovable Gateway) - Model: ${aiModel}, Stream: ${stream}`);
