@@ -26,7 +26,7 @@ import { initTTS, speakAIResponse, getTTSSettings } from '@/lib/tts-engine';
 import { speak, isTTSSupported } from '@/lib/tts';
 import { loadSettings } from '@/lib/chat-api';
 import { Button } from '@/components/ui/button';
-import { Settings, FolderPlus, Download, FileText, Play, Square, Terminal as TerminalIcon, Plug, Home, Bot, MonitorDown } from 'lucide-react';
+import { Settings, FolderPlus, Download, FileText, Play, Square, Terminal as TerminalIcon, Plug, Home, Bot, MonitorDown, Bug, Send } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -55,7 +55,8 @@ export default function IDE() {
   const [errors, setErrors] = useState<string[]>([]);
   const [systemCommands, setSystemCommands] = useState<SystemCommand[]>([]);
   const [plugins, setPlugins] = useState<Plugin[]>([]);
-  const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins'>('preview');
+  const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins' | 'debug'>('preview');
+  const [debugLogs, setDebugLogs] = useState<Array<{ type: 'error' | 'info'; message: string; timestamp: number }>>([]);
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | undefined>();
   const [previewHtml, setPreviewHtml] = useState<string | undefined>();
