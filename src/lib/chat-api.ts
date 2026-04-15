@@ -601,6 +601,46 @@ async function sendHuggingFaceMessage(
   return data.choices?.[0]?.message?.content || '';
 }
 
+// Blackbox AI API (OpenAI-compatible)
+async function sendBlackboxMessage(
+  messages: ChatMessage[],
+  settings: ChatSettings,
+  onChunk?: (chunk: string) => void
+): Promise<string> {
+  const apiKey = settings.apiKeys.blackbox;
+  if (!apiKey) {
+    throw new Error('Blackbox API key not configured. Add your key in Settings → API Keys.');
+  }
+
+  const response = await fetch('https://api.blackbox.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: settings.model || 'blackbox-ai',
+      messages,
+      temperature: settings.temperature,
+      top_p: settings.topP,
+      max_tokens: settings.maxTokens,
+      stream: !!onChunk,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Blackbox API error: ${response.status}`);
+  }
+
+  if (onChunk && response.body) {
+    return streamResponse(response, onChunk);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
 async function streamResponse(
   response: Response,
   onChunk: (chunk: string) => void
