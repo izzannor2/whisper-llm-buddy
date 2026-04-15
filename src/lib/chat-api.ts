@@ -47,7 +47,7 @@ export interface APIKeys {
 }
 
 export interface ChatSettings {
-  backend: 'cloud' | 'local' | 'ollama' | 'openai' | 'anthropic' | 'google' | 'huggingface';
+  backend: 'cloud' | 'local' | 'ollama' | 'openai' | 'anthropic' | 'google' | 'huggingface' | 'blackbox';
   localUrl: string;
   ollamaUrl: string;
   ollamaModel: string;
@@ -93,6 +93,7 @@ export const DEFAULT_API_KEYS: APIKeys = {
   anthropic: '',
   google: '',
   huggingface: '',
+  blackbox: '',
 };
 
 export const DEFAULT_SETTINGS: ChatSettings = {
@@ -143,6 +144,11 @@ export const ANTHROPIC_MODELS = [
 export const GOOGLE_MODELS = [
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', backend: 'google' },
   { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', backend: 'google' },
+];
+
+export const BLACKBOX_MODELS = [
+  { id: 'blackbox-ai', name: 'Blackbox AI', backend: 'blackbox' },
+  { id: 'blackbox-ai-pro', name: 'Blackbox AI Pro', backend: 'blackbox' },
 ];
 
 // Legacy export for backwards compatibility - will be removed
@@ -207,6 +213,8 @@ function dispatchToBackend(
       return sendGoogleMessage(allMessages, settings, onChunk);
     case 'huggingface':
       return sendHuggingFaceMessage(allMessages, settings, onChunk);
+    case 'blackbox':
+      return sendBlackboxMessage(allMessages, settings, onChunk);
     case 'cloud':
     default:
       return sendCloudMessage(allMessages, settings, onChunk);
