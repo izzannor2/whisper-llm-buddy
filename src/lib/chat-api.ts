@@ -43,6 +43,7 @@ export interface APIKeys {
   anthropic: string;
   google: string;
   huggingface: string;
+  blackbox: string;
 }
 
 export interface ChatSettings {
