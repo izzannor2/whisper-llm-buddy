@@ -826,6 +826,23 @@ export function SettingsDialog({
                   Get your token at huggingface.co/settings/tokens
                 </p>
               </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Bot className="w-4 h-4 text-foreground" />
+                  Blackbox AI API Key
+                </Label>
+                <Input
+                  type="password"
+                  value={localSettings.apiKeys.blackbox}
+                  onChange={(e) => updateApiKey('blackbox', e.target.value)}
+                  placeholder="bb-..."
+                  className="bg-muted font-mono text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Get your key at blackbox.ai
+                </p>
+              </div>
             </div>
 
             <div className="p-3 rounded-lg bg-muted/50 border border-border mt-4">
