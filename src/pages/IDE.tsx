@@ -292,7 +292,29 @@ export default function IDE() {
       }
       
       let fullResponse = '';
-      await sendChat(chatMessages, effectiveSettings, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
+      const appliedBlockKeys = new Set<string>();
+      const isAppBuilder = (settings.mode === 'app-builder' || settings.mode === 'ai-improvement') && !isPlan;
+      
+      await sendChat(chatMessages, effectiveSettings, (chunk) => {
+        fullResponse += chunk;
+        setStreamingContent(fullResponse);
+        
+        // Live preview: apply code blocks as they stream in
+        if (isAppBuilder && project) {
+          const blocks = parseCodeBlocks(fullResponse);
+          const newBlocks = blocks.filter(b => !appliedBlockKeys.has(b.filePath + ':' + b.content.length));
+          if (newBlocks.length > 0) {
+            newBlocks.forEach(b => appliedBlockKeys.add(b.filePath + ':' + b.content.length));
+            const currentProject = project;
+            const { files: updatedFiles } = applyCodeBlocks(currentProject.files, newBlocks);
+            const updatedProject = { ...currentProject, files: updatedFiles, updatedAt: Date.now() };
+            setProject(updatedProject);
+            saveProject(updatedProject);
+            // Trigger live preview update
+            generatePreview(updatedFiles);
+          }
+        }
+      });
 
       const assistantMessage: Message = { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() };
       setMessages(prev => [...prev, assistantMessage]);
