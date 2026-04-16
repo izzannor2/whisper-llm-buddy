@@ -282,6 +282,7 @@ export default function ImproveWorkspace() {
           language: block.language || 'typescript',
         }));
         const html = buildPreviewHTML(projectFiles);
+        setPreviewHtml(html);
       } catch {
         // Preview build failed, that's okay
       }
