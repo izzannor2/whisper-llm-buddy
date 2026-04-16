@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import Editor, { OnMount, OnChange } from '@monaco-editor/react';
 import { cn } from '@/lib/utils';
 import { ProjectFile } from '@/lib/ide-types';
-import { X } from 'lucide-react';
+import { X, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface CodeEditorProps {
@@ -11,6 +11,7 @@ interface CodeEditorProps {
   onFileChange: (path: string, content: string) => void;
   onCloseFile: (path: string) => void;
   onSelectFile: (file: ProjectFile) => void;
+  onSendToPreview?: () => void;
   fontSize?: number;
   className?: string;
 }
@@ -54,6 +55,7 @@ export function CodeEditor({
   onFileChange,
   onCloseFile,
   onSelectFile,
+  onSendToPreview,
   fontSize = 14,
   className,
 }: CodeEditorProps) {
@@ -103,6 +105,7 @@ export function CodeEditor({
     <div className={cn('flex flex-col h-full bg-[#0d1117]', className)}>
       {/* Tab bar */}
       <div className="flex items-center bg-card border-b border-border overflow-x-auto scrollbar-thin">
+        <div className="flex items-center flex-1 min-w-0 overflow-x-auto">
         {openFiles.map((f) => (
           <div
             key={f.path}
@@ -129,6 +132,19 @@ export function CodeEditor({
             </Button>
           </div>
         ))}
+        </div>
+        {onSendToPreview && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 mx-1 gap-1 text-xs text-muted-foreground hover:text-accent shrink-0"
+            onClick={onSendToPreview}
+            title="Send to Preview"
+          >
+            <Send className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Preview</span>
+          </Button>
+        )}
       </div>
 
       {/* Editor */}

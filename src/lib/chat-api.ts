@@ -151,6 +151,27 @@ export const BLACKBOX_MODELS = [
   { id: 'blackbox-ai-pro', name: 'Blackbox AI Pro', backend: 'blackbox' },
 ];
 
+/** Fetch available models from Blackbox API dynamically. Falls back to BLACKBOX_MODELS on failure. */
+export async function fetchBlackboxModels(apiKey: string): Promise<Array<{ id: string; name: string; backend: string }>> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('https://api.blackbox.ai/v1/models', {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      const models = data.data?.map((m: any) => ({ id: m.id, name: m.id, backend: 'blackbox' })) || [];
+      return models.length > 0 ? models : BLACKBOX_MODELS;
+    }
+    return BLACKBOX_MODELS;
+  } catch {
+    return BLACKBOX_MODELS;
+  }
+}
+
 // Legacy export for backwards compatibility - will be removed
 export const AVAILABLE_MODELS = [...CLOUD_MODELS];
 

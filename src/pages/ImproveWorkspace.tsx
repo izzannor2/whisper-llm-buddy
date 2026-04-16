@@ -5,6 +5,7 @@ import {
   RefreshCw, Loader2, Lightbulb, Mic, MicOff, Send, Wand2, Zap,
   Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2,
   CheckSquare, Square, X, CheckCheck, FileCode, Check, Upload, Eye, Phone,
+  Copy, RotateCcw, TestTube, BookOpen, Code2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -63,6 +64,9 @@ const QUICK_SUGGESTIONS = [
   { icon: Palette, label: 'Polish UI', prompt: 'Review the selected files for UI/UX improvements. Focus on accessibility, responsive design, and visual consistency. Output the COMPLETE corrected file using ```language:/path/to/file.ext format.' },
   { icon: Zap, label: 'Add features', prompt: 'What are the most impactful features we could add? Output complete file contents using ```language:/path/to/file.ext format for each new or modified file.' },
   { icon: Wand2, label: 'Refactor', prompt: 'Identify areas in the selected files that need refactoring. Focus on code duplication, complexity, and maintainability. Output the COMPLETE refactored file for each change using ```language:/path/to/file.ext format.' },
+  { icon: TestTube, label: 'Add Tests', prompt: 'Generate comprehensive unit tests for the selected files. Use vitest and testing-library. Output complete test files using ```language:/path/to/file.ext format.' },
+  { icon: BookOpen, label: 'Document', prompt: 'Add JSDoc/TSDoc comments to all exported functions, types, and components in the selected files. Output the COMPLETE documented file using ```language:/path/to/file.ext format.' },
+  { icon: Code2, label: 'TypeScript Strict', prompt: 'Fix all `any` types, add proper TypeScript typing, and enable strict checks in the selected files. Output the COMPLETE typed file using ```language:/path/to/file.ext format.' },
 ];
 
 // Collect all file paths from tree
@@ -278,6 +282,7 @@ export default function ImproveWorkspace() {
           language: block.language || 'typescript',
         }));
         const html = buildPreviewHTML(projectFiles);
+        setPreviewHtml(html);
       } catch {
         // Preview build failed, that's okay
       }
@@ -611,15 +616,45 @@ export default function ImproveWorkspace() {
             <Phone className="h-4 w-4" />
           </Button>
           {allCodeBlocks.length > 0 && (
-            <Button
-              variant="ghost" size="sm"
-              className="h-7 text-xs gap-1 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 border border-emerald-500/20"
-              onClick={handleApplyAll}
-              disabled={isApplying}
-            >
-              {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
-              Apply All ({allCodeBlocks.length})
-            </Button>
+            <>
+              <Button
+                variant="ghost" size="sm"
+                className="h-7 text-xs gap-1 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 border border-emerald-500/20"
+                onClick={handleApplyAll}
+                disabled={isApplying}
+              >
+                {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
+                Apply All ({allCodeBlocks.length})
+              </Button>
+              <Button
+                variant="ghost" size="sm"
+                className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
+                onClick={() => { setRightTab('preview'); }}
+                title="Preview Changes"
+              >
+                <Eye className="w-3 h-3" /> Preview
+              </Button>
+              <Button
+                variant="ghost" size="sm"
+                className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
+                onClick={() => {
+                  const all = allCodeBlocks.map(b => `// ${b.filePath}\n${b.content}`).join('\n\n');
+                  navigator.clipboard.writeText(all);
+                  toast.success('All code copied to clipboard');
+                }}
+                title="Copy All Code"
+              >
+                <Copy className="w-3 h-3" /> Copy
+              </Button>
+              <Button
+                variant="ghost" size="sm"
+                className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
+                onClick={() => { setAppliedFiles(new Set()); toast.info('Reverted all applied status'); }}
+                title="Revert All"
+              >
+                <RotateCcw className="w-3 h-3" /> Revert
+              </Button>
+            </>
           )}
           <Button
             variant="ghost" size="sm"

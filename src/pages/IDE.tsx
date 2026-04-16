@@ -462,7 +462,8 @@ export default function IDE() {
             <ResizableHandle />
             <ResizablePanel defaultSize={75}>
               <CodeEditor file={selectedFile} openFiles={openFiles} onFileChange={handleFileChange}
-                onCloseFile={handleCloseFile} onSelectFile={handleSelectFile} fontSize={settings.fontSize} />
+                onCloseFile={handleCloseFile} onSelectFile={handleSelectFile} fontSize={settings.fontSize}
+                onSendToPreview={() => generatePreview()} />
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>

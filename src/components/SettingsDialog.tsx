@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { Cloud, Server, RefreshCw, Volume2, Play, Key, Mic, Bot, HardDrive, Cpu, Wifi, WifiOff, Download, Zap, Brain, Clock, Save, Bug, Shield, Upload, FileDown, Plug, Package, RotateCw, User, LogOut } from 'lucide-react';
 import {
@@ -14,7 +14,7 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { ChatSettings, DEFAULT_SETTINGS, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, BLACKBOX_MODELS, DEFAULT_API_KEYS } from '@/lib/chat-api';
+import { ChatSettings, DEFAULT_SETTINGS, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, BLACKBOX_MODELS, DEFAULT_API_KEYS, fetchBlackboxModels } from '@/lib/chat-api';
 import { getAvailableVoices, speak, isTTSSupported } from '@/lib/tts';
 import { ModelManager } from '@/components/ModelManager';
 import { VoiceModelManager } from '@/components/VoiceModelManager';
@@ -63,6 +63,9 @@ export function SettingsDialog({
   });
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [blackboxModels, setBlackboxModels] = useState(BLACKBOX_MODELS);
+  const [isFetchingBlackbox, setIsFetchingBlackbox] = useState(false);
+  const [blackboxConnected, setBlackboxConnected] = useState<boolean | null>(null);
   const auth = useAuth();
 
   // Auto-scan system health when settings dialog opens
@@ -237,6 +240,29 @@ export function SettingsDialog({
     }
   }, [localSettings.backend]);
 
+  // Auto-scan Blackbox models when switching to blackbox backend
+  const handleRefreshBlackbox = useCallback(async () => {
+    const key = localSettings.apiKeys.blackbox;
+    if (!key) { toast.error('Add your Blackbox API key first'); return; }
+    setIsFetchingBlackbox(true);
+    try {
+      const models = await fetchBlackboxModels(key);
+      setBlackboxModels(models);
+      setBlackboxConnected(true);
+      toast.success(`Found ${models.length} Blackbox model(s)`);
+    } catch {
+      setBlackboxConnected(false);
+      toast.error('Failed to connect to Blackbox API');
+    }
+    setIsFetchingBlackbox(false);
+  }, [localSettings.apiKeys.blackbox]);
+
+  useEffect(() => {
+    if (localSettings.backend === 'blackbox' && localSettings.apiKeys.blackbox) {
+      handleRefreshBlackbox();
+    }
+  }, [localSettings.backend]);
+
   // Get available models based on backend and whether API keys are configured
   const getAvailableModels = () => {
     switch (localSettings.backend) {
@@ -249,7 +275,7 @@ export function SettingsDialog({
       case 'google':
         return localSettings.apiKeys.google ? GOOGLE_MODELS : [];
       case 'blackbox':
-        return localSettings.apiKeys.blackbox ? BLACKBOX_MODELS : [];
+        return localSettings.apiKeys.blackbox ? blackboxModels : [];
       case 'local':
         return localModels.map(m => ({ id: m, name: m, backend: 'local' }));
       case 'ollama':
@@ -580,6 +606,24 @@ export function SettingsDialog({
                     Pull models with: <code className="bg-muted px-1 rounded">ollama pull llama3.2</code>
                   </p>
                 </div>
+              </div>
+            )}
+
+            {localSettings.backend === 'blackbox' && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleRefreshBlackbox} disabled={isFetchingBlackbox || !localSettings.apiKeys.blackbox}>
+                    <RefreshCw className={cn('w-3 h-3 mr-1', isFetchingBlackbox && 'animate-spin')} />
+                    Refresh Models
+                  </Button>
+                  {blackboxConnected !== null && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={cn('w-2 h-2 rounded-full', blackboxConnected ? 'bg-green-500' : 'bg-destructive')} />
+                      <span className={blackboxConnected ? 'text-green-500' : 'text-destructive'}>{blackboxConnected ? 'Connected' : 'Failed'}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">{blackboxModels.length} model(s) available</p>
               </div>
             )}
 
