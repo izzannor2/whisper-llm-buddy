@@ -14,7 +14,7 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { ChatSettings, DEFAULT_SETTINGS, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, BLACKBOX_MODELS, DEFAULT_API_KEYS } from '@/lib/chat-api';
+import { ChatSettings, DEFAULT_SETTINGS, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, BLACKBOX_MODELS, DEFAULT_API_KEYS, fetchBlackboxModels } from '@/lib/chat-api';
 import { getAvailableVoices, speak, isTTSSupported } from '@/lib/tts';
 import { ModelManager } from '@/components/ModelManager';
 import { VoiceModelManager } from '@/components/VoiceModelManager';
@@ -63,6 +63,9 @@ export function SettingsDialog({
   });
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [blackboxModels, setBlackboxModels] = useState(BLACKBOX_MODELS);
+  const [isFetchingBlackbox, setIsFetchingBlackbox] = useState(false);
+  const [blackboxConnected, setBlackboxConnected] = useState<boolean | null>(null);
   const auth = useAuth();
 
   // Auto-scan system health when settings dialog opens
@@ -237,6 +240,29 @@ export function SettingsDialog({
     }
   }, [localSettings.backend]);
 
+  // Auto-scan Blackbox models when switching to blackbox backend
+  const handleRefreshBlackbox = useCallback(async () => {
+    const key = localSettings.apiKeys.blackbox;
+    if (!key) { toast.error('Add your Blackbox API key first'); return; }
+    setIsFetchingBlackbox(true);
+    try {
+      const models = await fetchBlackboxModels(key);
+      setBlackboxModels(models);
+      setBlackboxConnected(true);
+      toast.success(`Found ${models.length} Blackbox model(s)`);
+    } catch {
+      setBlackboxConnected(false);
+      toast.error('Failed to connect to Blackbox API');
+    }
+    setIsFetchingBlackbox(false);
+  }, [localSettings.apiKeys.blackbox]);
+
+  useEffect(() => {
+    if (localSettings.backend === 'blackbox' && localSettings.apiKeys.blackbox) {
+      handleRefreshBlackbox();
+    }
+  }, [localSettings.backend]);
+
   // Get available models based on backend and whether API keys are configured
   const getAvailableModels = () => {
     switch (localSettings.backend) {
@@ -249,7 +275,7 @@ export function SettingsDialog({
       case 'google':
         return localSettings.apiKeys.google ? GOOGLE_MODELS : [];
       case 'blackbox':
-        return localSettings.apiKeys.blackbox ? BLACKBOX_MODELS : [];
+        return localSettings.apiKeys.blackbox ? blackboxModels : [];
       case 'local':
         return localModels.map(m => ({ id: m, name: m, backend: 'local' }));
       case 'ollama':
