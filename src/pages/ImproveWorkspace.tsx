@@ -5,6 +5,7 @@ import {
   RefreshCw, Loader2, Lightbulb, Mic, MicOff, Send, Wand2, Zap,
   Shield, Palette, Bug, Gauge, ArrowDown, History, Plus, Trash2,
   CheckSquare, Square, X, CheckCheck, FileCode, Check, Upload, Eye, Phone,
+  Copy, RotateCcw, TestTube, BookOpen, Code2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -63,6 +64,9 @@ const QUICK_SUGGESTIONS = [
   { icon: Palette, label: 'Polish UI', prompt: 'Review the selected files for UI/UX improvements. Focus on accessibility, responsive design, and visual consistency. Output the COMPLETE corrected file using ```language:/path/to/file.ext format.' },
   { icon: Zap, label: 'Add features', prompt: 'What are the most impactful features we could add? Output complete file contents using ```language:/path/to/file.ext format for each new or modified file.' },
   { icon: Wand2, label: 'Refactor', prompt: 'Identify areas in the selected files that need refactoring. Focus on code duplication, complexity, and maintainability. Output the COMPLETE refactored file for each change using ```language:/path/to/file.ext format.' },
+  { icon: TestTube, label: 'Add Tests', prompt: 'Generate comprehensive unit tests for the selected files. Use vitest and testing-library. Output complete test files using ```language:/path/to/file.ext format.' },
+  { icon: BookOpen, label: 'Document', prompt: 'Add JSDoc/TSDoc comments to all exported functions, types, and components in the selected files. Output the COMPLETE documented file using ```language:/path/to/file.ext format.' },
+  { icon: Code2, label: 'TypeScript Strict', prompt: 'Fix all `any` types, add proper TypeScript typing, and enable strict checks in the selected files. Output the COMPLETE typed file using ```language:/path/to/file.ext format.' },
 ];
 
 // Collect all file paths from tree

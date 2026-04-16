@@ -609,6 +609,24 @@ export function SettingsDialog({
               </div>
             )}
 
+            {localSettings.backend === 'blackbox' && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleRefreshBlackbox} disabled={isFetchingBlackbox || !localSettings.apiKeys.blackbox}>
+                    <RefreshCw className={cn('w-3 h-3 mr-1', isFetchingBlackbox && 'animate-spin')} />
+                    Refresh Models
+                  </Button>
+                  {blackboxConnected !== null && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={cn('w-2 h-2 rounded-full', blackboxConnected ? 'bg-green-500' : 'bg-destructive')} />
+                      <span className={blackboxConnected ? 'text-green-500' : 'text-destructive'}>{blackboxConnected ? 'Connected' : 'Failed'}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">{blackboxModels.length} model(s) available</p>
+              </div>
+            )}
+
             {['openai', 'anthropic', 'google', 'huggingface', 'blackbox'].includes(localSettings.backend) && (
               <div className="p-3 rounded-lg bg-muted/50 border border-border">
                 <p className="text-xs text-muted-foreground">
