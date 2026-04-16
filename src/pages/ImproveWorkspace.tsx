@@ -616,15 +616,45 @@ export default function ImproveWorkspace() {
             <Phone className="h-4 w-4" />
           </Button>
           {allCodeBlocks.length > 0 && (
-            <Button
-              variant="ghost" size="sm"
-              className="h-7 text-xs gap-1 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 border border-emerald-500/20"
-              onClick={handleApplyAll}
-              disabled={isApplying}
-            >
-              {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
-              Apply All ({allCodeBlocks.length})
-            </Button>
+            <>
+              <Button
+                variant="ghost" size="sm"
+                className="h-7 text-xs gap-1 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 border border-emerald-500/20"
+                onClick={handleApplyAll}
+                disabled={isApplying}
+              >
+                {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
+                Apply All ({allCodeBlocks.length})
+              </Button>
+              <Button
+                variant="ghost" size="sm"
+                className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
+                onClick={() => { setRightTab('preview'); }}
+                title="Preview Changes"
+              >
+                <Eye className="w-3 h-3" /> Preview
+              </Button>
+              <Button
+                variant="ghost" size="sm"
+                className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
+                onClick={() => {
+                  const all = allCodeBlocks.map(b => `// ${b.filePath}\n${b.content}`).join('\n\n');
+                  navigator.clipboard.writeText(all);
+                  toast.success('All code copied to clipboard');
+                }}
+                title="Copy All Code"
+              >
+                <Copy className="w-3 h-3" /> Copy
+              </Button>
+              <Button
+                variant="ghost" size="sm"
+                className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
+                onClick={() => { setAppliedFiles(new Set()); toast.info('Reverted all applied status'); }}
+                title="Revert All"
+              >
+                <RotateCcw className="w-3 h-3" /> Revert
+              </Button>
+            </>
           )}
           <Button
             variant="ghost" size="sm"
