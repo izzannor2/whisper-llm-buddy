@@ -1,55 +1,79 @@
 
 
-# Enhancements: Send to Preview Button, Blackbox Model Fetching, AI Improvement Mode Polish
+# Add Comprehensive Settings System (Providers, Runtime, Tools, Assistants, Status)
 
-## 1. Add "Send to Preview" Button in Code Editor Toolbar
+## Goal
+Build a structured Settings panel that replaces hidden defaults with explicit, persisted, user-controlled config — without touching the working preview pipeline.
 
-**File: `src/components/ide/CodeEditor.tsx`**
-- Add an `onSendToPreview` optional callback prop
-- Add a "Send to Preview" button (with the `Send` icon) in the tab bar, right-aligned
-- When clicked, calls `onSendToPreview()`
+## Architecture
 
-**File: `src/pages/IDE.tsx`**
-- Pass `onSendToPreview={() => generatePreview()}` to `CodeEditor`
+### New central config store
+**`src/lib/config-store.ts`** — single source of truth, localStorage-persisted, with typed shapes:
+- `ProviderConfig` — toggles + URLs + API key for LocalDev Agent, Llama, Ollama, Remote API; selected provider; selected model
+- `RuntimeConfig` — `enablePreviewRuntime`, `useLocalDevAgent`, `useDevServer`, `forceLocalPreview`, `previewMode: 'auto' | 'local-only' | 'runtime-only'`
+- `ToolConfig` — booleans for File Editor, Terminal, Preview Control, API Caller, Voice, Camera
+- `AssistantConfig[]` — `{ id, name, description, systemPrompt, model, permissions:{ editFiles, runPreview, callAgent, useTools, accessApis } }` + `activeAssistantId`
 
-## 2. Blackbox API: Dynamic Model Fetching
+Exports `useConfig()` hook (subscribes via `window` event) and `getConfig()/setConfig()` helpers. All defaults preserve current behavior.
 
-Currently `BLACKBOX_MODELS` is hardcoded with 2 models. We need to try fetching available models from the Blackbox API when an API key is provided.
+### Model fetching
+**`src/lib/model-discovery.ts`** — small helpers:
+- `fetchOllamaModels(url)` → `GET /api/tags`
+- `fetchLlamaModels(url)` → `GET /v1/models`
+- `fetchAgentModels(url)` → `GET /models`
+- `fetchRemoteModels(baseUrl, key)` → `GET /v1/models`
+- `testConnection(provider)` → `{ ok, error?, models? }`
 
-**File: `src/lib/chat-api.ts`**
-- Add `fetchBlackboxModels(apiKey: string)` function that calls `https://api.blackbox.ai/v1/models` (OpenAI-compatible) and returns model list
-- Keep `BLACKBOX_MODELS` as fallback if the fetch fails
+Reuses existing `fetchBlackboxModels` pattern. No hardcoded model names.
 
-**File: `src/components/SettingsDialog.tsx`**
-- When Blackbox is selected and API key is present, call `fetchBlackboxModels()` to populate model dropdown dynamically
-- Add a "Refresh Models" button next to the Blackbox model selector
-- Show connection status indicator (green/red dot) after testing the key
+### New Settings page
+**`src/pages/Settings.tsx`** — route `/settings`, uses existing shadcn Tabs:
+- **Providers** — 4 cards (LocalDev Agent, Llama, Ollama, Remote API) with enable toggle + URL input + Test Connection button + dynamic model dropdown (fallback to text input on fetch failure)
+- **Runtime** — toggles for Preview Runtime / LocalDev Agent / Dev Server / Force Local Preview + Preview Mode dropdown. Banner: "Preview always falls back to local rendering"
+- **Tools** — 6 toggle rows with icons + descriptions
+- **Assistants** — list + Create/Edit/Delete + Active selector. Form with Name, Description, System Prompt textarea, Model dropdown (from configured providers), 5 permission toggles
+- **Status** — live rows for Agent / Preview Runtime / Current Preview Mode / Llama / Ollama. Each clickable to expand error details. Polls every 5s
 
-## 3. AI Improvement Mode — Additional Action Buttons
+### Routing
+**`src/App.tsx`** — add `<Route path="/settings" element={<Settings />} />`
 
-The workspace already has Apply All, Apply Single, Diff, Fix Bugs, Optimize, Security, Polish UI, Add Features, and Refactor. Adding more useful buttons:
+### Sidebar entry
+Locate existing sidebar component (likely `ChatSidebar.tsx` or similar) — add a "Settings" nav link under the System group. (Plan: read sidebar file first to match existing pattern; don't rewrite it.)
 
-**File: `src/pages/ImproveWorkspace.tsx`**
-- Add these new quick action buttons to `QUICK_SUGGESTIONS`:
-  - **"Add Tests"** — Generate unit tests for selected files
-  - **"Document"** — Add JSDoc/TSDoc comments to all functions
-  - **"TypeScript Strict"** — Fix all `any` types and add proper typing
-- Add a **"Preview Changes"** button in the header bar (next to Apply All) that builds preview from code blocks and switches to Preview tab
-- Fix the preview: line 281 builds `html` but never sets it — add `setPreviewHtml(html)` and auto-switch to preview tab
-- Add a **"Revert All"** button that clears `appliedFiles` state
-- Add a **"Copy All Code"** button that copies all code blocks to clipboard
+### Preview safety wiring
+**`src/pages/IDE.tsx`** — minimal change: read `RuntimeConfig` and:
+- If `forceLocalPreview === true` OR `previewMode === 'local-only'` → skip any runtime/agent path, always use existing `generatePreview()` srcdoc
+- If runtime path fails → fall back to `generatePreview()` (already the default — just guard it)
 
-## 4. Debug Tab Verification
+**No changes** to `src/lib/preview-builder.ts`, srcDoc logic, or stub system. Preview always renders from project files.
 
-The debug tab in IDE.tsx (lines 502-522) already captures `preview-error` and `preview-log` messages from the iframe. The `preview-builder.ts` already injects the bridge script. This is working — no changes needed.
+## Files Created
+| File | Purpose |
+|------|---------|
+| `src/lib/config-store.ts` | Central typed config + localStorage + event bus |
+| `src/lib/model-discovery.ts` | Provider model fetchers + connection tests |
+| `src/pages/Settings.tsx` | Full tabbed settings page |
+| `src/components/settings/ProvidersTab.tsx` | Providers UI |
+| `src/components/settings/RuntimeTab.tsx` | Runtime UI |
+| `src/components/settings/ToolsTab.tsx` | Tools UI |
+| `src/components/settings/AssistantsTab.tsx` | Assistants CRUD UI |
+| `src/components/settings/StatusTab.tsx` | Live status rows |
 
-## Files Changed
-
+## Files Modified (minimal)
 | File | Change |
 |------|--------|
-| `src/components/ide/CodeEditor.tsx` | Add `onSendToPreview` prop and button in tab bar |
-| `src/pages/IDE.tsx` | Pass `onSendToPreview` to CodeEditor |
-| `src/lib/chat-api.ts` | Add `fetchBlackboxModels()` for dynamic model discovery |
-| `src/components/SettingsDialog.tsx` | Dynamic Blackbox model list, refresh button, connection indicator |
-| `src/pages/ImproveWorkspace.tsx` | New quick actions, preview fix, revert/copy buttons |
+| `src/App.tsx` | Add `/settings` route |
+| Existing sidebar component | Add Settings nav link in System group |
+| `src/pages/IDE.tsx` | Read `RuntimeConfig`; guard runtime path; always allow local fallback |
+
+## Preview Safety Guarantees
+- `preview-builder.ts` — untouched
+- `iframe.srcDoc` flow — untouched
+- Stub/safety-net system — untouched
+- New runtime toggles only **gate** optional runtime usage; local srcdoc remains the default and the fallback
+
+## Out of Scope (intentional)
+- No backend wiring for Tools (UI + state only as requested)
+- No transport/sync changes
+- No rewrite of existing `SettingsDialog.tsx` (leaves legacy settings intact; new page is additive)
 
