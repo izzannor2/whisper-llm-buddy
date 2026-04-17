@@ -397,6 +397,9 @@ export function ChatSidebar({
         <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenSettings}>
           <Settings className="w-4 h-4 mr-3" />Settings
         </Button>
+        <Button asChild variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal">
+          <Link to="/app-settings"><Settings className="w-4 h-4 mr-3" />App Settings (Providers / Runtime)</Link>
+        </Button>
       </div>
 
       {/* File Search Dialog */}
