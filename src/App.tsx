@@ -19,6 +19,7 @@ const IoTWorkspace = lazy(() => import("./pages/IoTWorkspace"));
 const SandboxWorkspace = lazy(() => import("./pages/SandboxWorkspace"));
 const ImproveWorkspace = lazy(() => import("./pages/ImproveWorkspace"));
 const Auth = lazy(() => import("./pages/Auth"));
+const Settings = lazy(() => import("./pages/Settings"));
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ function AppInner() {
           <Route path="/sandbox" element={<SandboxWorkspace />} />
           <Route path="/improve" element={<ImproveWorkspace />} />
           <Route path="/settings" element={<IDESettings />} />
+          <Route path="/app-settings" element={<Settings />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
