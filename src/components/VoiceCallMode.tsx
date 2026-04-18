@@ -604,8 +604,8 @@ export function VoiceCallMode({
       const downloaded = getDownloadedModels();
       if (downloaded.length === 0) {
         toast.error('No voice model downloaded', {
-          description: 'Go to Settings → Voice Models to download Whisper, or enable Browser Speech.',
-          action: { label: 'Open Settings', onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })) },
+          description: 'Go to Settings → Tools to download Whisper, or enable Browser Speech.',
+          action: { label: 'Open Settings', onClick: () => { window.location.href = '/settings?tab=tools'; } },
           duration: 5000,
         });
         if (!uiAlreadyShown) return;
@@ -746,7 +746,7 @@ export function VoiceCallMode({
           : 'Go to Settings → Voice Models to download Whisper for speech recognition.',
         action: {
           label: 'Open Settings',
-          onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })),
+          onClick: () => { window.location.href = '/settings?tab=tools'; },
         },
         duration: 5000,
       });
