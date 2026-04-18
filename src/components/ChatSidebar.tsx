@@ -319,11 +319,6 @@ export function ChatSidebar({
                 <Cpu className="w-4 h-4 mr-3" />Models
               </Link>
             </Button>
-            <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" asChild>
-              <Link to="/app-settings">
-                <Settings className="w-4 h-4 mr-3 text-blue-400" />Settings
-              </Link>
-            </Button>
             {isFileSystemSupported() && (
               <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={handleOpenProject}>
                 <HardDrive className="w-4 h-4 mr-3 text-amber-400" />
