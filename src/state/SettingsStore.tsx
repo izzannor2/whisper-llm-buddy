@@ -7,7 +7,7 @@
  * New UI consumes only this store. Legacy helpers remain as backing storage
  * for the 19+ existing consumers — migration is incremental, not destructive.
  */
-import React, { createContext, useContext, useSyncExternalStore } from 'react';
+import React, { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
 import {
   loadSettings as legacyLoadChat,
   saveSettings as legacySaveChat,
@@ -113,7 +113,7 @@ const SettingsCtx = createContext<true>(true);
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   // One-time migration shim — preserves user data by ensuring legacy keys are read.
   // No destructive writes; just touches the snapshot caches.
-  React.useEffect(() => {
+  useEffect(() => {
     getChatSnapshot();
     getIdeSnapshot();
     getCfgSnapshot();
