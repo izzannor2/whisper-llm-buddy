@@ -34,7 +34,7 @@ interface ChatSidebarProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
-  onOpenSettings?: () => void;
+  onOpenSettings: () => void;
   onExport?: () => void;
   onImport?: () => void;
   onOpenCodeLibrary?: () => void;
@@ -79,7 +79,7 @@ const MODE_ICON_MAP: Record<string, { icon: any; color: string }> = {
 };
 
 export function ChatSidebar({
-  conversations, currentId, onSelect, onNew, onDelete,
+  conversations, currentId, onSelect, onNew, onDelete, onOpenSettings,
   onOpenMemory, onOpenAutoBuild, onOpenTaskGraph,
   currentMode = 'app-builder', currentModeKey, onModeChange, onCollapse,
   isLocked, onToggleLock, isOfflineMode, onToggleOffline,
@@ -386,23 +386,17 @@ export function ChatSidebar({
         </div>
       </ScrollArea>
 
-      {/* Footer — single Settings gear + version + quit */}
+      {/* Footer */}
       <div className="p-2 border-t border-sidebar-border space-y-0.5">
-        <Button asChild variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" title="Settings">
-          <Link to="/settings">
-            <Settings className="w-4 h-4 mr-3 text-muted-foreground" />Settings
-          </Link>
-        </Button>
-        <div className="flex items-center justify-between px-3 py-1">
+        <div className="px-3 py-1">
           <span className="text-[10px] font-mono text-muted-foreground">{getCurrentVersion()}</span>
-          <button
-            className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-            onClick={() => window.close()}
-            title="Quit LocalDev"
-          >
-            <Power className="w-3 h-3" />Quit
-          </button>
         </div>
+        <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal text-muted-foreground" onClick={() => window.close()}>
+          <Power className="w-4 h-4 mr-3" />Quit LocalDev
+        </Button>
+        <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-normal" onClick={onOpenSettings}>
+          <Settings className="w-4 h-4 mr-3" />Settings
+        </Button>
       </div>
 
       {/* File Search Dialog */}

@@ -254,8 +254,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const startWhisperRecording = useCallback(async () => {
       if (!whisperAvailable) {
         toast.info('Download a voice model first', {
-          description: 'Go to Settings → Tools to download Whisper.',
-          action: { label: 'Open Settings', onClick: () => { window.location.href = '/settings?tab=tools'; } },
+          description: 'Go to Settings → Voice Models to download Whisper.',
+          action: { label: 'Open Settings', onClick: () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } })) },
           duration: 5000,
         });
         return;
@@ -392,7 +392,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const currentModelName = getBackendDisplayName();
     const currentPresetData = currentPreset ? PRESETS.find(p => p.id === currentPreset) : null;
     const PresetIcon = currentPresetData?.icon;
-    const openSettings = () => { window.location.href = '/settings?tab=providers'; };
+    const openSettings = () => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'backend' } }));
 
     return (
       <div className="p-4 border-t border-border bg-background">
@@ -661,7 +661,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             <span>to send</span>
             <span className="mx-1">•</span>
             <button className="flex items-center gap-1 hover:text-accent transition-colors"
-              onClick={() => { window.location.href = '/settings?tab=tools'; }}>
+              onClick={() => window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voicemodels' } }))}>
               <Settings className="w-3 h-3" />Get offline voice
             </button>
           </div>

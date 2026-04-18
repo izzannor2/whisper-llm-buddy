@@ -202,7 +202,7 @@ export function EmptyState({ mode = 'app-builder', modeKey }: EmptyStateProps) {
             variant="outline"
             size="sm"
             className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-            onClick={() => { window.location.href = '/settings?tab=assistants'; }}
+            onClick={() => window.dispatchEvent(new CustomEvent('open-settings'))}
           >
             Edit Custom Prompt
           </Button>
