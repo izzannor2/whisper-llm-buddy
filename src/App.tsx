@@ -3,17 +3,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/components/AuthProvider";
+import { SettingsProvider } from "@/state/SettingsStore";
 import { FirstRunSetup } from "@/components/FirstRunSetup";
-import { loadSettings, type ChatSettings } from "@/lib/chat-api";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 // Lazy load heavy pages
 const IDE = lazy(() => import("./pages/IDE"));
-const IDESettings = lazy(() => import("./pages/IDESettings"));
 const Models = lazy(() => import("./pages/Models"));
 const IoTWorkspace = lazy(() => import("./pages/IoTWorkspace"));
 const SandboxWorkspace = lazy(() => import("./pages/SandboxWorkspace"));
@@ -60,8 +59,9 @@ function AppInner() {
           <Route path="/iot" element={<IoTWorkspace />} />
           <Route path="/sandbox" element={<SandboxWorkspace />} />
           <Route path="/improve" element={<ImproveWorkspace />} />
-          <Route path="/settings" element={<IDESettings />} />
-          <Route path="/app-settings" element={<Settings />} />
+          <Route path="/settings" element={<Settings />} />
+          {/* Migration shim: legacy /app-settings redirects to canonical /settings */}
+          <Route path="/app-settings" element={<Navigate to="/settings" replace />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
@@ -78,7 +78,9 @@ const App = () => (
       <BrowserRouter>
         <ErrorBoundary>
           <AuthProvider>
-            <AppInner />
+            <SettingsProvider>
+              <AppInner />
+            </SettingsProvider>
           </AuthProvider>
         </ErrorBoundary>
       </BrowserRouter>
