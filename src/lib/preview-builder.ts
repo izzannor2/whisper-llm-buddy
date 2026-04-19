@@ -760,6 +760,10 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
   // Topological sort
   const sorted = topologicalSort(components);
   const processedComponents = sorted.map(c => c.processed).join('\n\n');
+  const { stubs: missingStubs, missing: missingNames } = generateComponentStubs(processedComponents);
+  const missingBannerScript = missingNames.length > 0
+    ? `(function(){var b=document.createElement('div');b.style.cssText='position:sticky;top:0;z-index:50;background:#7f1d1d;color:#fecaca;padding:8px 12px;font-family:monospace;font-size:12px;border-bottom:1px solid #b91c1c;';b.textContent='\\u26A0 Missing components: ${missingNames.join(', ').replace(/'/g, "\\'")} \\u2014 define or import them.';document.body.insertBefore(b, document.body.firstChild);})();`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
