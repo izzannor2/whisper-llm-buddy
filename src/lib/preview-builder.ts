@@ -853,7 +853,7 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
       } else {
         document.getElementById('root').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;color:#64748b;"><div style="text-align:center"><h2 style="color:#e2e8f0;margin-bottom:0.5rem">Preview Ready</h2><p>Define an App component to see it rendered here.</p></div></div>';
       }
-    } catch (err) {
+      ${missingBannerScript}
       const overlay = document.getElementById('__error-overlay');
       document.getElementById('__error-message').textContent = err.message + '\\n\\n' + (err.stack || '');
       overlay.classList.add('visible');
