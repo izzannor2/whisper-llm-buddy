@@ -291,9 +291,10 @@ export default function ImproveWorkspace() {
 
   const handleApplyAll = useCallback(async () => {
     if (allCodeBlocks.length === 0) {
-      toast.info('No code blocks with file paths found to apply');
+      toast.info('No code changes to apply');
       return;
     }
+    if (isApplying) return; // prevent duplicate clicks
     setIsApplying(true);
     let applied = 0;
     let failed = 0;
@@ -307,12 +308,34 @@ export default function ImproveWorkspace() {
       }
     }
     setIsApplying(false);
-    if (failed === 0) {
-      toast.success(`Applied ${applied} file${applied > 1 ? 's' : ''} successfully`);
+    if (applied === 0) {
+      toast.error('No changes applied. Open a project folder first.');
+    } else if (failed === 0) {
+      toast.success(`Applied ${applied} file${applied > 1 ? 's' : ''}`);
     } else {
-      toast.warning(`Applied ${applied}, failed ${failed}. Make sure a project folder is open.`);
+      toast.warning(`Applied ${applied}, failed ${failed}`);
     }
-  }, [allCodeBlocks]);
+  }, [allCodeBlocks, isApplying]);
+
+  const handleApplySelected = useCallback(async () => {
+    const blocks = allCodeBlocks.filter(b => selectedFiles.has(b.filePath));
+    if (blocks.length === 0) {
+      toast.info('No selected files match the AI\'s code changes');
+      return;
+    }
+    if (isApplying) return;
+    setIsApplying(true);
+    let applied = 0;
+    for (const block of blocks) {
+      try {
+        await writeFile(block.filePath, block.content);
+        applied++;
+        setAppliedFiles(prev => new Set(prev).add(block.filePath));
+      } catch { /* swallow */ }
+    }
+    setIsApplying(false);
+    toast[applied > 0 ? 'success' : 'error'](applied > 0 ? `Applied ${applied} selected file${applied > 1 ? 's' : ''}` : 'No changes applied');
+  }, [allCodeBlocks, selectedFiles, isApplying]);
 
   useEffect(() => { applyModeTheme('ai-improvement'); }, []);
 
