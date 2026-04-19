@@ -1,55 +1,54 @@
 
 
-# Enhancements: Send to Preview Button, Blackbox Model Fetching, AI Improvement Mode Polish
+# Cleanup Plan — Remove Simulated Behavior, Tighten ImproveWorkspace
 
-## 1. Add "Send to Preview" Button in Code Editor Toolbar
+Scope per your choice ("only do the safe parts"). Settings architecture untouched. No files referenced in your original instructions exist in this repo — I'm only touching what's actually here.
 
-**File: `src/components/ide/CodeEditor.tsx`**
-- Add an `onSendToPreview` optional callback prop
-- Add a "Send to Preview" button (with the `Send` icon) in the tab bar, right-aligned
-- When clicked, calls `onSendToPreview()`
+## 1. `src/lib/local-backend-agent.ts` — Remove simulated success
+- **Delete** `simulateCommand()` and `simulateDevServer()`.
+- `executeCommand`: when agent disconnected, return `{ success: false, output: '', error: 'Local agent not connected. Start the agent on port 3847 to run commands.' }`.
+- `startDevServer`: when disconnected, return `null` (already does on fetch failure — make disconnected branch consistent and honest).
+- `writeProjectFiles`: when disconnected, return `false` instead of logging "[Simulated]" and returning `true`.
+- Keep all real connected-path logic, listeners, status, and `generateAgentScript()` untouched.
 
-**File: `src/pages/IDE.tsx`**
-- Pass `onSendToPreview={() => generatePreview()}` to `CodeEditor`
+## 2. `src/lib/system-commands.ts` — Honest preview-only behavior
+- `executeCommand(SystemCommand)`: stop marking simulated runs as `completed`. Try the real local agent first via `local-backend-agent.executeCommand`. 
+  - If agent connected → return real `output`/`error` and status `completed` or `failed`.
+  - If agent NOT connected → return status `failed` with output `"PREVIEW ONLY — NOT EXECUTED. Local agent not connected (port 3847)."` Do not falsely mark as completed.
 
-## 2. Blackbox API: Dynamic Model Fetching
+## 3. `src/lib/preview-builder.ts` — Stop hiding errors with fake stubs
+- Replace `generateComponentStubs()` with a function that still scans for undeclared capitalized identifiers, but instead of silently injecting working stub components, it:
+  - Emits a single visible **error banner** at the top of the preview body listing the missing components ("Missing components: Footer, Hero — define these or import them.").
+  - Pre-declares the missing names as components that render an inline red error badge (`⚠ <Name> is not defined`) — enough to prevent the whole preview from white-screening, but visually loud and clearly an error, not a working placeholder.
+- Remove the runtime `window.addEventListener('error', ...)` auto-stub fallback (lines ~830–845) — it silently masks real ReferenceErrors. Keep only the postMessage error-bridge for the Debug tab.
+- Keep TS stripping, library shims, `srcdoc` pipeline, file flattening, and the postMessage console/error bridge intact.
 
-Currently `BLACKBOX_MODELS` is hardcoded with 2 models. We need to try fetching available models from the Blackbox API when an API key is provided.
-
-**File: `src/lib/chat-api.ts`**
-- Add `fetchBlackboxModels(apiKey: string)` function that calls `https://api.blackbox.ai/v1/models` (OpenAI-compatible) and returns model list
-- Keep `BLACKBOX_MODELS` as fallback if the fetch fails
-
-**File: `src/components/SettingsDialog.tsx`**
-- When Blackbox is selected and API key is present, call `fetchBlackboxModels()` to populate model dropdown dynamically
-- Add a "Refresh Models" button next to the Blackbox model selector
-- Show connection status indicator (green/red dot) after testing the key
-
-## 3. AI Improvement Mode — Additional Action Buttons
-
-The workspace already has Apply All, Apply Single, Diff, Fix Bugs, Optimize, Security, Polish UI, Add Features, and Refactor. Adding more useful buttons:
-
-**File: `src/pages/ImproveWorkspace.tsx`**
-- Add these new quick action buttons to `QUICK_SUGGESTIONS`:
-  - **"Add Tests"** — Generate unit tests for selected files
-  - **"Document"** — Add JSDoc/TSDoc comments to all functions
-  - **"TypeScript Strict"** — Fix all `any` types and add proper typing
-- Add a **"Preview Changes"** button in the header bar (next to Apply All) that builds preview from code blocks and switches to Preview tab
-- Fix the preview: line 281 builds `html` but never sets it — add `setPreviewHtml(html)` and auto-switch to preview tab
-- Add a **"Revert All"** button that clears `appliedFiles` state
-- Add a **"Copy All Code"** button that copies all code blocks to clipboard
-
-## 4. Debug Tab Verification
-
-The debug tab in IDE.tsx (lines 502-522) already captures `preview-error` and `preview-log` messages from the iframe. The `preview-builder.ts` already injects the bridge script. This is working — no changes needed.
+## 4. `src/pages/ImproveWorkspace.tsx` — Tighten action-button UX
+- **Top action bar**: clearer hierarchy.
+  - Primary (filled, prominent): **Send / Improve** (or **Plan** when planning mode is on).
+  - Secondary (outline): **Diff**, **Preview Changes**.
+  - Apply group (right side, outline + filled CheckCheck): **Apply Selected**, **Apply All**.
+  - Utility group (icon-only, ghost): **Copy All Code**, **Revert All**.
+- **Disabled/loading states**:
+  - Apply buttons disabled when no parsed code blocks exist or while applying.
+  - Send disabled while streaming; show spinner inside the button.
+  - Apply buttons show a brief "Applied ✓" state for 1.5s after success, then revert. Track an `isApplying` ref to block duplicate clicks.
+- **Labels**: "Apply All" → "Apply All Changes (N files)"; "Diff" → "Show Diff"; "Preview" tab label stays.
+- **Selected-file state**: highlight selected file row with a left border accent + count badge ("3 files selected") in the header.
+- **Empty states**:
+  - No code blocks parsed → small inline note in apply area: "No code changes detected yet. Ask the AI to suggest improvements."
+  - No files selected → quick-suggestion buttons stay enabled but show tooltip "Select files first for targeted improvements".
+- **Honest success**: never show "Improvement complete!" toasts unless code blocks were actually parsed and applied. Toast wording: "Applied N file(s)" or "No changes to apply".
+- Keep pink theme, layout, file tree, chat panel, voice flow, and all existing data flow as-is.
 
 ## Files Changed
-
 | File | Change |
 |------|--------|
-| `src/components/ide/CodeEditor.tsx` | Add `onSendToPreview` prop and button in tab bar |
-| `src/pages/IDE.tsx` | Pass `onSendToPreview` to CodeEditor |
-| `src/lib/chat-api.ts` | Add `fetchBlackboxModels()` for dynamic model discovery |
-| `src/components/SettingsDialog.tsx` | Dynamic Blackbox model list, refresh button, connection indicator |
-| `src/pages/ImproveWorkspace.tsx` | New quick actions, preview fix, revert/copy buttons |
+| `src/lib/local-backend-agent.ts` | Remove simulate functions; honest error returns when disconnected |
+| `src/lib/system-commands.ts` | Route to real agent; mark unavailable runs as `failed` with PREVIEW ONLY label |
+| `src/lib/preview-builder.ts` | Replace silent stubs with visible error banner + inline error badges; remove auto-stub error listener |
+| `src/pages/ImproveWorkspace.tsx` | Tighten top action bar, button hierarchy, disabled/loading states, honest toasts, clearer empty/selected states |
+
+## Not touched (per your "safe parts only" choice)
+- `src/pages/IDESettings.tsx`, `src/components/SettingsDialog.tsx`, `src/pages/Index.tsx`, `src/App.tsx`, routing, ChatSidebar, IDE preview pipeline structure, all stores.
 
