@@ -862,12 +862,12 @@ export default function ImproveWorkspace() {
                       </div>
                       <Button
                         size="sm"
-                        className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white"
+                        className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
                         onClick={handleApplyAll}
                         disabled={isApplying || appliedFiles.size === allCodeBlocks.length}
                       >
                         {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
-                        {appliedFiles.size === allCodeBlocks.length ? 'All Applied' : 'Fix All'}
+                        {appliedFiles.size === allCodeBlocks.length ? 'All Applied ✓' : `Apply All Changes (${allCodeBlocks.length})`}
                       </Button>
                     </div>
                     <div className="divide-y" style={{ borderColor: 'hsl(330, 30%, 14%)' }}>
@@ -886,7 +886,7 @@ export default function ImproveWorkspace() {
                                 className="h-6 text-[10px] px-2 text-pink-300 hover:text-pink-100 hover:bg-pink-500/15"
                                 onClick={() => setDiffPreview({ filePath: block.filePath, content: block.content })}
                                 disabled={isBlockApplied}
-                              >Diff</Button>
+                              >Show Diff</Button>
                               <Button
                                 size="sm"
                                 className={cn(
@@ -952,9 +952,13 @@ export default function ImproveWorkspace() {
                   onClick={() => handleSend()}
                   disabled={!input.trim() || isLoading}
                   size="icon"
-                  className="shrink-0 h-[42px] w-[42px] rounded-xl bg-pink-600 hover:bg-pink-500 disabled:opacity-30"
+                  className={cn(
+                    "shrink-0 h-[42px] w-[42px] rounded-xl disabled:opacity-30",
+                    isPlanMode ? "bg-amber-600 hover:bg-amber-500" : "bg-pink-600 hover:bg-pink-500"
+                  )}
+                  title={isPlanMode ? 'Send to plan' : 'Send to improve'}
                 >
-                  <Send className="w-4 h-4" />
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
