@@ -698,10 +698,11 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
 </body></html>`;
   }
 
-  // ----- Static analysis: find undefined components and generate stubs -----
-  function generateComponentStubs(code: string): string {
-    // Find all capitalized identifiers used as component references
-    // Patterns: React.createElement(Name  or  <Name  (in case Babel leaves JSX)
+  // ----- Static analysis: find undeclared component references -----
+  // Instead of silently stubbing them as working components (which hides bugs),
+  // we surface a visible error banner + inline red error badges so the
+  // preview is honest about what's missing.
+  function generateComponentStubs(code: string): { stubs: string; missing: string[] } {
     const referencedSet = new Set<string>();
     const refPatterns = [
       /React\.createElement\(\s*([A-Z][a-zA-Z0-9]*)/g,
@@ -714,7 +715,6 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
       }
     }
 
-    // Find all declared names: const/let/var/function Name
     const declaredSet = new Set<string>();
     const declPat = /(?:const|let|var|function)\s+([A-Z][a-zA-Z0-9]*)/g;
     let dm: RegExpExecArray | null;
@@ -722,33 +722,48 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
       declaredSet.add(dm[1]);
     }
 
-    // Known shim names (from LIBRARY_SHIMS) — extract from the shims string too
-    const shimCode = LIBRARY_SHIMS;
     const shimDeclPat = /(?:const|let|var|function)\s+([A-Z][a-zA-Z0-9]*)/g;
     let sm: RegExpExecArray | null;
-    while ((sm = shimDeclPat.exec(shimCode)) !== null) {
+    while ((sm = shimDeclPat.exec(LIBRARY_SHIMS)) !== null) {
       declaredSet.add(sm[1]);
     }
-    // Also add React built-ins
     ['React', 'ReactDOM', 'Fragment', 'Suspense', 'Proxy', 'Promise', 'Map', 'Set', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Error', 'TypeError', 'ReferenceError', 'JSON', 'Math', 'Date', 'RegExp', 'Symbol', 'Int8Array', 'Uint8Array', 'Float32Array', 'Float64Array', 'ArrayBuffer', 'DataView', 'URL', 'URLSearchParams', 'FormData', 'Headers', 'Request', 'Response', 'Event', 'CustomEvent', 'AbortController', 'MutationObserver', 'IntersectionObserver', 'ResizeObserver', 'MessageChannel', 'MessagePort', 'Worker', 'Blob', 'FileReader', 'XMLHttpRequest', 'WebSocket', 'HTMLElement', 'SVGElement', 'Node', 'NodeList', 'Document', 'Window', 'Console', 'Intl'].forEach(n => declaredSet.add(n));
 
-    // Compute missing
     const missing = Array.from(referencedSet).filter(name => !declaredSet.has(name));
+    if (missing.length === 0) return { stubs: '// No undefined components detected', missing: [] };
 
-    if (missing.length === 0) return '// No undefined components detected';
-
-    return missing.map(name => `
-    var ${name} = function ${name}_Stub(props) {
-      return React.createElement('div', {
-        style: { padding: '16px', border: '1px dashed rgba(234,179,8,0.3)', borderRadius: '8px', margin: '4px 0' },
-        'data-stub-component': '${name}'
-      }, props && props.children ? props.children : React.createElement('span', { style: { color: 'rgba(234,179,8,0.5)', fontSize: '12px' } }, '\\u26A0 ${name}'));
+    // Pre-declare each missing name as a visibly broken error badge so the
+    // whole tree doesn't white-screen, but the user clearly sees this is
+    // not a working placeholder.
+    const stubs = missing.map(name => `
+    var ${name} = function ${name}_MissingComponent(props) {
+      return React.createElement('span', {
+        style: {
+          display: 'inline-block',
+          padding: '2px 8px',
+          margin: '2px',
+          background: 'rgba(239,68,68,0.15)',
+          color: '#fca5a5',
+          border: '1px solid rgba(239,68,68,0.5)',
+          borderRadius: '4px',
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          fontWeight: 600,
+        },
+        'data-missing-component': '${name}',
+        title: '${name} is not defined. Define it or import it.'
+      }, '\\u26A0 <${name} /> not defined');
     };`).join('\n');
+    return { stubs, missing };
   }
 
   // Topological sort
   const sorted = topologicalSort(components);
   const processedComponents = sorted.map(c => c.processed).join('\n\n');
+  const { stubs: missingStubs, missing: missingNames } = generateComponentStubs(processedComponents);
+  const missingBannerScript = missingNames.length > 0
+    ? `(function(){var b=document.createElement('div');b.style.cssText='position:sticky;top:0;z-index:50;background:#7f1d1d;color:#fecaca;padding:8px 12px;font-family:monospace;font-size:12px;border-bottom:1px solid #b91c1c;';b.textContent='\\u26A0 Missing components: ${missingNames.join(', ').replace(/'/g, "\\'")} \\u2014 define or import them.';document.body.insertBefore(b, document.body.firstChild);})();`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -825,21 +840,7 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
 
     ${LIBRARY_SHIMS}
 
-    ${generateComponentStubs(processedComponents)}
-
-    // Last-resort error listener for edge cases
-    window.addEventListener('error', function(e) {
-      const m = e.message && e.message.match(/^(?:Uncaught )?ReferenceError: ([A-Z][a-zA-Z0-9]*) is not defined/);
-      if (m && m[1] && !window['__stub_' + m[1]]) {
-        window['__stub_' + m[1]] = true;
-        window[m[1]] = function(props) {
-          return React.createElement('div', {
-            style: { padding: '16px', border: '1px dashed rgba(234,179,8,0.3)', borderRadius: '8px', margin: '4px 0' },
-            'data-stub-component': m[1]
-          }, props && props.children ? props.children : React.createElement('span', { style: { color: 'rgba(234,179,8,0.5)', fontSize: '12px' } }, '\u26A0 ' + m[1]));
-        };
-      }
-    });
+    ${missingStubs}
 
     ${processedComponents}
 
@@ -852,6 +853,7 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
       } else {
         document.getElementById('root').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;color:#64748b;"><div style="text-align:center"><h2 style="color:#e2e8f0;margin-bottom:0.5rem">Preview Ready</h2><p>Define an App component to see it rendered here.</p></div></div>';
       }
+      ${missingBannerScript}
     } catch (err) {
       const overlay = document.getElementById('__error-overlay');
       document.getElementById('__error-message').textContent = err.message + '\\n\\n' + (err.stack || '');

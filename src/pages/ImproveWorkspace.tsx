@@ -291,9 +291,10 @@ export default function ImproveWorkspace() {
 
   const handleApplyAll = useCallback(async () => {
     if (allCodeBlocks.length === 0) {
-      toast.info('No code blocks with file paths found to apply');
+      toast.info('No code changes to apply');
       return;
     }
+    if (isApplying) return; // prevent duplicate clicks
     setIsApplying(true);
     let applied = 0;
     let failed = 0;
@@ -307,12 +308,34 @@ export default function ImproveWorkspace() {
       }
     }
     setIsApplying(false);
-    if (failed === 0) {
-      toast.success(`Applied ${applied} file${applied > 1 ? 's' : ''} successfully`);
+    if (applied === 0) {
+      toast.error('No changes applied. Open a project folder first.');
+    } else if (failed === 0) {
+      toast.success(`Applied ${applied} file${applied > 1 ? 's' : ''}`);
     } else {
-      toast.warning(`Applied ${applied}, failed ${failed}. Make sure a project folder is open.`);
+      toast.warning(`Applied ${applied}, failed ${failed}`);
     }
-  }, [allCodeBlocks]);
+  }, [allCodeBlocks, isApplying]);
+
+  const handleApplySelected = useCallback(async () => {
+    const blocks = allCodeBlocks.filter(b => selectedFiles.has(b.filePath));
+    if (blocks.length === 0) {
+      toast.info('No selected files match the AI\'s code changes');
+      return;
+    }
+    if (isApplying) return;
+    setIsApplying(true);
+    let applied = 0;
+    for (const block of blocks) {
+      try {
+        await writeFile(block.filePath, block.content);
+        applied++;
+        setAppliedFiles(prev => new Set(prev).add(block.filePath));
+      } catch { /* swallow */ }
+    }
+    setIsApplying(false);
+    toast[applied > 0 ? 'success' : 'error'](applied > 0 ? `Applied ${applied} selected file${applied > 1 ? 's' : ''}` : 'No changes applied');
+  }, [allCodeBlocks, selectedFiles, isApplying]);
 
   useEffect(() => { applyModeTheme('ai-improvement'); }, []);
 
@@ -615,47 +638,70 @@ export default function ImproveWorkspace() {
           <Button variant="ghost" size="icon" className="h-8 w-8 text-green-400 hover:text-green-300" onClick={() => setShowVoiceCall(true)} title="Voice call">
             <Phone className="h-4 w-4" />
           </Button>
+
+          {/* Selected files badge */}
+          {selectedFiles.size > 0 && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 h-7 rounded-md text-[10px] font-mono bg-pink-500/15 text-pink-200 border border-pink-500/25">
+              <FileText className="w-3 h-3" /> {selectedFiles.size} selected
+            </span>
+          )}
+
+          {/* Apply group — only when there are actual code changes */}
           {allCodeBlocks.length > 0 && (
             <>
+              <div className="w-px h-5 bg-pink-500/20 mx-1" />
               <Button
-                variant="ghost" size="sm"
-                className="h-7 text-xs gap-1 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 border border-emerald-500/20"
+                variant="outline" size="sm"
+                className="h-7 text-xs gap-1 border-emerald-500/30 bg-transparent text-emerald-300 hover:bg-emerald-500/15 hover:text-emerald-200"
+                onClick={handleApplySelected}
+                disabled={isApplying || selectedFiles.size === 0}
+                title={selectedFiles.size === 0 ? 'Select files to apply only those' : 'Apply changes only to selected files'}
+              >
+                {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                Apply Selected
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
                 onClick={handleApplyAll}
-                disabled={isApplying}
+                disabled={isApplying || appliedFiles.size === allCodeBlocks.length}
               >
                 {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
-                Apply All ({allCodeBlocks.length})
+                Apply All Changes ({allCodeBlocks.length})
               </Button>
               <Button
-                variant="ghost" size="sm"
-                className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
-                onClick={() => { setRightTab('preview'); }}
-                title="Preview Changes"
+                variant="outline" size="sm"
+                className="h-7 text-xs gap-1 border-pink-500/30 bg-transparent text-pink-300 hover:bg-pink-500/15 hover:text-pink-200"
+                onClick={() => setRightTab('preview')}
+                title="Show live preview of changes"
               >
-                <Eye className="w-3 h-3" /> Preview
+                <Eye className="w-3 h-3" /> Preview Changes
               </Button>
               <Button
-                variant="ghost" size="sm"
-                className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
+                variant="ghost" size="icon"
+                className="h-7 w-7 text-pink-400 hover:text-pink-200"
                 onClick={() => {
                   const all = allCodeBlocks.map(b => `// ${b.filePath}\n${b.content}`).join('\n\n');
                   navigator.clipboard.writeText(all);
-                  toast.success('All code copied to clipboard');
+                  toast.success('All code copied');
                 }}
-                title="Copy All Code"
+                title="Copy all code to clipboard"
               >
-                <Copy className="w-3 h-3" /> Copy
+                <Copy className="w-3.5 h-3.5" />
               </Button>
               <Button
-                variant="ghost" size="sm"
-                className="h-7 text-xs gap-1 text-pink-400 hover:text-pink-200"
-                onClick={() => { setAppliedFiles(new Set()); toast.info('Reverted all applied status'); }}
-                title="Revert All"
+                variant="ghost" size="icon"
+                className="h-7 w-7 text-pink-400 hover:text-pink-200"
+                onClick={() => { setAppliedFiles(new Set()); toast.info('Cleared applied status'); }}
+                title="Revert applied status (does not undo file writes)"
+                disabled={appliedFiles.size === 0}
               >
-                <RotateCcw className="w-3 h-3" /> Revert
+                <RotateCcw className="w-3.5 h-3.5" />
               </Button>
+              <div className="w-px h-5 bg-pink-500/20 mx-1" />
             </>
           )}
+
           <Button
             variant="ghost" size="sm"
             className={cn("h-7 text-xs gap-1", showHistory ? "bg-pink-500/20 text-pink-200" : "text-pink-400 hover:text-pink-200")}
@@ -669,8 +715,9 @@ export default function ImproveWorkspace() {
           </Button>
           <Button
             variant="ghost" size="sm"
-            className={cn("h-7 text-xs gap-1", isPlanMode ? "bg-amber-500/20 text-amber-300" : "text-pink-400 hover:text-pink-200")}
+            className={cn("h-7 text-xs gap-1", isPlanMode ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-pink-400 hover:text-pink-200")}
             onClick={() => setIsPlanMode(!isPlanMode)}
+            title={isPlanMode ? 'Planning mode: AI outlines changes only' : 'Switch to planning mode'}
           >
             <Lightbulb className="w-3 h-3" />
             {isPlanMode ? 'Planning' : 'Plan'}
@@ -815,12 +862,12 @@ export default function ImproveWorkspace() {
                       </div>
                       <Button
                         size="sm"
-                        className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white"
+                        className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
                         onClick={handleApplyAll}
                         disabled={isApplying || appliedFiles.size === allCodeBlocks.length}
                       >
                         {isApplying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
-                        {appliedFiles.size === allCodeBlocks.length ? 'All Applied' : 'Fix All'}
+                        {appliedFiles.size === allCodeBlocks.length ? 'All Applied ✓' : `Apply All Changes (${allCodeBlocks.length})`}
                       </Button>
                     </div>
                     <div className="divide-y" style={{ borderColor: 'hsl(330, 30%, 14%)' }}>
@@ -839,7 +886,7 @@ export default function ImproveWorkspace() {
                                 className="h-6 text-[10px] px-2 text-pink-300 hover:text-pink-100 hover:bg-pink-500/15"
                                 onClick={() => setDiffPreview({ filePath: block.filePath, content: block.content })}
                                 disabled={isBlockApplied}
-                              >Diff</Button>
+                              >Show Diff</Button>
                               <Button
                                 size="sm"
                                 className={cn(
@@ -905,9 +952,13 @@ export default function ImproveWorkspace() {
                   onClick={() => handleSend()}
                   disabled={!input.trim() || isLoading}
                   size="icon"
-                  className="shrink-0 h-[42px] w-[42px] rounded-xl bg-pink-600 hover:bg-pink-500 disabled:opacity-30"
+                  className={cn(
+                    "shrink-0 h-[42px] w-[42px] rounded-xl disabled:opacity-30",
+                    isPlanMode ? "bg-amber-600 hover:bg-amber-500" : "bg-pink-600 hover:bg-pink-500"
+                  )}
+                  title={isPlanMode ? 'Send to plan' : 'Send to improve'}
                 >
-                  <Send className="w-4 h-4" />
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
