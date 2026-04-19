@@ -109,11 +109,14 @@ export function connectToAgent(): Promise<boolean> {
 
 // Execute a shell command
 export async function executeCommand(command: string, cwd?: string): Promise<CommandResult> {
-  // If agent is not connected, return simulated result
   if (!agentStatus.connected) {
-    return simulateCommand(command);
+    return {
+      success: false,
+      output: '',
+      error: 'Local agent not connected. Start the agent on port 3847 to run commands.',
+    };
   }
-  
+
   try {
     const response = await fetch(`${AGENT_URL}/exec`, {
       method: 'POST',
@@ -147,9 +150,9 @@ export async function runNpm(args: string[], cwd?: string): Promise<CommandResul
 // Start dev server
 export async function startDevServer(cwd?: string): Promise<{ port: number; process: ProcessInfo } | null> {
   if (!agentStatus.connected) {
-    return simulateDevServer();
+    return null;
   }
-  
+
   try {
     const response = await fetch(`${AGENT_URL}/dev-server/start`, {
       method: 'POST',
@@ -222,10 +225,9 @@ export async function writeProjectFiles(
   files: { path: string; content: string }[]
 ): Promise<boolean> {
   if (!agentStatus.connected) {
-    console.log('[Simulated] Would write project files:', files.map(f => f.path));
-    return true;
+    return false;
   }
-  
+
   try {
     const response = await fetch(`${AGENT_URL}/project/write`, {
       method: 'POST',
@@ -302,53 +304,6 @@ function notifyStatusListeners() {
 
 function notifyOutputListeners(output: string, isError: boolean) {
   outputListeners.forEach(l => l(output, isError));
-}
-
-// Simulate command execution when agent is not connected
-function simulateCommand(command: string): CommandResult {
-  const cmd = command.toLowerCase();
-  
-  if (cmd.includes('npm install') || cmd.includes('npm i')) {
-    return {
-      success: true,
-      output: `[Simulated] Installing packages...\nadded 1234 packages in 3.5s\n\n⚠️ Note: Real execution requires the LocalDev Agent running on your machine.`,
-      duration: 3500,
-    };
-  }
-  
-  if (cmd.includes('npm run dev') || cmd.includes('npm start')) {
-    return {
-      success: true,
-      output: `[Simulated] Starting dev server...\n\n  VITE v5.0.0  ready in 500ms\n\n  ➜  Local:   http://localhost:5173/\n  ➜  Network: http://192.168.1.100:5173/\n\n⚠️ Note: Real execution requires the LocalDev Agent.`,
-      duration: 500,
-    };
-  }
-  
-  if (cmd.includes('node') || cmd.includes('npx')) {
-    return {
-      success: true,
-      output: `[Simulated] Command executed: ${command}\n\n⚠️ Note: Real execution requires the LocalDev Agent.`,
-      duration: 100,
-    };
-  }
-  
-  return {
-    success: true,
-    output: `[Simulated] ${command}\n\nTo run commands for real, start the LocalDev Agent on your machine.`,
-    duration: 50,
-  };
-}
-
-function simulateDevServer(): { port: number; process: ProcessInfo } {
-  return {
-    port: 5173,
-    process: {
-      pid: 0,
-      name: 'vite (simulated)',
-      command: 'npm run dev',
-      port: 5173,
-    },
-  };
 }
 
 function detectPlatform(): 'windows' | 'linux' | 'macos' {

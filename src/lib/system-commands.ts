@@ -189,19 +189,32 @@ function categorizeCommand(command: string): SystemCommand['category'] {
   return 'system';
 }
 
-// Note: Actual command execution would require a local backend/agent
-// This is a placeholder that simulates execution
+// Execute via the real local agent (port 3847). If unavailable, return an
+// honest "PREVIEW ONLY — NOT EXECUTED" failed status. Never mark as completed
+// if nothing actually ran.
+import { executeCommand as agentExec, getAgentStatus, checkAgentStatus } from './local-backend-agent';
+
 export async function executeCommand(command: SystemCommand): Promise<SystemCommand> {
-  // In a real implementation, this would send to a local agent
-  // For now, we'll simulate the execution
-  
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        ...command,
-        status: 'completed',
-        output: `[Simulated] Command executed: ${command.command}\n\nNote: Real execution requires a local backend agent. This is a preview-only mode.`,
-      });
-    }, 1500);
-  });
+  let status = getAgentStatus();
+  if (!status.connected) {
+    // One quick check in case the agent came online since the last poll
+    status = await checkAgentStatus();
+  }
+
+  if (!status.connected) {
+    return {
+      ...command,
+      status: 'failed',
+      output: 'PREVIEW ONLY — NOT EXECUTED. Local agent not connected (port 3847).',
+      error: 'Local agent not connected',
+    };
+  }
+
+  const result = await agentExec(command.command);
+  return {
+    ...command,
+    status: result.success ? 'completed' : 'failed',
+    output: result.output,
+    error: result.error,
+  };
 }

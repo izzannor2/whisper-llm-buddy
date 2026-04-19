@@ -698,10 +698,11 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
 </body></html>`;
   }
 
-  // ----- Static analysis: find undefined components and generate stubs -----
-  function generateComponentStubs(code: string): string {
-    // Find all capitalized identifiers used as component references
-    // Patterns: React.createElement(Name  or  <Name  (in case Babel leaves JSX)
+  // ----- Static analysis: find undeclared component references -----
+  // Instead of silently stubbing them as working components (which hides bugs),
+  // we surface a visible error banner + inline red error badges so the
+  // preview is honest about what's missing.
+  function generateComponentStubs(code: string): { stubs: string; missing: string[] } {
     const referencedSet = new Set<string>();
     const refPatterns = [
       /React\.createElement\(\s*([A-Z][a-zA-Z0-9]*)/g,
@@ -714,7 +715,6 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
       }
     }
 
-    // Find all declared names: const/let/var/function Name
     const declaredSet = new Set<string>();
     const declPat = /(?:const|let|var|function)\s+([A-Z][a-zA-Z0-9]*)/g;
     let dm: RegExpExecArray | null;
@@ -722,28 +722,39 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
       declaredSet.add(dm[1]);
     }
 
-    // Known shim names (from LIBRARY_SHIMS) — extract from the shims string too
-    const shimCode = LIBRARY_SHIMS;
     const shimDeclPat = /(?:const|let|var|function)\s+([A-Z][a-zA-Z0-9]*)/g;
     let sm: RegExpExecArray | null;
-    while ((sm = shimDeclPat.exec(shimCode)) !== null) {
+    while ((sm = shimDeclPat.exec(LIBRARY_SHIMS)) !== null) {
       declaredSet.add(sm[1]);
     }
-    // Also add React built-ins
     ['React', 'ReactDOM', 'Fragment', 'Suspense', 'Proxy', 'Promise', 'Map', 'Set', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Error', 'TypeError', 'ReferenceError', 'JSON', 'Math', 'Date', 'RegExp', 'Symbol', 'Int8Array', 'Uint8Array', 'Float32Array', 'Float64Array', 'ArrayBuffer', 'DataView', 'URL', 'URLSearchParams', 'FormData', 'Headers', 'Request', 'Response', 'Event', 'CustomEvent', 'AbortController', 'MutationObserver', 'IntersectionObserver', 'ResizeObserver', 'MessageChannel', 'MessagePort', 'Worker', 'Blob', 'FileReader', 'XMLHttpRequest', 'WebSocket', 'HTMLElement', 'SVGElement', 'Node', 'NodeList', 'Document', 'Window', 'Console', 'Intl'].forEach(n => declaredSet.add(n));
 
-    // Compute missing
     const missing = Array.from(referencedSet).filter(name => !declaredSet.has(name));
+    if (missing.length === 0) return { stubs: '// No undefined components detected', missing: [] };
 
-    if (missing.length === 0) return '// No undefined components detected';
-
-    return missing.map(name => `
-    var ${name} = function ${name}_Stub(props) {
-      return React.createElement('div', {
-        style: { padding: '16px', border: '1px dashed rgba(234,179,8,0.3)', borderRadius: '8px', margin: '4px 0' },
-        'data-stub-component': '${name}'
-      }, props && props.children ? props.children : React.createElement('span', { style: { color: 'rgba(234,179,8,0.5)', fontSize: '12px' } }, '\\u26A0 ${name}'));
+    // Pre-declare each missing name as a visibly broken error badge so the
+    // whole tree doesn't white-screen, but the user clearly sees this is
+    // not a working placeholder.
+    const stubs = missing.map(name => `
+    var ${name} = function ${name}_MissingComponent(props) {
+      return React.createElement('span', {
+        style: {
+          display: 'inline-block',
+          padding: '2px 8px',
+          margin: '2px',
+          background: 'rgba(239,68,68,0.15)',
+          color: '#fca5a5',
+          border: '1px solid rgba(239,68,68,0.5)',
+          borderRadius: '4px',
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          fontWeight: 600,
+        },
+        'data-missing-component': '${name}',
+        title: '${name} is not defined. Define it or import it.'
+      }, '\\u26A0 <${name} /> not defined');
     };`).join('\n');
+    return { stubs, missing };
   }
 
   // Topological sort
