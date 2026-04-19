@@ -840,21 +840,7 @@ export function buildPreviewHTML(files: ProjectFile[]): string {
 
     ${LIBRARY_SHIMS}
 
-    ${generateComponentStubs(processedComponents)}
-
-    // Last-resort error listener for edge cases
-    window.addEventListener('error', function(e) {
-      const m = e.message && e.message.match(/^(?:Uncaught )?ReferenceError: ([A-Z][a-zA-Z0-9]*) is not defined/);
-      if (m && m[1] && !window['__stub_' + m[1]]) {
-        window['__stub_' + m[1]] = true;
-        window[m[1]] = function(props) {
-          return React.createElement('div', {
-            style: { padding: '16px', border: '1px dashed rgba(234,179,8,0.3)', borderRadius: '8px', margin: '4px 0' },
-            'data-stub-component': m[1]
-          }, props && props.children ? props.children : React.createElement('span', { style: { color: 'rgba(234,179,8,0.5)', fontSize: '12px' } }, '\u26A0 ' + m[1]));
-        };
-      }
-    });
+    ${missingStubs}
 
     ${processedComponents}
 
