@@ -32,6 +32,7 @@ interface PreviewPaneProps {
   onStopServer: () => void;
   onOpenExternal?: () => void;
   onGeneratePreview?: () => void;
+  onCopyHtml?: () => void;
   className?: string;
 }
 
