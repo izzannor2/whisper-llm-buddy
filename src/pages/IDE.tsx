@@ -294,11 +294,25 @@ export default function IDE() {
       let fullResponse = '';
       const appliedBlockKeys = new Set<string>();
       const isAppBuilder = (settings.mode === 'app-builder' || settings.mode === 'ai-improvement') && !isPlan;
-      
+      let lastLiveBuildAt = 0;
+
+      // Throttled live preview during streaming — does NOT switch tabs
+      const liveStreamPreview = (files: ProjectFile[]) => {
+        const now = Date.now();
+        if (now - lastLiveBuildAt < 400) return;
+        lastLiveBuildAt = now;
+        try {
+          const html = buildPreviewHTML(files);
+          setPreviewHtml(html);
+        } catch (err) {
+          console.error('[live preview]', err);
+        }
+      };
+
       await sendChat(chatMessages, effectiveSettings, (chunk) => {
         fullResponse += chunk;
         setStreamingContent(fullResponse);
-        
+
         // Live preview: apply code blocks as they stream in
         if (isAppBuilder && project) {
           const blocks = parseCodeBlocks(fullResponse);
@@ -310,8 +324,8 @@ export default function IDE() {
             const updatedProject = { ...currentProject, files: updatedFiles, updatedAt: Date.now() };
             setProject(updatedProject);
             saveProject(updatedProject);
-            // Trigger live preview update
-            generatePreview(updatedFiles);
+            // Throttled HTML rebuild only — keep user's current right-pane tab
+            liveStreamPreview(updatedFiles);
           }
         }
       });
@@ -384,8 +398,17 @@ export default function IDE() {
   const handleStartServer = async () => {
     setLogs(prev => [...prev, 'Starting dev server...']);
     const result = await startDevServer();
-    if (result) { setIsServerRunning(true); setPreviewUrl(`http://localhost:${result.port}`); setLogs(prev => [...prev, `Dev server running on http://localhost:${result.port}`]); toast.success('Dev server started'); }
-    else { setIsServerRunning(true); setPreviewUrl('http://localhost:5173'); setLogs(prev => [...prev, '[Simulated] Dev server running on http://localhost:5173']); toast.info('Dev server started (simulated)'); }
+    if (result) {
+      setIsServerRunning(true);
+      setPreviewUrl(`http://localhost:${result.port}`);
+      setLogs(prev => [...prev, `Dev server running on http://localhost:${result.port}`]);
+      toast.success('Dev server started');
+    } else {
+      const msg = 'Local agent not connected (port 3847). Start the agent to run a dev server.';
+      setErrors(prev => [...prev, msg]);
+      setLogs(prev => [...prev, msg]);
+      toast.error(msg);
+    }
   };
 
   const handleStopServer = async () => {
@@ -491,8 +514,19 @@ export default function IDE() {
               <TabsContent value="preview" className="flex-1 m-0">
                 <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
                   isServerRunning={isServerRunning} isGenerating={isPreviewGenerating} logs={logs} errors={errors}
+                  agentConnected={agentStatus.connected}
                   onRefresh={() => generatePreview()} onStartServer={handleStartServer} onStopServer={handleStopServer}
-                  onGeneratePreview={() => generatePreview()} />
+                  onGeneratePreview={() => generatePreview()}
+                  onOpenExternal={() => {
+                    if (previewUrl) {
+                      window.open(previewUrl, '_blank');
+                    } else if (previewHtml) {
+                      const blob = new Blob([previewHtml], { type: 'text/html' });
+                      window.open(URL.createObjectURL(blob), '_blank');
+                    } else {
+                      toast.info('No preview available to open');
+                    }
+                  }} />
               </TabsContent>
               <TabsContent value="terminal" className="flex-1 m-0"><Terminal className="h-full" /></TabsContent>
               <TabsContent value="commands" className="flex-1 m-0">
