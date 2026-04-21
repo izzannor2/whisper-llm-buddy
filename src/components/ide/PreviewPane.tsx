@@ -26,6 +26,7 @@ interface PreviewPaneProps {
   isGenerating?: boolean;
   logs: string[];
   errors: string[];
+  agentConnected?: boolean;
   onRefresh: () => void;
   onStartServer: () => void;
   onStopServer: () => void;
@@ -42,6 +43,7 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   isGenerating,
   logs,
   errors,
+  agentConnected,
   onRefresh,
   onStartServer,
   onStopServer,
@@ -223,13 +225,31 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
               <Square className="h-4 w-4 text-destructive" />
             </Button>
           ) : (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStartServer} title="Start Dev Server">
-              <Play className="h-4 w-4 text-accent" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={onStartServer}
+                    disabled={agentConnected === false}
+                    title={agentConnected === false ? 'Local agent offline (port 3847)' : 'Start Dev Server'}
+                  >
+                    <Play className={cn('h-4 w-4', agentConnected === false ? 'text-muted-foreground' : 'text-accent')} />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>{agentConnected === false ? 'Local agent offline (port 3847)' : 'Start Dev Server'}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {onOpenExternal && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onOpenExternal} title="Open preview in new tab">
+              <ExternalLink className="h-4 w-4" />
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onOpenExternal}>
-            <ExternalLink className="h-4 w-4" />
-          </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsMaximized(!isMaximized)}>
             {isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
@@ -283,9 +303,19 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
                         Generate Preview
                       </Button>
                     )}
-                    <Button variant="outline" size="lg" onClick={onStartServer} className="gap-2">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={onStartServer}
+                      disabled={agentConnected === false}
+                      className="gap-2"
+                      title={agentConnected === false ? 'Requires LocalDev Agent on port 3847' : 'Start Dev Server'}
+                    >
                       <Play className="h-4 w-4" />
                       Start Dev Server
+                      {agentConnected === false && (
+                        <span className="text-[10px] text-muted-foreground ml-1">(Agent offline)</span>
+                      )}
                     </Button>
                   </div>
                   <div className="mt-6 p-4 rounded-lg bg-muted/50 text-left">

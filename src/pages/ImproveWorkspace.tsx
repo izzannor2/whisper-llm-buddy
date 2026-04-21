@@ -211,6 +211,8 @@ export default function ImproveWorkspace() {
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [rightTab, setRightTab] = useState<'files' | 'preview'>('files');
   const [previewHtml, setPreviewHtml] = useState('');
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewKey, setPreviewKey] = useState(0);
   const uploadRef = useRef<HTMLInputElement>(null);
 
   const toggleFile = useCallback((path: string) => {
@@ -283,11 +285,13 @@ export default function ImproveWorkspace() {
         }));
         const html = buildPreviewHTML(projectFiles);
         setPreviewHtml(html);
-      } catch {
-        // Preview build failed, that's okay
+        setPreviewError(null);
+      } catch (err) {
+        setPreviewHtml('');
+        setPreviewError(String((err as Error)?.message || err));
       }
     }
-  }, [allCodeBlocks]);
+  }, [allCodeBlocks, previewKey]);
 
   const handleApplyAll = useCallback(async () => {
     if (allCodeBlocks.length === 0) {
@@ -981,6 +985,17 @@ export default function ImproveWorkspace() {
                   </TabsTrigger>
                 </TabsList>
                 <div className="ml-auto flex items-center gap-1 pr-2">
+                  {rightTab === 'preview' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] px-2 text-pink-400 hover:text-pink-200"
+                      onClick={() => setPreviewKey(k => k + 1)}
+                      title="Rebuild preview from current code blocks"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" /> Refresh
+                    </Button>
+                  )}
                   <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-pink-400 hover:text-pink-200" onClick={handleOpenFolder} title="Open folder (File System Access API)">
                     <FolderOpen className="w-3 h-3 mr-1" /> Open
                   </Button>
@@ -1009,11 +1024,19 @@ export default function ImproveWorkspace() {
               </TabsContent>
 
               <TabsContent value="preview" className="flex-1 m-0 overflow-hidden">
-                {previewHtml ? (
+                {previewError ? (
+                  <div className="h-full overflow-auto p-4">
+                    <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                      <div className="font-semibold mb-1">Preview build failed</div>
+                      <pre className="whitespace-pre-wrap font-mono text-[11px] opacity-90">{previewError}</pre>
+                    </div>
+                  </div>
+                ) : previewHtml ? (
                   <iframe
+                    key={previewKey}
                     srcDoc={previewHtml}
                     className="w-full h-full border-0"
-                    sandbox="allow-scripts"
+                    sandbox="allow-scripts allow-same-origin"
                     title="Live Preview"
                   />
                 ) : (
