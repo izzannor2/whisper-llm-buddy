@@ -520,6 +520,19 @@ export default function IDE() {
                   agentConnected={agentStatus.connected}
                   onRefresh={() => generatePreview()} onStartServer={handleStartServer} onStopServer={handleStopServer}
                   onGeneratePreview={() => generatePreview()}
+                  onCopyHtml={async () => {
+                    let html = previewHtml || '';
+                    if (!html && previewUrl) {
+                      try { html = await fetch(previewUrl).then(r => r.text()); } catch { /* ignore */ }
+                    }
+                    if (!html) { toast.info('No preview HTML available'); return; }
+                    try {
+                      await navigator.clipboard.writeText(html);
+                      toast.success('Preview HTML copied to clipboard');
+                    } catch {
+                      toast.error('Failed to copy preview HTML');
+                    }
+                  }}
                   onOpenExternal={() => {
                     if (previewUrl) {
                       window.open(previewUrl, '_blank');
