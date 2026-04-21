@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
-import { RefreshCw, ExternalLink, Terminal, Play, Square, Maximize2, Minimize2, Eye, Smartphone, Tablet, Monitor, RotateCcw, Loader2 } from 'lucide-react';
+import { RefreshCw, ExternalLink, Terminal, Play, Square, Maximize2, Minimize2, Eye, Smartphone, Tablet, Monitor, RotateCcw, Loader2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
