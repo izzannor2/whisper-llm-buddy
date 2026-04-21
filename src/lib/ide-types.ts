@@ -134,6 +134,7 @@ export const DEFAULT_SETTINGS: IDESettings = {
   folderStructure: 'feature-based',
   jailbreakPrompt: '',
   jailbreakEnabled: false,
+  autoOpenDebugOnError: true,
 };
 
 export const FRAMEWORKS = [
