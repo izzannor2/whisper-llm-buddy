@@ -986,15 +986,31 @@ export default function ImproveWorkspace() {
                 </TabsList>
                 <div className="ml-auto flex items-center gap-1 pr-2">
                   {rightTab === 'preview' && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-[10px] px-2 text-pink-400 hover:text-pink-200"
-                      onClick={() => setPreviewKey(k => k + 1)}
-                      title="Rebuild preview from current code blocks"
-                    >
-                      <RefreshCw className="w-3 h-3 mr-1" /> Refresh
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[10px] px-2 text-pink-400 hover:text-pink-200"
+                        onClick={() => setPreviewKey(k => k + 1)}
+                        title="Rebuild preview from current code blocks"
+                      >
+                        <RefreshCw className="w-3 h-3 mr-1" /> Refresh
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[10px] px-2 text-pink-400 hover:text-pink-200"
+                        onClick={() => {
+                          setAppliedFiles(new Set());
+                          setPreviewError(null);
+                          setPreviewKey(k => k + 1);
+                          toast.info('Preview reset to original code blocks');
+                        }}
+                        title="Clear applied state and rebuild from original AI code blocks"
+                      >
+                        <RotateCcw className="w-3 h-3 mr-1" /> Reset
+                      </Button>
+                    </>
                   )}
                   <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-pink-400 hover:text-pink-200" onClick={handleOpenFolder} title="Open folder (File System Access API)">
                     <FolderOpen className="w-3 h-3 mr-1" /> Open
