@@ -222,6 +222,16 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
               <RefreshCw className="h-4 w-4" />
             </Button>
           )}
+          {hasPreview && onCopyHtml && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onCopyHtml}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p>Copy preview HTML</p></TooltipContent>
+            </Tooltip>
+          )}
           {isServerRunning ? (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStopServer}>
               <Square className="h-4 w-4 text-destructive" />
