@@ -46,6 +46,8 @@ export interface IDESettings {
   // Jailbreak
   jailbreakPrompt: string;
   jailbreakEnabled: boolean;
+  // Auto-open Debug tab on preview errors
+  autoOpenDebugOnError: boolean;
 }
 
 export interface ProjectFile {
@@ -132,6 +134,7 @@ export const DEFAULT_SETTINGS: IDESettings = {
   folderStructure: 'feature-based',
   jailbreakPrompt: '',
   jailbreakEnabled: false,
+  autoOpenDebugOnError: true,
 };
 
 export const FRAMEWORKS = [

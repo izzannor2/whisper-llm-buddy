@@ -69,13 +69,16 @@ export default function IDE() {
     const handlePreviewMessage = (event: MessageEvent) => {
       if (event.data?.type === 'preview-error') {
         setDebugLogs(prev => [...prev.slice(-99), { type: 'error', message: event.data.message, timestamp: Date.now() }]);
+        if (settings.autoOpenDebugOnError && rightPanelTab !== 'debug') {
+          setRightPanelTab('debug');
+        }
       } else if (event.data?.type === 'preview-log') {
         setDebugLogs(prev => [...prev.slice(-99), { type: 'info', message: event.data.message, timestamp: Date.now() }]);
       }
     };
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
-  }, []);
+  }, [settings.autoOpenDebugOnError, rightPanelTab]);
 
   useEffect(() => {
     setSettings(getIDESettings());
@@ -517,6 +520,19 @@ export default function IDE() {
                   agentConnected={agentStatus.connected}
                   onRefresh={() => generatePreview()} onStartServer={handleStartServer} onStopServer={handleStopServer}
                   onGeneratePreview={() => generatePreview()}
+                  onCopyHtml={async () => {
+                    let html = previewHtml || '';
+                    if (!html && previewUrl) {
+                      try { html = await fetch(previewUrl).then(r => r.text()); } catch { /* ignore */ }
+                    }
+                    if (!html) { toast.info('No preview HTML available'); return; }
+                    try {
+                      await navigator.clipboard.writeText(html);
+                      toast.success('Preview HTML copied to clipboard');
+                    } catch {
+                      toast.error('Failed to copy preview HTML');
+                    }
+                  }}
                   onOpenExternal={() => {
                     if (previewUrl) {
                       window.open(previewUrl, '_blank');

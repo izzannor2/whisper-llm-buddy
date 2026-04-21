@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
-import { RefreshCw, ExternalLink, Terminal, Play, Square, Maximize2, Minimize2, Eye, Smartphone, Tablet, Monitor, RotateCcw, Loader2 } from 'lucide-react';
+import { RefreshCw, ExternalLink, Terminal, Play, Square, Maximize2, Minimize2, Eye, Smartphone, Tablet, Monitor, RotateCcw, Loader2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,6 +32,7 @@ interface PreviewPaneProps {
   onStopServer: () => void;
   onOpenExternal?: () => void;
   onGeneratePreview?: () => void;
+  onCopyHtml?: () => void;
   className?: string;
 }
 
@@ -49,6 +50,7 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   onStopServer,
   onOpenExternal,
   onGeneratePreview,
+  onCopyHtml,
   className,
 }, ref) => {
   const [activeTab, setActiveTab] = useState<'preview' | 'console'>('preview');
@@ -219,6 +221,16 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRefresh} title="Refresh">
               <RefreshCw className="h-4 w-4" />
             </Button>
+          )}
+          {hasPreview && onCopyHtml && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onCopyHtml}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p>Copy preview HTML</p></TooltipContent>
+            </Tooltip>
           )}
           {isServerRunning ? (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStopServer}>

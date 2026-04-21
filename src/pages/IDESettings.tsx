@@ -381,6 +381,13 @@ export default function IDESettingsPage() {
             <div className="space-y-4">
               <div><Label>Font Size: {settings.fontSize}px</Label><Slider value={[settings.fontSize]} onValueChange={([v]) => updateSetting('fontSize', v)} min={10} max={24} step={1} /></div>
               <div className="flex items-center justify-between"><Label>Auto Save</Label><Switch checked={settings.autoSave} onCheckedChange={(v) => updateSetting('autoSave', v)} /></div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label>Auto-open Debug tab on preview errors</Label>
+                  <p className="text-xs text-muted-foreground mt-1">When the preview throws an error, automatically switch the right panel to the Debug tab.</p>
+                </div>
+                <Switch checked={settings.autoOpenDebugOnError} onCheckedChange={(v) => updateSetting('autoOpenDebugOnError', v)} />
+              </div>
             </div>
           </section>
 
