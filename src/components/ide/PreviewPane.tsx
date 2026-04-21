@@ -50,6 +50,7 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   onStopServer,
   onOpenExternal,
   onGeneratePreview,
+  onCopyHtml,
   className,
 }, ref) => {
   const [activeTab, setActiveTab] = useState<'preview' | 'console'>('preview');
