@@ -46,6 +46,8 @@ export interface IDESettings {
   // Jailbreak
   jailbreakPrompt: string;
   jailbreakEnabled: boolean;
+  // Auto-open Debug tab on preview errors
+  autoOpenDebugOnError: boolean;
 }
 
 export interface ProjectFile {
