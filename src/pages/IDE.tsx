@@ -69,13 +69,16 @@ export default function IDE() {
     const handlePreviewMessage = (event: MessageEvent) => {
       if (event.data?.type === 'preview-error') {
         setDebugLogs(prev => [...prev.slice(-99), { type: 'error', message: event.data.message, timestamp: Date.now() }]);
+        if (settings.autoOpenDebugOnError && rightPanelTab !== 'debug') {
+          setRightPanelTab('debug');
+        }
       } else if (event.data?.type === 'preview-log') {
         setDebugLogs(prev => [...prev.slice(-99), { type: 'info', message: event.data.message, timestamp: Date.now() }]);
       }
     };
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
-  }, []);
+  }, [settings.autoOpenDebugOnError, rightPanelTab]);
 
   useEffect(() => {
     setSettings(getIDESettings());
