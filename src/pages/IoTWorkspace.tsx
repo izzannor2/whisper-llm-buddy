@@ -16,8 +16,9 @@ import { saveConversation, Conversation } from '@/lib/db';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { VoiceCallMode } from '@/components/VoiceCallMode';
-import { executeCommand as agentExec, checkAgentStatus, getAgentStatus } from '@/lib/local-backend-agent';
+import { executeCommand as agentExec, checkAgentStatus, getAgentStatus, connectToAgent, onOutput } from '@/lib/local-backend-agent';
 import { useAgentStatus } from '@/hooks/use-agent-status';
+import { Hammer, Trash2 } from 'lucide-react';
 
 interface Message {
   id: string;
