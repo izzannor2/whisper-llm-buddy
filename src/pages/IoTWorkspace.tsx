@@ -49,7 +49,31 @@ export default function IoTWorkspace() {
   const [convId] = useState(() => generateId());
   const [showVoiceCall, setShowVoiceCall] = useState(false);
   const agent = useAgentStatus();
+  const [buildLogs, setBuildLogs] = useState<{ text: string; isError: boolean; ts: number }[]>([
+    { text: '[Build/Flash] Idle. Run Verify or Upload to stream agent output here.', isError: false, ts: Date.now() },
+  ]);
+  const [activeOp, setActiveOp] = useState<'idle' | 'building' | 'flashing'>('idle');
   useEffect(() => { applyModeTheme('embedded-iot'); }, []);
+
+  // Stream live agent stdout/stderr into the build logs panel
+  useEffect(() => {
+    if (!agent.connected) return;
+    let cancelled = false;
+    connectToAgent().catch(() => {});
+    const off = onOutput((text, isError) => {
+      if (cancelled) return;
+      const lines = text.split('\n').filter(Boolean);
+      setBuildLogs(prev => [
+        ...prev.slice(-499),
+        ...lines.map(l => ({ text: l, isError, ts: Date.now() })),
+      ]);
+    });
+    return () => { cancelled = true; off(); };
+  }, [agent.connected]);
+
+  const appendBuildLog = (text: string, isError = false) => {
+    setBuildLogs(prev => [...prev.slice(-499), { text, isError, ts: Date.now() }]);
+  };
 
   const runAgentCommand = useCallback(async (label: string, cmd: string): Promise<boolean> => {
     let s = getAgentStatus();
