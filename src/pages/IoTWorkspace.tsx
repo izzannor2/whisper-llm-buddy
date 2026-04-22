@@ -35,7 +35,9 @@ const DEFAULT_SKETCH: ProjectFile = {
 export default function IoTWorkspace() {
   const navigate = useNavigate();
   const [board, setBoard] = useState('esp32');
-  const [serialOutput, setSerialOutput] = useState<string[]>(['[Serial Monitor] Ready...']);
+  const [serialOutput, setSerialOutput] = useState<string[]>([
+    '[Serial Monitor] Idle — connect the LocalDev Agent (port 3847) to enable real serial output.',
+  ]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
@@ -45,26 +47,45 @@ export default function IoTWorkspace() {
   const [isUploading, setIsUploading] = useState(false);
   const [convId] = useState(() => generateId());
   const [showVoiceCall, setShowVoiceCall] = useState(false);
+  const agent = useAgentStatus();
   useEffect(() => { applyModeTheme('embedded-iot'); }, []);
 
-  const handleVerify = () => {
+  const runAgentCommand = useCallback(async (label: string, cmd: string): Promise<boolean> => {
+    let s = getAgentStatus();
+    if (!s.connected) s = await checkAgentStatus();
+    if (!s.connected) {
+      setSerialOutput(prev => [
+        ...prev,
+        `[${label}] PREVIEW ONLY — NOT EXECUTED. Local agent not connected on port 3847.`,
+        `[${label}] Start the LocalDev Agent to run: ${cmd}`,
+      ]);
+      toast.error('Local agent not connected', { description: 'Start the agent on port 3847 to run real build/flash.' });
+      return false;
+    }
+    setSerialOutput(prev => [...prev, `[${label}] $ ${cmd}`]);
+    const result = await agentExec(cmd);
+    if (result.output) setSerialOutput(prev => [...prev, ...result.output.split('\n').filter(Boolean)]);
+    if (result.error) setSerialOutput(prev => [...prev, ...result.error!.split('\n').filter(Boolean).map(l => `[err] ${l}`)]);
+    setSerialOutput(prev => [...prev, result.success ? `[${label}] ✓ Completed (exit ${result.exitCode ?? 0})` : `[${label}] ✗ Failed (exit ${result.exitCode ?? 1})`]);
+    return result.success;
+  }, []);
+
+  const handleVerify = async () => {
     setIsVerifying(true);
-    setSerialOutput(prev => [...prev, '[Compiling] Verifying sketch...']);
-    setTimeout(() => {
-      setSerialOutput(prev => [...prev, '[Compiling] Sketch uses 245320 bytes (18%) of program storage', '[Compiling] ✓ Compilation successful']);
-      setIsVerifying(false);
-      toast.success('Compilation successful');
-    }, 1500);
+    const ideSettings = getIDESettings();
+    const cmd = ideSettings.buildCommand || 'platformio run';
+    const ok = await runAgentCommand('Build', cmd);
+    if (ok) toast.success('Build succeeded');
+    setIsVerifying(false);
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     setIsUploading(true);
-    setSerialOutput(prev => [...prev, `[Upload] Uploading to ${BOARD_TYPES.find(b => b.id === board)?.name}...`]);
-    setTimeout(() => {
-      setSerialOutput(prev => [...prev, '[Upload] Writing at 0x00010000... (100%)', '[Upload] ✓ Upload complete']);
-      setIsUploading(false);
-      toast.success('Upload complete');
-    }, 2000);
+    const ideSettings = getIDESettings();
+    const cmd = ideSettings.flashCommand || 'platformio run --target upload';
+    const ok = await runAgentCommand('Flash', cmd);
+    if (ok) toast.success('Flash complete');
+    setIsUploading(false);
   };
 
   const handleFileChange = useCallback((_path: string, content: string) => {
