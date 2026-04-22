@@ -254,12 +254,12 @@ export default function IoTWorkspace() {
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={75}>
           <ResizablePanelGroup direction="vertical">
-            <ResizablePanel defaultSize={65} minSize={30}>
+            <ResizablePanel defaultSize={55} minSize={25}>
               <CodeEditor file={selectedFile} openFiles={openFiles} onFileChange={handleFileChange}
                 onCloseFile={() => {}} onSelectFile={() => {}} fontSize={14} />
             </ResizablePanel>
             <ResizableHandle />
-            <ResizablePanel defaultSize={35} minSize={15}>
+            <ResizablePanel defaultSize={22} minSize={10}>
               <div className="h-full flex flex-col" style={{ background: 'hsl(160, 20%, 5%)' }}>
                 <div className="h-8 flex items-center justify-between px-3 border-b" style={{ borderColor: 'hsl(168, 40%, 20%)' }}>
                   <div className="flex items-center gap-2">
@@ -288,6 +288,48 @@ export default function IoTWorkspace() {
                         line.includes('Error') ? 'text-red-400' :
                         line.startsWith('[') ? 'text-teal-400' : 'text-teal-200/70'
                       )}>{line}</div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={23} minSize={10}>
+              <div className="h-full flex flex-col" style={{ background: 'hsl(160, 25%, 4%)' }}>
+                <div className="h-8 flex items-center justify-between px-3 border-b" style={{ borderColor: 'hsl(168, 40%, 20%)' }}>
+                  <div className="flex items-center gap-2">
+                    <Hammer className="w-3.5 h-3.5 text-orange-400" />
+                    <span className="text-xs font-mono text-orange-300">Build / Flash Logs</span>
+                    {activeOp !== 'idle' && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-orange-900/30 text-orange-300 border border-orange-700/40 animate-pulse">
+                        {activeOp === 'building' ? 'building…' : 'flashing…'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-orange-500/70">{buildLogs.length} line{buildLogs.length === 1 ? '' : 's'}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] text-orange-400 hover:text-orange-200 gap-1"
+                      onClick={() => setBuildLogs([{ text: '[Build/Flash] Logs cleared.', isError: false, ts: Date.now() }])}
+                      title="Clear build/flash logs"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+                <ScrollArea className="flex-1 p-2">
+                  <div className="font-mono text-[11px] leading-relaxed space-y-0.5">
+                    {buildLogs.map((line, i) => (
+                      <div key={i} className={cn(
+                        'whitespace-pre-wrap break-all',
+                        line.isError ? 'text-red-400' :
+                        line.text.includes('✓') || line.text.includes('Completed') ? 'text-green-400' :
+                        line.text.startsWith('[') ? 'text-orange-300' :
+                        'text-orange-100/80'
+                      )}>{line.text}</div>
                     ))}
                   </div>
                 </ScrollArea>
