@@ -16,8 +16,9 @@ import { saveConversation, Conversation } from '@/lib/db';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { VoiceCallMode } from '@/components/VoiceCallMode';
-import { executeCommand as agentExec, checkAgentStatus, getAgentStatus } from '@/lib/local-backend-agent';
+import { executeCommand as agentExec, checkAgentStatus, getAgentStatus, connectToAgent, onOutput } from '@/lib/local-backend-agent';
 import { useAgentStatus } from '@/hooks/use-agent-status';
+import { Hammer, Trash2 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -48,44 +49,86 @@ export default function IoTWorkspace() {
   const [convId] = useState(() => generateId());
   const [showVoiceCall, setShowVoiceCall] = useState(false);
   const agent = useAgentStatus();
+  const [buildLogs, setBuildLogs] = useState<{ text: string; isError: boolean; ts: number }[]>([
+    { text: '[Build/Flash] Idle. Run Verify or Upload to stream agent output here.', isError: false, ts: Date.now() },
+  ]);
+  const [activeOp, setActiveOp] = useState<'idle' | 'building' | 'flashing'>('idle');
   useEffect(() => { applyModeTheme('embedded-iot'); }, []);
+
+  // Stream live agent stdout/stderr into the build logs panel
+  useEffect(() => {
+    if (!agent.connected) return;
+    let cancelled = false;
+    connectToAgent().catch(() => {});
+    const off = onOutput((text, isError) => {
+      if (cancelled) return;
+      const lines = text.split('\n').filter(Boolean);
+      setBuildLogs(prev => [
+        ...prev.slice(-499),
+        ...lines.map(l => ({ text: l, isError, ts: Date.now() })),
+      ]);
+    });
+    return () => { cancelled = true; off(); };
+  }, [agent.connected]);
+
+  const appendBuildLog = (text: string, isError = false) => {
+    setBuildLogs(prev => [...prev.slice(-499), { text, isError, ts: Date.now() }]);
+  };
 
   const runAgentCommand = useCallback(async (label: string, cmd: string): Promise<boolean> => {
     let s = getAgentStatus();
     if (!s.connected) s = await checkAgentStatus();
     if (!s.connected) {
-      setSerialOutput(prev => [
-        ...prev,
-        `[${label}] PREVIEW ONLY — NOT EXECUTED. Local agent not connected on port 3847.`,
-        `[${label}] Start the LocalDev Agent to run: ${cmd}`,
-      ]);
+      const msg1 = `[${label}] PREVIEW ONLY — NOT EXECUTED. Local agent not connected on port 3847.`;
+      const msg2 = `[${label}] Start the LocalDev Agent to run: ${cmd}`;
+      setSerialOutput(prev => [...prev, msg1, msg2]);
+      appendBuildLog(msg1, true);
+      appendBuildLog(msg2, true);
       toast.error('Local agent not connected', { description: 'Start the agent on port 3847 to run real build/flash.' });
       return false;
     }
-    setSerialOutput(prev => [...prev, `[${label}] $ ${cmd}`]);
+    const header = `[${label}] $ ${cmd}`;
+    setSerialOutput(prev => [...prev, header]);
+    appendBuildLog(header);
     const result = await agentExec(cmd);
-    if (result.output) setSerialOutput(prev => [...prev, ...result.output.split('\n').filter(Boolean)]);
-    if (result.error) setSerialOutput(prev => [...prev, ...result.error!.split('\n').filter(Boolean).map(l => `[err] ${l}`)]);
-    setSerialOutput(prev => [...prev, result.success ? `[${label}] ✓ Completed (exit ${result.exitCode ?? 0})` : `[${label}] ✗ Failed (exit ${result.exitCode ?? 1})`]);
+    if (result.output) {
+      const outLines = result.output.split('\n').filter(Boolean);
+      setSerialOutput(prev => [...prev, ...outLines]);
+      outLines.forEach(l => appendBuildLog(l, false));
+    }
+    if (result.error) {
+      const errLines = result.error.split('\n').filter(Boolean);
+      setSerialOutput(prev => [...prev, ...errLines.map(l => `[err] ${l}`)]);
+      errLines.forEach(l => appendBuildLog(l, true));
+    }
+    const tail = result.success
+      ? `[${label}] ✓ Completed (exit ${result.exitCode ?? 0})`
+      : `[${label}] ✗ Failed (exit ${result.exitCode ?? 1})`;
+    setSerialOutput(prev => [...prev, tail]);
+    appendBuildLog(tail, !result.success);
     return result.success;
   }, []);
 
   const handleVerify = async () => {
     setIsVerifying(true);
+    setActiveOp('building');
     const ideSettings = getIDESettings();
     const cmd = ideSettings.buildCommand || 'platformio run';
     const ok = await runAgentCommand('Build', cmd);
     if (ok) toast.success('Build succeeded');
     setIsVerifying(false);
+    setActiveOp('idle');
   };
 
   const handleUpload = async () => {
     setIsUploading(true);
+    setActiveOp('flashing');
     const ideSettings = getIDESettings();
     const cmd = ideSettings.flashCommand || 'platformio run --target upload';
     const ok = await runAgentCommand('Flash', cmd);
     if (ok) toast.success('Flash complete');
     setIsUploading(false);
+    setActiveOp('idle');
   };
 
   // Swap default sketch language/extension when board family changes
@@ -211,12 +254,12 @@ export default function IoTWorkspace() {
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={75}>
           <ResizablePanelGroup direction="vertical">
-            <ResizablePanel defaultSize={65} minSize={30}>
+            <ResizablePanel defaultSize={55} minSize={25}>
               <CodeEditor file={selectedFile} openFiles={openFiles} onFileChange={handleFileChange}
                 onCloseFile={() => {}} onSelectFile={() => {}} fontSize={14} />
             </ResizablePanel>
             <ResizableHandle />
-            <ResizablePanel defaultSize={35} minSize={15}>
+            <ResizablePanel defaultSize={22} minSize={10}>
               <div className="h-full flex flex-col" style={{ background: 'hsl(160, 20%, 5%)' }}>
                 <div className="h-8 flex items-center justify-between px-3 border-b" style={{ borderColor: 'hsl(168, 40%, 20%)' }}>
                   <div className="flex items-center gap-2">
@@ -245,6 +288,48 @@ export default function IoTWorkspace() {
                         line.includes('Error') ? 'text-red-400' :
                         line.startsWith('[') ? 'text-teal-400' : 'text-teal-200/70'
                       )}>{line}</div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={23} minSize={10}>
+              <div className="h-full flex flex-col" style={{ background: 'hsl(160, 25%, 4%)' }}>
+                <div className="h-8 flex items-center justify-between px-3 border-b" style={{ borderColor: 'hsl(168, 40%, 20%)' }}>
+                  <div className="flex items-center gap-2">
+                    <Hammer className="w-3.5 h-3.5 text-orange-400" />
+                    <span className="text-xs font-mono text-orange-300">Build / Flash Logs</span>
+                    {activeOp !== 'idle' && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-orange-900/30 text-orange-300 border border-orange-700/40 animate-pulse">
+                        {activeOp === 'building' ? 'building…' : 'flashing…'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-orange-500/70">{buildLogs.length} line{buildLogs.length === 1 ? '' : 's'}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] text-orange-400 hover:text-orange-200 gap-1"
+                      onClick={() => setBuildLogs([{ text: '[Build/Flash] Logs cleared.', isError: false, ts: Date.now() }])}
+                      title="Clear build/flash logs"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+                <ScrollArea className="flex-1 p-2">
+                  <div className="font-mono text-[11px] leading-relaxed space-y-0.5">
+                    {buildLogs.map((line, i) => (
+                      <div key={i} className={cn(
+                        'whitespace-pre-wrap break-all',
+                        line.isError ? 'text-red-400' :
+                        line.text.includes('✓') || line.text.includes('Completed') ? 'text-green-400' :
+                        line.text.startsWith('[') ? 'text-orange-300' :
+                        'text-orange-100/80'
+                      )}>{line.text}</div>
                     ))}
                   </div>
                 </ScrollArea>
