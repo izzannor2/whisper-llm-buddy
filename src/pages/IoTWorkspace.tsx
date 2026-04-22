@@ -79,38 +79,56 @@ export default function IoTWorkspace() {
     let s = getAgentStatus();
     if (!s.connected) s = await checkAgentStatus();
     if (!s.connected) {
-      setSerialOutput(prev => [
-        ...prev,
-        `[${label}] PREVIEW ONLY — NOT EXECUTED. Local agent not connected on port 3847.`,
-        `[${label}] Start the LocalDev Agent to run: ${cmd}`,
-      ]);
+      const msg1 = `[${label}] PREVIEW ONLY — NOT EXECUTED. Local agent not connected on port 3847.`;
+      const msg2 = `[${label}] Start the LocalDev Agent to run: ${cmd}`;
+      setSerialOutput(prev => [...prev, msg1, msg2]);
+      appendBuildLog(msg1, true);
+      appendBuildLog(msg2, true);
       toast.error('Local agent not connected', { description: 'Start the agent on port 3847 to run real build/flash.' });
       return false;
     }
-    setSerialOutput(prev => [...prev, `[${label}] $ ${cmd}`]);
+    const header = `[${label}] $ ${cmd}`;
+    setSerialOutput(prev => [...prev, header]);
+    appendBuildLog(header);
     const result = await agentExec(cmd);
-    if (result.output) setSerialOutput(prev => [...prev, ...result.output.split('\n').filter(Boolean)]);
-    if (result.error) setSerialOutput(prev => [...prev, ...result.error!.split('\n').filter(Boolean).map(l => `[err] ${l}`)]);
-    setSerialOutput(prev => [...prev, result.success ? `[${label}] ✓ Completed (exit ${result.exitCode ?? 0})` : `[${label}] ✗ Failed (exit ${result.exitCode ?? 1})`]);
+    if (result.output) {
+      const outLines = result.output.split('\n').filter(Boolean);
+      setSerialOutput(prev => [...prev, ...outLines]);
+      outLines.forEach(l => appendBuildLog(l, false));
+    }
+    if (result.error) {
+      const errLines = result.error.split('\n').filter(Boolean);
+      setSerialOutput(prev => [...prev, ...errLines.map(l => `[err] ${l}`)]);
+      errLines.forEach(l => appendBuildLog(l, true));
+    }
+    const tail = result.success
+      ? `[${label}] ✓ Completed (exit ${result.exitCode ?? 0})`
+      : `[${label}] ✗ Failed (exit ${result.exitCode ?? 1})`;
+    setSerialOutput(prev => [...prev, tail]);
+    appendBuildLog(tail, !result.success);
     return result.success;
   }, []);
 
   const handleVerify = async () => {
     setIsVerifying(true);
+    setActiveOp('building');
     const ideSettings = getIDESettings();
     const cmd = ideSettings.buildCommand || 'platformio run';
     const ok = await runAgentCommand('Build', cmd);
     if (ok) toast.success('Build succeeded');
     setIsVerifying(false);
+    setActiveOp('idle');
   };
 
   const handleUpload = async () => {
     setIsUploading(true);
+    setActiveOp('flashing');
     const ideSettings = getIDESettings();
     const cmd = ideSettings.flashCommand || 'platformio run --target upload';
     const ok = await runAgentCommand('Flash', cmd);
     if (ok) toast.success('Flash complete');
     setIsUploading(false);
+    setActiveOp('idle');
   };
 
   // Swap default sketch language/extension when board family changes
