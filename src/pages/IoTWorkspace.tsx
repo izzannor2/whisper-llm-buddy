@@ -9,13 +9,15 @@ import { CodeEditor } from '@/components/ide/CodeEditor';
 import { IDEChat } from '@/components/ide/IDEChat';
 import { applyModeTheme } from '@/lib/mode-themes';
 import { BOARD_TYPES, ProjectFile } from '@/lib/ide-types';
-import { generateId } from '@/lib/ide-store';
+import { generateId, getIDESettings } from '@/lib/ide-store';
 import { sendChatMessage, loadSettings, ChatMessage } from '@/lib/chat-api';
 import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { saveConversation, Conversation } from '@/lib/db';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { VoiceCallMode } from '@/components/VoiceCallMode';
+import { executeCommand as agentExec, checkAgentStatus, getAgentStatus } from '@/lib/local-backend-agent';
+import { useAgentStatus } from '@/hooks/use-agent-status';
 
 interface Message {
   id: string;
