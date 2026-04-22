@@ -1,75 +1,94 @@
 
 
-# Three Small UX Wins: Reset Preview, Auto-Open Debug, Copy HTML
+# Mode Validation & Honesty Pass — All Workspaces
 
-Surgical additions. No redesign. No new files.
+Audit and tighten every workspace mode so each behaves honestly and matches its stated purpose. No redesign, no new features beyond what's needed to make existing modes work correctly.
 
-## 1. AI Improvement — "Reset Preview" button
+## Scope
 
-**File: `src/pages/ImproveWorkspace.tsx`**
+10 workspaces to validate: App Builder (IDE), AI Improvement, Embedded/IoT (ESP/Arduino/RPi), System Helper, Learning, Jailbreak, Plugin, Sandbox, plus Chat and All-in-One.
 
-In the right-pane header (visible when `rightTab === 'preview'`), add a **Reset Preview** button next to the existing Refresh button.
+## 1. App Builder (`src/pages/IDE.tsx`)
 
-Behavior:
-- Clears `appliedFiles` state (so the applied-status badges revert to "pending")
-- Clears `previewError`
-- Rebuilds the preview from the original parsed code blocks only (ignoring any local edits to applied files) by calling the existing `buildPreviewHTML` with the freshly parsed blocks
-- Bumps `previewKey` so the iframe fully reloads
-- Toast: `"Preview reset to original code blocks"`
+- Verify streaming preview works for all language code blocks (tsx/ts/jsx/js/css/html/json), not just tsx.
+- Confirm `parseCodeBlocks` handles every format the AI emits (already supports 4 patterns — verify in flow).
+- Ensure preview rebuilds work when only CSS or only JSON changes (currently keyed off `project.updatedAt`, which is correct).
+- Confirm "Stop" during streaming actually aborts and the partial preview stays usable.
 
-Icon: `RotateCcw` from lucide-react (already imported elsewhere in file).
+## 2. AI Improvement (`src/pages/ImproveWorkspace.tsx`)
 
-## 2. IDE — Auto-open Debug tab on preview error
+- Verify the existing Reset Preview, Refresh, Apply All, and Diff buttons all wire to real state.
+- Confirm `previewError` surfaces when build fails (already added).
+- Verify voice auto-send still triggers improvement flow.
 
-**File: `src/pages/IDE.tsx`**
+## 3. Embedded / IoT (`src/pages/IoTWorkspace.tsx`)
 
-The `preview-error` postMessage handler (around lines 502–522) currently appends to `errors` but doesn't switch tabs. Update it:
-- When a new error arrives AND the `autoOpenDebugOnError` setting is enabled AND `rightPanelTab !== 'debug'` → call `setRightPanelTab('debug')`.
-- Read the setting from `ide-store` settings (new field `autoOpenDebugOnError`, default `true`).
+This is the highest-risk mode for fakeness — needs the most attention.
 
-**File: `src/lib/ide-store.ts`**
+- **Build/Flash buttons**: route through `local-backend-agent.executeCommand` using `settings.buildCommand` and `settings.flashCommand`. If agent disconnected → honest toast + "PREVIEW ONLY" output, never fake success.
+- **Serial monitor**: only show "Connected" if the agent reports a real serial connection. If no agent → disabled state with tooltip "Requires LocalDev Agent on port 3847".
+- **Board picker**: confirm all 9 boards in `BOARD_TYPES` (ESP32, ESP32-S3, ESP8266, Arduino Uno/Nano/Mega, RPi Pico/Zero/4) actually swap the system prompt and language template (cpp for Arduino/ESP, python for RPi).
+- **Code generation**: when AI emits cpp/python code, the Apply button writes to project files using the correct extension (.ino for Arduino, .cpp for ESP, .py for RPi).
 
-Add `autoOpenDebugOnError: boolean` to the settings interface and default initial state to `true`. Include in `validateSettings` (default true if missing/invalid).
+## 4. System Helper (`src/pages/Index.tsx` System Helper mode)
 
-**File: `src/pages/IDESettings.tsx`**
+- Verify all proposed system commands route through `system-commands.executeCommand` (already updated to fail honestly if agent offline).
+- Confirm the dangerous-command confirmation gate still requires explicit approval before sending to the agent.
 
-Add a new toggle row in the existing Editor/Workspace settings section:
-- Label: **"Auto-open Debug tab on preview errors"**
-- Description: "When the preview throws an error, automatically switch the right panel to the Debug tab."
-- Bound to `settings.autoOpenDebugOnError` via the existing settings update flow.
+## 5. Learning Mode
 
-## 3. IDE — "Copy preview HTML" button
+- Verify `PatternsSidebar` reads from real `memory-store` learned patterns, not placeholders.
+- Confirm naming convention / framework / folder structure settings actually inject into the system prompt.
 
-**File: `src/components/ide/PreviewPane.tsx`**
+## 6. Jailbreak Mode
 
-Add an optional `onCopyHtml?: () => void` prop. When supplied AND `hasPreview` is true, render a `Copy` icon button in the toolbar (between Refresh and the External Link button). Tooltip: "Copy preview HTML".
+- Verify `settings.jailbreakPrompt` is prepended to system prompt only when `settings.jailbreakEnabled === true`.
+- Confirm visible warning banner stays on while active.
 
-**File: `src/pages/IDE.tsx`**
+## 7. Plugin Mode
 
-Wire it:
-```ts
-onCopyHtml={async () => {
-  const html = previewHtml || (previewUrl ? await fetch(previewUrl).then(r => r.text()).catch(() => '') : '');
-  if (!html) { toast({ title: 'No preview HTML available' }); return; }
-  await navigator.clipboard.writeText(html);
-  toast({ title: 'Preview HTML copied to clipboard' });
-}}
-```
+- Verify `PluginManager` lists real plugins from `plugin-system.ts` (calculator + any user-added).
+- Confirm plugin command execution routes through real handler, not stub.
 
-## 4. Validation
+## 8. Sandbox Mode (`src/pages/SandboxWorkspace.tsx`)
 
-- AI Improvement → Preview tab shows Reset Preview button; clicking clears applied badges and rebuilds iframe.
-- IDE → trigger a preview error (e.g., reference an undefined component) → right panel auto-switches to Debug; toggle off in /settings → no auto-switch on next error.
-- IDE → Preview pane shows Copy icon → clicking copies the current `previewHtml` to clipboard with a success toast.
-- No new dependencies. No settings architecture changes. TypeScript clean.
+- Verify Pyodide path runs real Python (already real via `python-runner.ts`).
+- Verify other-language execution either runs through WebContainers/agent OR shows honest "language not executable in browser" message — no fake success.
 
-## Files Changed
+## 9. Chat & All-in-One
 
-| File | Change |
-|------|--------|
-| `src/pages/ImproveWorkspace.tsx` | Add Reset Preview button in right-pane header |
-| `src/lib/ide-store.ts` | Add `autoOpenDebugOnError` setting (default true) |
-| `src/pages/IDE.tsx` | Auto-switch to Debug tab on preview error (gated by setting); wire `onCopyHtml` |
-| `src/pages/IDESettings.tsx` | Toggle for "Auto-open Debug tab on preview errors" |
-| `src/components/ide/PreviewPane.tsx` | Add `onCopyHtml` prop and Copy icon button in toolbar |
+- Verify mode-routing tags `[ROUTE:xyz]` from All-in-One actually navigate.
+- Confirm conversation persistence by `modeKey` works across all 10 modes.
+
+## Approach
+
+For each mode I will:
+1. Read the workspace file + its key dependencies.
+2. Identify any remaining simulation, fake success path, or broken wiring.
+3. Apply minimal surgical fixes (no redesigns).
+4. Run `tsc --noEmit` after each batch.
+
+## Validation
+
+- Each workspace: open route, send a representative message, verify the response and any action buttons behave honestly (real result OR honest error, never fake success).
+- Embedded mode: select each board family, confirm prompt + language switch and code blocks land in correctly-named files.
+- All "execute / build / flash / start server" buttons: with agent offline → disabled or honest error; with agent online → real command output.
+
+## Files Likely to Change
+
+| File | Likely change |
+|------|----------------|
+| `src/pages/IoTWorkspace.tsx` | Route Build/Flash/Serial through real agent; honest disabled states; correct file extensions per board |
+| `src/pages/SandboxWorkspace.tsx` | Honest "not executable" for non-Python languages without runtime |
+| `src/lib/code-parser.ts` | Add `.ino`/`.py` extension awareness if missing for IoT mode |
+| `src/components/PatternsSidebar.tsx` | Verify reads real memory-store, fix if stubbed |
+| `src/components/ide/PluginManager.tsx` | Verify real plugin execution path |
+| `src/pages/Index.tsx` (mode handlers) | Verify mode-prompt injection for Learning/Jailbreak/Plugin |
+
+Files only touched if a real bug or simulation is found during inspection — minimal surface area.
+
+## Out of Scope
+
+- Settings architecture, routing, sidebar layout, themes — untouched.
+- No new modes, no new features beyond making existing ones honest.
 
