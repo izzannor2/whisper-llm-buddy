@@ -88,6 +88,23 @@ export default function IoTWorkspace() {
     setIsUploading(false);
   };
 
+  // Swap default sketch language/extension when board family changes
+  useEffect(() => {
+    const isPi = board.startsWith('rpi-');
+    const isArduino = board.startsWith('arduino-');
+    const ext = isPi ? 'py' : isArduino ? 'ino' : 'cpp';
+    const lang = isPi ? 'python' : 'cpp';
+    setSelectedFile(prev => {
+      // Only swap when sketch is still the default untouched name
+      if (!prev || (prev.id === 'main' && (prev.name === 'sketch.ino' || prev.name === 'sketch.cpp' || prev.name === 'sketch.py'))) {
+        const next: ProjectFile = { ...DEFAULT_SKETCH, name: `sketch.${ext}`, path: `/sketch.${ext}`, language: lang };
+        setOpenFiles([next]);
+        return next;
+      }
+      return prev;
+    });
+  }, [board]);
+
   const handleFileChange = useCallback((_path: string, content: string) => {
     setSelectedFile(prev => prev ? { ...prev, content } : prev);
     setOpenFiles(prev => prev.map(f => f.path === _path ? { ...f, content } : f));
