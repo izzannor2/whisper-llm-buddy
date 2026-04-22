@@ -207,6 +207,14 @@ export default function IoTWorkspace() {
                     <span className="text-xs font-mono text-teal-300">Serial Monitor</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-[10px] font-mono px-1.5 py-0.5 rounded border',
+                      agent.connected
+                        ? 'text-green-300 border-green-700/40 bg-green-900/20'
+                        : 'text-amber-300 border-amber-700/40 bg-amber-900/20'
+                    )} title={agent.connected ? `Agent v${agent.version} on ${agent.platform}` : 'LocalDev Agent offline (port 3847)'}>
+                      Agent: {agent.connected ? 'connected' : 'offline'}
+                    </span>
                     <span className="text-[10px] font-mono text-teal-500">115200 baud</span>
                     <Button variant="ghost" size="sm" className="h-6 text-[10px] text-teal-400 hover:text-teal-200"
                       onClick={() => setSerialOutput(['[Serial Monitor] Cleared'])}>Clear</Button>
