@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { GraduationCap, Code, FolderTree, Library, Palette, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { getIDESettings } from '@/lib/ide-store';
+import { listMemories, type Memory } from '@/lib/memory-store';
 
 interface Pattern {
   id: string;
@@ -11,20 +13,29 @@ interface Pattern {
   icon: any;
 }
 
-const DEFAULT_PATTERNS: Pattern[] = [
-  { id: '1', category: 'Framework', label: 'Preferred', value: 'React + TypeScript', icon: Code },
-  { id: '2', category: 'Styling', label: 'CSS Framework', value: 'Tailwind CSS', icon: Palette },
-  { id: '3', category: 'Structure', label: 'Folder Layout', value: 'Feature-based', icon: FolderTree },
-  { id: '4', category: 'Libraries', label: 'State Management', value: 'React Query + Zustand', icon: Library },
-  { id: '5', category: 'Naming', label: 'Convention', value: 'camelCase', icon: Code },
-];
-
 interface PatternsSidebarProps {
   onClose: () => void;
 }
 
 export function PatternsSidebar({ onClose }: PatternsSidebarProps) {
-  const [patterns] = useState<Pattern[]>(DEFAULT_PATTERNS);
+  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [learnedMemories, setLearnedMemories] = useState<Memory[]>([]);
+
+  useEffect(() => {
+    const s = getIDESettings();
+    setPatterns([
+      { id: 'fw', category: 'Framework', label: 'Preferred', value: s.preferredFramework || '—', icon: Code },
+      { id: 'naming', category: 'Naming', label: 'Convention', value: s.namingConvention || '—', icon: Code },
+      { id: 'folder', category: 'Structure', label: 'Folder Layout', value: s.folderStructure || '—', icon: FolderTree },
+      { id: 'styling', category: 'Styling', label: 'CSS Framework', value: 'Tailwind CSS', icon: Palette },
+      { id: 'libs', category: 'Libraries', label: 'State', value: 'React Query + Zustand', icon: Library },
+    ]);
+
+    // Try to fetch learned patterns from memory store (tag: 'learning-pattern')
+    listMemories(20)
+      .then(mems => setLearnedMemories(mems.filter(m => (m.tags || []).includes('learning-pattern'))))
+      .catch(() => setLearnedMemories([]));
+  }, []);
 
   return (
     <div className="h-full flex flex-col border-l" style={{
@@ -59,8 +70,25 @@ export function PatternsSidebar({ onClose }: PatternsSidebarProps) {
             );
           })}
         </div>
+
+        {learnedMemories.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[10px] text-green-500 font-medium uppercase mb-2">Observed from chat</p>
+            <div className="space-y-2">
+              {learnedMemories.map(m => (
+                <div key={m.id} className="p-2 rounded border text-xs text-green-300" style={{
+                  background: 'hsl(142, 20%, 8%)',
+                  borderColor: 'hsl(142, 25%, 15%)',
+                }}>
+                  {m.content.slice(0, 140)}{m.content.length > 140 ? '…' : ''}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <p className="text-[10px] text-green-600 mt-4 text-center">
-          Patterns are observed from your conversations
+          Update preferences in Settings → Learning
         </p>
       </ScrollArea>
     </div>

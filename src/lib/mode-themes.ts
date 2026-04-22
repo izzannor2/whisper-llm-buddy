@@ -175,7 +175,24 @@ export function getModeSystemPrompt(modeKey: string, userJailbreakPrompt?: strin
   if (modeKey === 'jailbreak' && userJailbreakPrompt) {
     return userJailbreakPrompt;
   }
-  return MODE_THEMES[modeKey]?.systemPrompt || '';
+  let base = MODE_THEMES[modeKey]?.systemPrompt || '';
+  // Append learned developer preferences for Learning Mode (and All-in-One)
+  if (modeKey === 'learning' || modeKey === 'all-in-one') {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('ide-settings') : null;
+      if (raw) {
+        const s = JSON.parse(raw);
+        const prefs: string[] = [];
+        if (s.preferredFramework) prefs.push(`Preferred framework: ${s.preferredFramework}`);
+        if (s.namingConvention) prefs.push(`Naming convention: ${s.namingConvention}`);
+        if (s.folderStructure) prefs.push(`Folder structure: ${s.folderStructure}`);
+        if (prefs.length) {
+          base += `\n\nUser developer preferences (honor these in all suggestions):\n- ${prefs.join('\n- ')}`;
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  return base;
 }
 
 export function applyModeTheme(modeKey: string): void {

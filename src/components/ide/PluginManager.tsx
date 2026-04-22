@@ -96,12 +96,11 @@ export function PluginManager({ plugins, onPluginsChange, className }: PluginMan
 
   const handleRunCommand = async (plugin: Plugin, command: PluginCommand) => {
     toast.info(`Running ${command.name}...`);
-    
-    // In a real implementation, this would execute the command
+
     if (command.endpoint) {
       try {
         const response = await fetch(command.endpoint);
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         toast.success(`${command.name} completed`, {
           description: JSON.stringify(data).substring(0, 100),
         });
@@ -110,10 +109,33 @@ export function PluginManager({ plugins, onPluginsChange, className }: PluginMan
           description: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    } else if (command.script) {
-      // Would execute script via local agent
-      toast.info('Script execution requires local agent');
+      return;
     }
+
+    if (command.script) {
+      const { executeCommand, getAgentStatus, checkAgentStatus } = await import('@/lib/local-backend-agent');
+      let s = getAgentStatus();
+      if (!s.connected) s = await checkAgentStatus();
+      if (!s.connected) {
+        toast.error('Local agent not connected', {
+          description: 'Start the LocalDev Agent on port 3847 to run scripts.',
+        });
+        return;
+      }
+      const result = await executeCommand(command.script);
+      if (result.success) {
+        toast.success(`${command.name} completed`, {
+          description: (result.output || '').slice(0, 200) || `exit ${result.exitCode ?? 0}`,
+        });
+      } else {
+        toast.error(`${command.name} failed`, {
+          description: (result.error || result.output || '').slice(0, 200),
+        });
+      }
+      return;
+    }
+
+    toast.warning(`${command.name} has no endpoint or script configured`);
   };
 
   return (

@@ -9,13 +9,15 @@ import { CodeEditor } from '@/components/ide/CodeEditor';
 import { IDEChat } from '@/components/ide/IDEChat';
 import { applyModeTheme } from '@/lib/mode-themes';
 import { BOARD_TYPES, ProjectFile } from '@/lib/ide-types';
-import { generateId } from '@/lib/ide-store';
+import { generateId, getIDESettings } from '@/lib/ide-store';
 import { sendChatMessage, loadSettings, ChatMessage } from '@/lib/chat-api';
 import { speak, isTTSSupported, stopSpeaking } from '@/lib/tts';
 import { saveConversation, Conversation } from '@/lib/db';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { VoiceCallMode } from '@/components/VoiceCallMode';
+import { executeCommand as agentExec, checkAgentStatus, getAgentStatus } from '@/lib/local-backend-agent';
+import { useAgentStatus } from '@/hooks/use-agent-status';
 
 interface Message {
   id: string;
@@ -33,7 +35,9 @@ const DEFAULT_SKETCH: ProjectFile = {
 export default function IoTWorkspace() {
   const navigate = useNavigate();
   const [board, setBoard] = useState('esp32');
-  const [serialOutput, setSerialOutput] = useState<string[]>(['[Serial Monitor] Ready...']);
+  const [serialOutput, setSerialOutput] = useState<string[]>([
+    '[Serial Monitor] Idle — connect the LocalDev Agent (port 3847) to enable real serial output.',
+  ]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
@@ -43,27 +47,63 @@ export default function IoTWorkspace() {
   const [isUploading, setIsUploading] = useState(false);
   const [convId] = useState(() => generateId());
   const [showVoiceCall, setShowVoiceCall] = useState(false);
+  const agent = useAgentStatus();
   useEffect(() => { applyModeTheme('embedded-iot'); }, []);
 
-  const handleVerify = () => {
+  const runAgentCommand = useCallback(async (label: string, cmd: string): Promise<boolean> => {
+    let s = getAgentStatus();
+    if (!s.connected) s = await checkAgentStatus();
+    if (!s.connected) {
+      setSerialOutput(prev => [
+        ...prev,
+        `[${label}] PREVIEW ONLY — NOT EXECUTED. Local agent not connected on port 3847.`,
+        `[${label}] Start the LocalDev Agent to run: ${cmd}`,
+      ]);
+      toast.error('Local agent not connected', { description: 'Start the agent on port 3847 to run real build/flash.' });
+      return false;
+    }
+    setSerialOutput(prev => [...prev, `[${label}] $ ${cmd}`]);
+    const result = await agentExec(cmd);
+    if (result.output) setSerialOutput(prev => [...prev, ...result.output.split('\n').filter(Boolean)]);
+    if (result.error) setSerialOutput(prev => [...prev, ...result.error!.split('\n').filter(Boolean).map(l => `[err] ${l}`)]);
+    setSerialOutput(prev => [...prev, result.success ? `[${label}] ✓ Completed (exit ${result.exitCode ?? 0})` : `[${label}] ✗ Failed (exit ${result.exitCode ?? 1})`]);
+    return result.success;
+  }, []);
+
+  const handleVerify = async () => {
     setIsVerifying(true);
-    setSerialOutput(prev => [...prev, '[Compiling] Verifying sketch...']);
-    setTimeout(() => {
-      setSerialOutput(prev => [...prev, '[Compiling] Sketch uses 245320 bytes (18%) of program storage', '[Compiling] ✓ Compilation successful']);
-      setIsVerifying(false);
-      toast.success('Compilation successful');
-    }, 1500);
+    const ideSettings = getIDESettings();
+    const cmd = ideSettings.buildCommand || 'platformio run';
+    const ok = await runAgentCommand('Build', cmd);
+    if (ok) toast.success('Build succeeded');
+    setIsVerifying(false);
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     setIsUploading(true);
-    setSerialOutput(prev => [...prev, `[Upload] Uploading to ${BOARD_TYPES.find(b => b.id === board)?.name}...`]);
-    setTimeout(() => {
-      setSerialOutput(prev => [...prev, '[Upload] Writing at 0x00010000... (100%)', '[Upload] ✓ Upload complete']);
-      setIsUploading(false);
-      toast.success('Upload complete');
-    }, 2000);
+    const ideSettings = getIDESettings();
+    const cmd = ideSettings.flashCommand || 'platformio run --target upload';
+    const ok = await runAgentCommand('Flash', cmd);
+    if (ok) toast.success('Flash complete');
+    setIsUploading(false);
   };
+
+  // Swap default sketch language/extension when board family changes
+  useEffect(() => {
+    const isPi = board.startsWith('rpi-');
+    const isArduino = board.startsWith('arduino-');
+    const ext = isPi ? 'py' : isArduino ? 'ino' : 'cpp';
+    const lang = isPi ? 'python' : 'cpp';
+    setSelectedFile(prev => {
+      // Only swap when sketch is still the default untouched name
+      if (!prev || (prev.id === 'main' && (prev.name === 'sketch.ino' || prev.name === 'sketch.cpp' || prev.name === 'sketch.py'))) {
+        const next: ProjectFile = { ...DEFAULT_SKETCH, name: `sketch.${ext}`, path: `/sketch.${ext}`, language: lang };
+        setOpenFiles([next]);
+        return next;
+      }
+      return prev;
+    });
+  }, [board]);
 
   const handleFileChange = useCallback((_path: string, content: string) => {
     setSelectedFile(prev => prev ? { ...prev, content } : prev);
@@ -184,6 +224,14 @@ export default function IoTWorkspace() {
                     <span className="text-xs font-mono text-teal-300">Serial Monitor</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-[10px] font-mono px-1.5 py-0.5 rounded border',
+                      agent.connected
+                        ? 'text-green-300 border-green-700/40 bg-green-900/20'
+                        : 'text-amber-300 border-amber-700/40 bg-amber-900/20'
+                    )} title={agent.connected ? `Agent v${agent.version} on ${agent.platform}` : 'LocalDev Agent offline (port 3847)'}>
+                      Agent: {agent.connected ? 'connected' : 'offline'}
+                    </span>
                     <span className="text-[10px] font-mono text-teal-500">115200 baud</span>
                     <Button variant="ghost" size="sm" className="h-6 text-[10px] text-teal-400 hover:text-teal-200"
                       onClick={() => setSerialOutput(['[Serial Monitor] Cleared'])}>Clear</Button>
