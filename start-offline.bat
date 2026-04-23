@@ -22,17 +22,41 @@ for %%D in (logs models\gguf models\ollama bin\node bin\ollama bin\llama config)
     if not exist "%%D" mkdir "%%D" 2>nul
 )
 
-:: Reset PID tracker
-> "logs\pids.txt" echo.
+:: Reset PID tracker (truncate, no blank line)
+break > "logs\pids.txt"
 
 :: ----------------------------------------------------
-:: Verify portable Node.js
+:: PREFLIGHT - verify ports free + required files exist
 :: ----------------------------------------------------
-if not exist "bin\node\node.exe" (
-    echo  [ERROR] Portable Node.js missing.
-    echo  Run scripts\prepare-usb.bat on a connected PC first.
+echo [0/4] Running preflight checks...
+set "PREFLIGHT_FAIL=0"
+
+for %%F in ("bin\node\node.exe" "server\index.js" "server\static.cjs" "dist\index.html") do (
+    if not exist %%F (
+        echo       [FAIL] Missing: %%F
+        set "PREFLIGHT_FAIL=1"
+    )
+)
+
+for %%P in (8080 3847) do (
+    netstat -ano | findstr ":%%P " | findstr "LISTENING" >nul 2>&1
+    if not errorlevel 1 (
+        echo       [FAIL] Port %%P already in use
+        set "PREFLIGHT_FAIL=1"
+    )
+)
+netstat -ano | findstr ":11434 " | findstr "LISTENING" >nul 2>&1
+if not errorlevel 1 echo       [WARN] Port 11434 in use - will reuse existing Ollama
+
+if "!PREFLIGHT_FAIL!"=="1" (
+    echo.
+    echo  [ERROR] Preflight failed. Fix issues above and retry.
+    echo  - Run scripts\prepare-usb.bat to install missing files
+    echo  - Run stop-offline.bat to free ports from a previous run
     pause & exit /b 1
 )
+echo       [OK] All checks passed
+
 set "PATH=%ROOT%\bin\node;%ROOT%\bin\ollama;%PATH%"
 echo [1/4] [OK] Portable Node.js ready
 
@@ -46,8 +70,13 @@ if exist "bin\ollama\ollama.exe" (
     curl -s http://localhost:11434/api/tags >nul 2>&1
     if errorlevel 1 (
         echo [2/4] [*] Starting portable Ollama...
-        start "OLLAMA" /B cmd /c "set OLLAMA_MODELS=%ROOT%\models\ollama&& set OLLAMA_HOST=127.0.0.1:11434&& bin\ollama\ollama.exe serve >> logs\ollama.log 2>&1"
-        powershell -NoProfile -Command "(Get-Process ollama -ErrorAction SilentlyContinue | Select-Object -First 1).Id" >> "logs\pids.txt" 2>nul
+        start "OLLAMA" /B cmd /c "set OLLAMA_MODELS=%ROOT%\models\ollama& set OLLAMA_HOST=127.0.0.1:11434& bin\ollama\ollama.exe serve >> logs\ollama.log 2>&1"
+        timeout /t 1 /nobreak >nul
+        for /f "tokens=2" %%P in ('tasklist /FI "IMAGENAME eq ollama.exe" /NH ^| sort /R') do (
+            echo %%P>> "logs\pids.txt"
+            goto :ollama_pid_done
+        )
+        :ollama_pid_done
         for /l %%i in (1,1,10) do (
             curl -s http://localhost:11434/api/tags >nul 2>&1
             if not errorlevel 1 (
@@ -81,32 +110,39 @@ if defined GGUF_MODEL if exist "bin\llama\llama-server.exe" (
     if errorlevel 1 (
         echo       [*] Starting llama-server with !GGUF_MODEL!
         start "LLAMA" /B cmd /c "bin\llama\llama-server.exe -m \"!GGUF_MODEL!\" --port 8081 --host 0.0.0.0 -ngl 99 >> logs\llama.log 2>&1"
-        powershell -NoProfile -Command "(Get-Process llama-server -ErrorAction SilentlyContinue | Select-Object -First 1).Id" >> "logs\pids.txt" 2>nul
+        timeout /t 1 /nobreak >nul
+        for /f "tokens=2" %%P in ('tasklist /FI "IMAGENAME eq llama-server.exe" /NH ^| sort /R') do (
+            echo %%P>> "logs\pids.txt"
+            goto :llama_pid_done
+        )
+        :llama_pid_done
     )
 )
 
 :: ----------------------------------------------------
 :: Local Agent server on 3847
 :: ----------------------------------------------------
-if exist "server\index.js" (
-    echo [3/4] [*] Starting local agent on :3847...
-    start "AGENT" /B cmd /c "bin\node\node.exe server\index.js >> logs\agent.log 2>&1"
-    powershell -NoProfile -Command "Start-Sleep -Milliseconds 500; (Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like '*server\index.js*' } | Select-Object -First 1).ProcessId" >> "logs\pids.txt" 2>nul
-    echo       [OK] Agent launched
-) else (
-    echo [3/4] [!] server\index.js missing - skipping agent
+echo [3/4] [*] Starting local agent on :3847...
+start "AGENT" /B cmd /c "bin\node\node.exe server\index.js >> logs\agent.log 2>&1"
+timeout /t 1 /nobreak >nul
+for /f "tokens=2" %%P in ('tasklist /FI "IMAGENAME eq node.exe" /NH ^| sort /R') do (
+    echo %%P>> "logs\pids.txt"
+    goto :agent_pid_done
 )
+:agent_pid_done
+echo       [OK] Agent launched
 
 :: ----------------------------------------------------
 :: Static web server for dist\
 :: ----------------------------------------------------
-if not exist "dist\index.html" (
-    echo  [ERROR] dist\ not built. Run scripts\prepare-usb.bat first.
-    pause & exit /b 1
-)
 echo [4/4] [*] Starting web server on :8080...
 start "WEB" /B cmd /c "bin\node\node.exe server\static.cjs >> logs\web.log 2>&1"
-powershell -NoProfile -Command "Start-Sleep -Milliseconds 500; (Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like '*server\static.cjs*' } | Select-Object -First 1).ProcessId" >> "logs\pids.txt" 2>nul
+timeout /t 1 /nobreak >nul
+for /f "tokens=2" %%P in ('tasklist /FI "IMAGENAME eq node.exe" /NH ^| sort /R') do (
+    echo %%P>> "logs\pids.txt"
+    goto :web_pid_done
+)
+:web_pid_done
 
 :: Open browser
 start /B cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8080"
