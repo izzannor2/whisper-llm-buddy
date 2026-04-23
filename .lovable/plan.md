@@ -1,94 +1,101 @@
 
 
-# Mode Validation & Honesty Pass — All Workspaces
+# Fully Portable USB Runtime — Offline .bat Suite
 
-Audit and tighten every workspace mode so each behaves honestly and matches its stated purpose. No redesign, no new features beyond what's needed to make existing modes work correctly.
+Make the project run end-to-end from a USB stick on any Windows PC with **zero installs on the host**. Everything (Node, Ollama, models, app) lives inside the project folder.
 
-## Scope
+## Current State
 
-10 workspaces to validate: App Builder (IDE), AI Improvement, Embedded/IoT (ESP/Arduino/RPi), System Helper, Learning, Jailbreak, Plugin, Sandbox, plus Chat and All-in-One.
+You already have:
+- `start.bat`, `start.sh`, `scripts/setup.bat`, `scripts/setup.ps1`, `scripts/setup.sh`
+- `bin/node/`, `bin/ollama/`, `bin/llama/`, `models/gguf/`, `models/ollama/` directory scaffolding
+- `config/settings.json` with relative paths
+- `server/index.js` local agent on port 3847
 
-## 1. App Builder (`src/pages/IDE.tsx`)
+**Gaps:**
+1. No script that **downloads** portable Node + Ollama into `bin/` (current scripts assume binaries are already there or fall back to system installs).
+2. No script that **bundles a built dist + offline server** so the app runs without `npm run dev` (Vite needs network for the first install).
+3. `OLLAMA_MODELS` env var not set when launching Ollama → it writes models to `%USERPROFILE%\.ollama` on the host instead of `models/ollama/` on the USB.
+4. No "fully offline" launcher that skips all network checks.
+5. No single `INSTALL-TO-USB.bat` that prepares a fresh USB from a connected PC.
 
-- Verify streaming preview works for all language code blocks (tsx/ts/jsx/js/css/html/json), not just tsx.
-- Confirm `parseCodeBlocks` handles every format the AI emits (already supports 4 patterns — verify in flow).
-- Ensure preview rebuilds work when only CSS or only JSON changes (currently keyed off `project.updatedAt`, which is correct).
-- Confirm "Stop" during streaming actually aborts and the partial preview stays usable.
+## What I'll Add
 
-## 2. AI Improvement (`src/pages/ImproveWorkspace.tsx`)
+### 1. `scripts/prepare-usb.bat` (run ONCE on a connected PC)
+One-time prep script — downloads everything portable into the project folder so it can be copied to USB:
+- Downloads **portable Node.js 20 LTS** zip → extracts to `bin/node/`
+- Downloads **Ollama Windows zip** → extracts to `bin/ollama/`
+- Runs `npm ci` using portable Node to populate `node_modules/`
+- Runs `npm run build` to produce `dist/` (so app runs without dev server)
+- Pulls default model `llama3.2` into `models/ollama/` via `OLLAMA_MODELS` env redirect
+- Verifies all binaries with version checks
+- Prints "USB ready — copy entire folder to USB drive"
 
-- Verify the existing Reset Preview, Refresh, Apply All, and Diff buttons all wire to real state.
-- Confirm `previewError` surfaces when build fails (already added).
-- Verify voice auto-send still triggers improvement flow.
+### 2. `start-offline.bat` (the daily-driver launcher)
+Pure-offline launcher — no network calls, no install attempts:
+- Sets `OLLAMA_MODELS=%CD%\models\ollama` so Ollama uses USB storage
+- Sets `PATH=%CD%\bin\node;%CD%\bin\ollama;%PATH%`
+- Starts portable Ollama serve in background (if `bin/ollama/ollama.exe` exists)
+- Starts portable llama-server in background (if `bin/llama/llama-server.exe` + a `.gguf` exists)
+- Starts the local agent server (`server/index.js`) on port 3847
+- Serves the prebuilt `dist/` via a tiny static server on port 8080 (using portable Node + a vendored `serve` package, or a 30-line static server we ship in `server/static.cjs`)
+- Opens browser to `http://localhost:8080`
+- Single console window with tagged output (`[OLLAMA]`, `[AGENT]`, `[WEB]`)
 
-## 3. Embedded / IoT (`src/pages/IoTWorkspace.tsx`)
+### 3. `stop-offline.bat`
+Cleanly kills Ollama, llama-server, agent, and static server processes started by `start-offline.bat` (tracks PIDs in `logs/pids.txt`).
 
-This is the highest-risk mode for fakeness — needs the most attention.
+### 4. `server/static.cjs` (~40 lines)
+Tiny zero-dependency Node static file server that serves `dist/` with SPA fallback to `index.html`. Avoids needing the `serve` npm package over network.
 
-- **Build/Flash buttons**: route through `local-backend-agent.executeCommand` using `settings.buildCommand` and `settings.flashCommand`. If agent disconnected → honest toast + "PREVIEW ONLY" output, never fake success.
-- **Serial monitor**: only show "Connected" if the agent reports a real serial connection. If no agent → disabled state with tooltip "Requires LocalDev Agent on port 3847".
-- **Board picker**: confirm all 9 boards in `BOARD_TYPES` (ESP32, ESP32-S3, ESP8266, Arduino Uno/Nano/Mega, RPi Pico/Zero/4) actually swap the system prompt and language template (cpp for Arduino/ESP, python for RPi).
-- **Code generation**: when AI emits cpp/python code, the Apply button writes to project files using the correct extension (.ino for Arduino, .cpp for ESP, .py for RPi).
+### 5. Update `start.bat` (existing)
+Keep as-is for "online dev mode" but add a top banner: `"For pure offline USB usage, run start-offline.bat instead"`.
 
-## 4. System Helper (`src/pages/Index.tsx` System Helper mode)
+### 6. `USB-README.md` (root)
+Plain-English instructions:
+- "First time on a connected PC: double-click `scripts\prepare-usb.bat`"
+- "Then copy the whole folder to your USB drive"
+- "On any Windows PC: double-click `start-offline.bat`"
+- Troubleshooting: port conflicts, Windows SmartScreen warning, antivirus quarantine of `ollama.exe`
 
-- Verify all proposed system commands route through `system-commands.executeCommand` (already updated to fail honestly if agent offline).
-- Confirm the dangerous-command confirmation gate still requires explicit approval before sending to the agent.
+## Technical Details
 
-## 5. Learning Mode
+**Portable Node download URL** (no installer):  
+`https://nodejs.org/dist/v20.18.0/node-v20.18.0-win-x64.zip`
 
-- Verify `PatternsSidebar` reads from real `memory-store` learned patterns, not placeholders.
-- Confirm naming convention / framework / folder structure settings actually inject into the system prompt.
+**Ollama Windows portable**:  
+`https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip`
 
-## 6. Jailbreak Mode
+**OLLAMA_MODELS env**: Setting this before `ollama serve` redirects all model storage to a custom path — confirmed Ollama-supported env var.
 
-- Verify `settings.jailbreakPrompt` is prepended to system prompt only when `settings.jailbreakEnabled === true`.
-- Confirm visible warning banner stays on while active.
+**Static server**: `http.createServer` + `fs.readFileSync` + simple MIME map + SPA fallback. ~40 lines, zero deps, ships in `server/static.cjs`.
 
-## 7. Plugin Mode
+**PID tracking**: Each background `start "" /B` writes its PID to `logs/pids.txt` via PowerShell one-liner; `stop-offline.bat` reads and `taskkill /F /PID` each.
 
-- Verify `PluginManager` lists real plugins from `plugin-system.ts` (calculator + any user-added).
-- Confirm plugin command execution routes through real handler, not stub.
-
-## 8. Sandbox Mode (`src/pages/SandboxWorkspace.tsx`)
-
-- Verify Pyodide path runs real Python (already real via `python-runner.ts`).
-- Verify other-language execution either runs through WebContainers/agent OR shows honest "language not executable in browser" message — no fake success.
-
-## 9. Chat & All-in-One
-
-- Verify mode-routing tags `[ROUTE:xyz]` from All-in-One actually navigate.
-- Confirm conversation persistence by `modeKey` works across all 10 modes.
-
-## Approach
-
-For each mode I will:
-1. Read the workspace file + its key dependencies.
-2. Identify any remaining simulation, fake success path, or broken wiring.
-3. Apply minimal surgical fixes (no redesigns).
-4. Run `tsc --noEmit` after each batch.
+**Drive-letter independence**: All scripts use `%~dp0` (script's own directory) and `cd /d "%~dp0\.."` so they work from any drive letter — already the existing convention.
 
 ## Validation
 
-- Each workspace: open route, send a representative message, verify the response and any action buttons behave honestly (real result OR honest error, never fake success).
-- Embedded mode: select each board family, confirm prompt + language switch and code blocks land in correctly-named files.
-- All "execute / build / flash / start server" buttons: with agent offline → disabled or honest error; with agent online → real command output.
+- On a fresh Windows VM with no Node/Ollama: copy USB folder → double-click `start-offline.bat` → app loads at `localhost:8080`, Ollama serves models from `models/ollama/`, agent responds on 3847. **No host installs.**
+- Pull USB → plug into different PC → same flow works without re-prep.
+- `stop-offline.bat` cleanly kills all processes; no orphans.
+- Existing `start.bat` / `start.sh` / dev workflow unchanged.
 
-## Files Likely to Change
+## Files Changed/Added
 
-| File | Likely change |
-|------|----------------|
-| `src/pages/IoTWorkspace.tsx` | Route Build/Flash/Serial through real agent; honest disabled states; correct file extensions per board |
-| `src/pages/SandboxWorkspace.tsx` | Honest "not executable" for non-Python languages without runtime |
-| `src/lib/code-parser.ts` | Add `.ino`/`.py` extension awareness if missing for IoT mode |
-| `src/components/PatternsSidebar.tsx` | Verify reads real memory-store, fix if stubbed |
-| `src/components/ide/PluginManager.tsx` | Verify real plugin execution path |
-| `src/pages/Index.tsx` (mode handlers) | Verify mode-prompt injection for Learning/Jailbreak/Plugin |
-
-Files only touched if a real bug or simulation is found during inspection — minimal surface area.
+| File | Change |
+|------|--------|
+| `scripts/prepare-usb.bat` | **NEW** — one-time USB prep (downloads Node + Ollama + builds dist + pulls model) |
+| `start-offline.bat` | **NEW** — pure-offline launcher with portable everything |
+| `stop-offline.bat` | **NEW** — clean shutdown of all background processes |
+| `server/static.cjs` | **NEW** — zero-dep static file server for `dist/` |
+| `start.bat` | Add banner pointing to `start-offline.bat` for USB use |
+| `USB-README.md` | **NEW** — root-level USB usage guide |
+| `.gitignore` | Add `bin/node/`, `bin/ollama/*.exe`, `dist/`, `logs/pids.txt` if missing |
 
 ## Out of Scope
 
-- Settings architecture, routing, sidebar layout, themes — untouched.
-- No new modes, no new features beyond making existing ones honest.
+- macOS/Linux portable equivalents (existing `start.sh` covers dev; portable Linux Node/Ollama bundling would be a follow-up).
+- Auto-updating portable binaries — manual re-run of `prepare-usb.bat` refreshes them.
+- Bundling .gguf models into the prep script (too large; user drops their own into `models/gguf/`).
 
