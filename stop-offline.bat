@@ -10,28 +10,36 @@ echo.
 echo  Stopping LocalDev AI offline services...
 echo.
 
-:: Kill tracked PIDs first
-if exist "logs\pids.txt" (
-    for /f "usebackq tokens=*" %%P in ("logs\pids.txt") do (
-        if not "%%P"=="" (
-            taskkill /F /PID %%P >nul 2>&1
-            if not errorlevel 1 echo  [OK] Killed PID %%P
+if not exist "logs\pids.txt" (
+    echo  [INFO] No logs\pids.txt found - nothing to stop.
+    echo  (start-offline.bat was not run, or already stopped)
+    echo.
+    pause & exit /b 0
+)
+
+set "STOPPED=0"
+for /f "usebackq tokens=* eol=#" %%P in ("logs\pids.txt") do (
+    set "PID=%%P"
+    if not "!PID!"=="" (
+        :: Verify PID is purely numeric before killing
+        set "NONNUM="
+        for /f "delims=0123456789" %%X in ("!PID!") do set "NONNUM=1"
+        if not defined NONNUM (
+            taskkill /F /PID !PID! >nul 2>&1
+            if not errorlevel 1 (
+                echo  [OK] Killed PID !PID!
+                set /a STOPPED+=1
+            ) else (
+                echo  [--] PID !PID! already gone
+            )
         )
     )
-    del "logs\pids.txt" 2>nul
 )
 
-:: Belt-and-suspenders: kill known process names
-for %%N in (ollama.exe llama-server.exe) do (
-    taskkill /F /IM %%N >nul 2>&1
-    if not errorlevel 1 echo  [OK] Killed %%N
-)
-
-:: Kill node processes serving our scripts (match by command line)
-powershell -NoProfile -Command "Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like '*server\index.js*' -or $_.CommandLine -like '*server\static.cjs*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; Write-Host ('  [OK] Killed node PID ' + $_.ProcessId) }"
-
+del "logs\pids.txt" 2>nul
 echo.
-echo  All offline services stopped.
+echo  Stopped !STOPPED! tracked process(es).
+echo  Other ollama/node processes on this PC were left untouched.
 echo.
 pause
 endlocal
