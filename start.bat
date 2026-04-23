@@ -16,6 +16,9 @@ echo.
 echo  ╔══════════════════════════════════════════╗
 echo  ║         LocalDev AI - Quick Start        ║
 echo  ╚══════════════════════════════════════════╝
+echo  TIP: For pure offline USB usage, run
+echo       start-offline.bat instead (no internet
+echo       required, uses portable bin\ binaries).
 echo.
 
 :: Ensure directories exist (self-healing)
