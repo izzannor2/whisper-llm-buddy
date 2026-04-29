@@ -36,11 +36,13 @@ interface SystemHealthStatus {
 }
 
 interface SettingsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   settings: ChatSettings;
   onSave: (settings: ChatSettings) => void;
   initialTab?: string;
+  /** When true, render content inline (no Dialog wrapper). Used by the consolidated /settings page. */
+  inline?: boolean;
 }
 
 // No placeholder models - only show what's actually available
@@ -51,6 +53,7 @@ export function SettingsDialog({
   settings,
   onSave,
   initialTab,
+  inline = false,
 }: SettingsDialogProps) {
   const [localSettings, setLocalSettings] = useState<ChatSettings>(settings);
   const [localModels, setLocalModels] = useState<string[]>([]);
