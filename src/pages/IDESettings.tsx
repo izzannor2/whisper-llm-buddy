@@ -21,6 +21,7 @@ import { LocalModelPicker } from '@/components/LocalModelPicker';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { SettingsDialog } from '@/components/SettingsDialog';
+import { LauncherToolsDialog } from '@/components/LauncherToolsDialog';
 import { loadSettings as loadChatSettings, saveSettings as saveChatSettings, type ChatSettings } from '@/lib/chat-api';
 
 // Simple QR code generator using canvas
@@ -230,7 +231,10 @@ export default function IDESettingsPage() {
           </Button>
           <h1 className="text-xl font-bold">Settings</h1>
         </div>
-        <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Save</Button>
+        <div className="flex items-center gap-2">
+          <LauncherToolsDialog />
+          <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Save</Button>
+        </div>
       </header>
 
       <ScrollArea className="h-[calc(100vh-56px)]">
