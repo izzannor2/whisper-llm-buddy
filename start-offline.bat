@@ -61,6 +61,18 @@ set "PATH=%ROOT%\bin\node;%ROOT%\bin\ollama;%PATH%"
 echo [1/4] [OK] Portable Node.js ready
 
 :: ----------------------------------------------------
+:: Snapshot pre-existing node.exe / ollama.exe / llama-server.exe PIDs
+:: so we can detect newly spawned ones reliably (PID diffing).
+:: We set per-PID env vars: SEEN_<imagename>_<pid>=1
+:: ----------------------------------------------------
+for %%I in (node.exe ollama.exe llama-server.exe) do (
+    for /f "tokens=2 delims=," %%P in ('tasklist /FI "IMAGENAME eq %%I" /NH /FO CSV 2^>nul') do (
+        set "PID=%%~P"
+        set "SEEN_%%I_!PID!=1"
+    )
+)
+
+:: ----------------------------------------------------
 :: Portable Ollama (optional)
 :: ----------------------------------------------------
 set "OLLAMA_RUNNING=0"
@@ -71,12 +83,8 @@ if exist "bin\ollama\ollama.exe" (
     if errorlevel 1 (
         echo [2/4] [*] Starting portable Ollama...
         start "OLLAMA" /B cmd /c "set OLLAMA_MODELS=%ROOT%\models\ollama& set OLLAMA_HOST=127.0.0.1:11434& bin\ollama\ollama.exe serve >> logs\ollama.log 2>&1"
-        timeout /t 1 /nobreak >nul
-        for /f "tokens=2" %%P in ('tasklist /FI "IMAGENAME eq ollama.exe" /NH ^| sort /R') do (
-            echo %%P>> "logs\pids.txt"
-            goto :ollama_pid_done
-        )
-        :ollama_pid_done
+        timeout /t 2 /nobreak >nul
+        call :capture_new_pid ollama.exe
         for /l %%i in (1,1,10) do (
             curl -s http://localhost:11434/api/tags >nul 2>&1
             if not errorlevel 1 (
@@ -110,12 +118,8 @@ if defined GGUF_MODEL if exist "bin\llama\llama-server.exe" (
     if errorlevel 1 (
         echo       [*] Starting llama-server with !GGUF_MODEL!
         start "LLAMA" /B cmd /c "bin\llama\llama-server.exe -m \"!GGUF_MODEL!\" --port 8081 --host 0.0.0.0 -ngl 99 >> logs\llama.log 2>&1"
-        timeout /t 1 /nobreak >nul
-        for /f "tokens=2" %%P in ('tasklist /FI "IMAGENAME eq llama-server.exe" /NH ^| sort /R') do (
-            echo %%P>> "logs\pids.txt"
-            goto :llama_pid_done
-        )
-        :llama_pid_done
+        timeout /t 2 /nobreak >nul
+        call :capture_new_pid llama-server.exe
     )
 )
 
@@ -124,12 +128,8 @@ if defined GGUF_MODEL if exist "bin\llama\llama-server.exe" (
 :: ----------------------------------------------------
 echo [3/4] [*] Starting local agent on :3847...
 start "AGENT" /B cmd /c "bin\node\node.exe server\index.js >> logs\agent.log 2>&1"
-timeout /t 1 /nobreak >nul
-for /f "tokens=2" %%P in ('tasklist /FI "IMAGENAME eq node.exe" /NH ^| sort /R') do (
-    echo %%P>> "logs\pids.txt"
-    goto :agent_pid_done
-)
-:agent_pid_done
+timeout /t 2 /nobreak >nul
+call :capture_new_pid node.exe
 echo       [OK] Agent launched
 
 :: ----------------------------------------------------
@@ -137,12 +137,8 @@ echo       [OK] Agent launched
 :: ----------------------------------------------------
 echo [4/4] [*] Starting web server on :8080...
 start "WEB" /B cmd /c "bin\node\node.exe server\static.cjs >> logs\web.log 2>&1"
-timeout /t 1 /nobreak >nul
-for /f "tokens=2" %%P in ('tasklist /FI "IMAGENAME eq node.exe" /NH ^| sort /R') do (
-    echo %%P>> "logs\pids.txt"
-    goto :web_pid_done
-)
-:web_pid_done
+timeout /t 2 /nobreak >nul
+call :capture_new_pid node.exe
 
 :: Open browser
 start /B cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8080"
@@ -164,3 +160,21 @@ echo  Press any key to keep this window open...
 echo  (closing this window does NOT stop services)
 pause >nul
 endlocal
+goto :eof
+
+:: ----------------------------------------------------
+:: :capture_new_pid <imagename>
+:: Compares current PIDs of <imagename> against the SEEN_ map.
+:: Any PID not in the map is appended to logs\pids.txt and added
+:: to the map so it isn't double-captured by later launches.
+:: ----------------------------------------------------
+:capture_new_pid
+set "IMG=%~1"
+for /f "tokens=2 delims=," %%P in ('tasklist /FI "IMAGENAME eq %IMG%" /NH /FO CSV 2^>nul') do (
+    set "PID=%%~P"
+    if not defined SEEN_%IMG%_!PID! (
+        echo !PID!>> "logs\pids.txt"
+        set "SEEN_%IMG%_!PID!=1"
+    )
+)
+goto :eof
