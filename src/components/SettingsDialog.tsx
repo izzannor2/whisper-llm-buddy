@@ -36,11 +36,13 @@ interface SystemHealthStatus {
 }
 
 interface SettingsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   settings: ChatSettings;
   onSave: (settings: ChatSettings) => void;
   initialTab?: string;
+  /** When true, render content inline (no Dialog wrapper). Used by the consolidated /settings page. */
+  inline?: boolean;
 }
 
 // No placeholder models - only show what's actually available
@@ -51,6 +53,7 @@ export function SettingsDialog({
   settings,
   onSave,
   initialTab,
+  inline = false,
 }: SettingsDialogProps) {
   const [localSettings, setLocalSettings] = useState<ChatSettings>(settings);
   const [localModels, setLocalModels] = useState<string[]>([]);
@@ -68,9 +71,9 @@ export function SettingsDialog({
   const [blackboxConnected, setBlackboxConnected] = useState<boolean | null>(null);
   const auth = useAuth();
 
-  // Auto-scan system health when settings dialog opens
+  // Auto-scan system health when settings dialog opens (or when inline page mounts)
   useEffect(() => {
-    if (!open) return;
+    if (!inline && !open) return;
     const isCloud = window.location.hostname.includes('lovable.app') || window.location.hostname.includes('lovableproject.com');
     if (isCloud) {
       setSystemHealth({ ollama: 'offline', llamaCpp: 'offline', ollamaModel: '', llamaCppModel: '' });
@@ -126,7 +129,7 @@ export function SettingsDialog({
     };
 
     scanHealth();
-  }, [open]);
+  }, [open, inline]);
   
 
   // Load available voices
@@ -145,7 +148,8 @@ export function SettingsDialog({
 
   const handleSave = () => {
     onSave(localSettings);
-    onOpenChange(false);
+    if (!inline) onOpenChange?.(false);
+    else toast.success('Settings saved');
   };
 
   const scanLocalModels = async () => {
@@ -311,13 +315,14 @@ export function SettingsDialog({
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl glass-panel border-border max-h-[90vh] overflow-y-auto">
+  const body = (
+    <>
+      {!inline && (
         <DialogHeader>
           <DialogTitle className="text-xl">Settings</DialogTitle>
           <p className="text-sm text-muted-foreground">Configure backend, models, voice, and more.</p>
         </DialogHeader>
+      )}
 
         <Tabs defaultValue={initialTab || "backend"} key={initialTab} className="mt-4">
           <TabsList className="flex flex-wrap gap-1 h-auto bg-muted p-1">
@@ -1384,12 +1389,23 @@ export function SettingsDialog({
         <div className="flex items-center justify-between mt-4">
           <p className="text-[10px] text-muted-foreground">LocalDev AI v1.0.0</p>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
+            {!inline && (
+              <Button variant="ghost" onClick={() => onOpenChange?.(false)}>
+                Cancel
+              </Button>
+            )}
             <Button onClick={handleSave}>Save Settings</Button>
           </div>
         </div>
+    </>
+  );
+
+  if (inline) return body;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl glass-panel border-border max-h-[90vh] overflow-y-auto">
+        {body}
       </DialogContent>
     </Dialog>
   );

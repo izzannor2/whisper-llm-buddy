@@ -22,7 +22,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const isDev = NODE_ENV === 'development';
 
 // Session token generated on startup
-const SESSION_TOKEN = crypto.randomHex ? crypto.randomBytes(16).toString('hex') : crypto.randomBytes(16).toString('hex');
+const SESSION_TOKEN = crypto.randomBytes(16).toString('hex');
 
 // Project root = one directory up from server/
 const PROJECT_ROOT = path.resolve(__dirname, '..');

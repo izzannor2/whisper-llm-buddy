@@ -224,7 +224,7 @@ if !LLAMA_SERVER_RUNNING!==0 (
         if errorlevel 1 (
             echo       [*] Starting Ollama...
             set "OLLAMA_HOST=127.0.0.1:11434"
-            start "" /B cmd /c "set OLLAMA_HOST=127.0.0.1:11434 && set OLLAMA_MODELS=%SCRIPT_DIR%models\ollama && "!OLLAMA_CMD!" serve"
+            start "OLLAMA" /B cmd /c "set OLLAMA_HOST=127.0.0.1:11434& set OLLAMA_MODELS=%SCRIPT_DIR%models\ollama& "!OLLAMA_CMD!" serve"
             echo [%date% %time%] Started Ollama >> "logs\app.log"
             for /l %%i in (1,1,10) do (
                 curl -s http://localhost:11434/api/tags >nul 2>&1
