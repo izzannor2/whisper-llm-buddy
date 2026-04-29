@@ -1389,13 +1389,25 @@ export function SettingsDialog({
         <div className="flex items-center justify-between mt-4">
           <p className="text-[10px] text-muted-foreground">LocalDev AI v1.0.0</p>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
+            {!inline && (
+              <Button variant="ghost" onClick={() => onOpenChange?.(false)}>
+                Cancel
+              </Button>
+            )}
             <Button onClick={handleSave}>Save Settings</Button>
           </div>
         </div>
+    </>
+  );
+
+  if (inline) return body;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl glass-panel border-border max-h-[90vh] overflow-y-auto">
+        {body}
       </DialogContent>
     </Dialog>
   );
+}
 }
