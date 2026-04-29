@@ -94,7 +94,10 @@ async function detectLocalIP(): Promise<string> {
 
 export default function IDESettingsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialChatTab = searchParams.get('tab') || undefined;
   const [settings, setSettings] = useState<IDESettingsType>(DEFAULT_SETTINGS);
+  const [chatSettings, setChatSettings] = useState<ChatSettings>(() => loadChatSettings());
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [ollamaConnected, setOllamaConnected] = useState(false);
   const [llamaCppConnected, setLlamaCppConnected] = useState(false);
@@ -103,6 +106,12 @@ export default function IDESettingsPage() {
   const [localIP, setLocalIP] = useState('Detecting...');
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [devPort] = useState('8080');
+
+  const handleChatSettingsSave = (next: ChatSettings) => {
+    setChatSettings(next);
+    saveChatSettings(next);
+  };
+
 
   useEffect(() => {
     setSettings(getIDESettings());
