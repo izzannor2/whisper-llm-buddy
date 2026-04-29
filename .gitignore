@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Portable USB runtime
+bin/node/
+bin/ollama/*.exe
+bin/llama/*.exe
+config/settings.json
+logs/pids.txt

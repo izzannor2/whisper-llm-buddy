@@ -110,7 +110,7 @@ export default function IDESettingsPage() {
       const url = `http://${ip}:${devPort}`;
       setQrDataUrl(generateQRDataUrl(url));
     });
-  }, []);
+  }, [devPort]);
 
   const checkConnections = async () => {
     const ollamaOk = await isOllamaRunning();
