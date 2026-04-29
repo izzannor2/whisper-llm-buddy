@@ -315,13 +315,14 @@ export function SettingsDialog({
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl glass-panel border-border max-h-[90vh] overflow-y-auto">
+  const body = (
+    <>
+      {!inline && (
         <DialogHeader>
           <DialogTitle className="text-xl">Settings</DialogTitle>
           <p className="text-sm text-muted-foreground">Configure backend, models, voice, and more.</p>
         </DialogHeader>
+      )}
 
         <Tabs defaultValue={initialTab || "backend"} key={initialTab} className="mt-4">
           <TabsList className="flex flex-wrap gap-1 h-auto bg-muted p-1">
