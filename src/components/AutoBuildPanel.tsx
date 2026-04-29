@@ -6,12 +6,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { parseCodeBlocks } from '@/lib/code-parser';
+import { writeFile } from '@/lib/file-system';
+import { toast } from 'sonner';
 
 interface BuildStep {
   id: string;
   label: string;
   status: 'pending' | 'running' | 'done' | 'error';
   detail?: string;
+  filesWritten?: number;
 }
 
 interface AutoBuildPanelProps {
@@ -25,11 +29,13 @@ export function AutoBuildPanel({ open, onOpenChange, onSendMessage }: AutoBuildP
   const [steps, setSteps] = useState<BuildStep[]>([]);
   const [isBuilding, setIsBuilding] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [totalFiles, setTotalFiles] = useState(0);
 
   const startBuild = useCallback(async () => {
     if (!description.trim() || isBuilding) return;
     setIsBuilding(true);
     setProgress(0);
+    setTotalFiles(0);
 
     const buildSteps: BuildStep[] = [
       { id: '1', label: 'Analyzing requirements', status: 'pending' },
@@ -41,27 +47,51 @@ export function AutoBuildPanel({ open, onOpenChange, onSendMessage }: AutoBuildP
     ];
     setSteps(buildSteps);
 
+    const formatRule =
+      '\n\nFor every file you want created or modified, output a complete code block using exactly this format on the opening fence: ```language:/full/path/to/file.ext (no spaces). Include the entire file contents — no placeholders, no diffs.';
+
     const prompts = [
-      `I want to build: ${description}\n\nFirst, analyze the requirements. List what this project needs: features, pages, data models, and tech stack. Be specific.`,
-      `Now create a detailed project plan with file structure. List every file that needs to be created with a one-line description of its purpose.`,
-      `Generate the project structure. Create the main entry point, routing, and layout files. Output complete, working code.`,
-      `Write the core components and pages. Output each file with complete code. Make everything functional — no placeholder comments.`,
-      `Add styling, animations, responsive design, and visual polish. Update any files that need style improvements.`,
-      `Review the entire project. Fix any issues, missing imports, or incomplete functionality. Output a summary of what was built.`,
+      `I want to build: ${description}\n\nFirst, analyze the requirements. List what this project needs: features, pages, data models, and tech stack. Be specific. (No code in this step.)`,
+      `Now create a detailed project plan with file structure. List every file that needs to be created with a one-line description of its purpose. (No code in this step.)`,
+      `Generate the project structure. Create the main entry point, routing, and layout files.${formatRule}`,
+      `Write the core components and pages. Make everything functional — no placeholder comments.${formatRule}`,
+      `Add styling, animations, responsive design, and visual polish. Update any files that need style improvements.${formatRule}`,
+      `Review the entire project. Fix any issues, missing imports, or incomplete functionality.${formatRule}`,
     ];
+
+    let cumulativeFiles = 0;
 
     for (let i = 0; i < buildSteps.length; i++) {
       setSteps(prev => prev.map((s, j) => j === i ? { ...s, status: 'running' } : s));
-      setProgress(((i) / buildSteps.length) * 100);
+      setProgress((i / buildSteps.length) * 100);
 
       try {
         const response = await onSendMessage(prompts[i]);
+        const blocks = parseCodeBlocks(response);
+        let writtenThisStep = 0;
+        let writeFailed = 0;
+
+        for (const block of blocks) {
+          try {
+            await writeFile(block.filePath, block.content);
+            writtenThisStep++;
+          } catch {
+            writeFailed++;
+          }
+        }
+        cumulativeFiles += writtenThisStep;
+        setTotalFiles(cumulativeFiles);
+
+        const detail = blocks.length === 0
+          ? response.slice(0, 100).replace(/\s+/g, ' ').trim() + (response.length > 100 ? '…' : '')
+          : `${writtenThisStep} file${writtenThisStep === 1 ? '' : 's'} written${writeFailed ? ` (${writeFailed} failed)` : ''}`;
+
         setSteps(prev => prev.map((s, j) =>
-          j === i ? { ...s, status: 'done', detail: response.slice(0, 100) + '...' } : s
+          j === i ? { ...s, status: 'done', detail, filesWritten: writtenThisStep } : s
         ));
       } catch (err: any) {
         setSteps(prev => prev.map((s, j) =>
-          j === i ? { ...s, status: 'error', detail: err.message } : s
+          j === i ? { ...s, status: 'error', detail: err?.message || 'Step failed' } : s
         ));
         break;
       }
@@ -69,7 +99,20 @@ export function AutoBuildPanel({ open, onOpenChange, onSendMessage }: AutoBuildP
 
     setProgress(100);
     setIsBuilding(false);
+
+    if (cumulativeFiles > 0) {
+      toast.success(`Auto-Build complete — ${cumulativeFiles} file${cumulativeFiles === 1 ? '' : 's'} written`);
+    } else {
+      toast.info('Auto-Build finished but no files were written. Open a project folder first or check the AI response format.');
+    }
   }, [description, isBuilding, onSendMessage]);
+
+  const reset = () => {
+    setSteps([]);
+    setProgress(0);
+    setTotalFiles(0);
+    setDescription('');
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -84,7 +127,7 @@ export function AutoBuildPanel({ open, onOpenChange, onSendMessage }: AutoBuildP
         {steps.length === 0 ? (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Describe what you want to build. The AI will plan and generate the entire project step by step.
+              Describe what you want to build. The AI will plan the project, generate code, and write the files for you.
             </p>
             <Textarea
               placeholder="e.g., A task management app with drag-and-drop kanban board, user authentication, and dark mode..."
@@ -99,6 +142,10 @@ export function AutoBuildPanel({ open, onOpenChange, onSendMessage }: AutoBuildP
           </div>
         ) : (
           <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{Math.round(progress)}% complete</span>
+              <span>{totalFiles} file{totalFiles === 1 ? '' : 's'} written</span>
+            </div>
             <Progress value={progress} className="h-2" />
             <ScrollArea className="h-64">
               <div className="space-y-2">
@@ -126,7 +173,7 @@ export function AutoBuildPanel({ open, onOpenChange, onSendMessage }: AutoBuildP
               </div>
             </ScrollArea>
             {!isBuilding && (
-              <Button variant="outline" className="w-full" onClick={() => { setSteps([]); setProgress(0); }}>
+              <Button variant="outline" className="w-full" onClick={reset}>
                 Start New Build
               </Button>
             )}
