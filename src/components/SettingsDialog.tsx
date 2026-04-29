@@ -1410,4 +1410,3 @@ export function SettingsDialog({
     </Dialog>
   );
 }
-}
