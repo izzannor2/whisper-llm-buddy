@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, Moon, Sun, Wifi, WifiOff, RefreshCw, AlertTriangle, Cpu, Plug, FlaskConical, Brain, BookOpen, Shield, Server, HardDrive, Globe, Copy, QrCode, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,8 @@ import { isLlamaCppRunning, getLlamaCppServerInfo, generateLlamaServerCommand } 
 import { LocalModelPicker } from '@/components/LocalModelPicker';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { SettingsDialog } from '@/components/SettingsDialog';
+import { loadSettings as loadChatSettings, saveSettings as saveChatSettings, type ChatSettings } from '@/lib/chat-api';
 
 // Simple QR code generator using canvas
 function generateQRDataUrl(text: string): string {
