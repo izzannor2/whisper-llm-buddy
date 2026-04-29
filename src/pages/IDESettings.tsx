@@ -437,6 +437,19 @@ export default function IDESettingsPage() {
               </section>
             </>
           )}
+
+          <Separator />
+
+          {/* Unified app/chat settings (Backend, Models, Voice, API Keys, TTS, Plugins, Updates, Account, Debug…) */}
+          <section>
+            <h2 className="text-lg font-semibold mb-4">Application</h2>
+            <SettingsDialog
+              inline
+              settings={chatSettings}
+              onSave={handleChatSettingsSave}
+              initialTab={initialChatTab}
+            />
+          </section>
         </div>
       </ScrollArea>
     </div>
