@@ -71,9 +71,9 @@ export function SettingsDialog({
   const [blackboxConnected, setBlackboxConnected] = useState<boolean | null>(null);
   const auth = useAuth();
 
-  // Auto-scan system health when settings dialog opens
+  // Auto-scan system health when settings dialog opens (or when inline page mounts)
   useEffect(() => {
-    if (!open) return;
+    if (!inline && !open) return;
     const isCloud = window.location.hostname.includes('lovable.app') || window.location.hostname.includes('lovableproject.com');
     if (isCloud) {
       setSystemHealth({ ollama: 'offline', llamaCpp: 'offline', ollamaModel: '', llamaCppModel: '' });
@@ -129,7 +129,7 @@ export function SettingsDialog({
     };
 
     scanHealth();
-  }, [open]);
+  }, [open, inline]);
   
 
   // Load available voices
@@ -148,7 +148,8 @@ export function SettingsDialog({
 
   const handleSave = () => {
     onSave(localSettings);
-    onOpenChange(false);
+    if (!inline) onOpenChange?.(false);
+    else toast.success('Settings saved');
   };
 
   const scanLocalModels = async () => {
