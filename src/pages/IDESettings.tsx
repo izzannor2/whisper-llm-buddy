@@ -21,6 +21,7 @@ import { LocalModelPicker } from '@/components/LocalModelPicker';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { SettingsDialog } from '@/components/SettingsDialog';
+import { LauncherToolsDialog } from '@/components/LauncherToolsDialog';
 import { loadSettings as loadChatSettings, saveSettings as saveChatSettings, type ChatSettings } from '@/lib/chat-api';
 
 // Simple QR code generator using canvas
@@ -145,9 +146,44 @@ export default function IDESettingsPage() {
     else toast.error('Could not connect to llama.cpp server');
   };
 
-  const handleGgufSelected = (file: File) => {
+  const handleGgufSelected = async (file: File) => {
     setSelectedGgufFile(file);
+    const previousModel = settings.llamaCppModel;
     updateSetting('llamaCppModel', file.name);
+
+    // Don't fire on initial load — only when model actually changes
+    if (previousModel === file.name) return;
+
+    const ctx = settings.llamaCppContextSize;
+    const toastId = toast.loading(`Switching active GGUF model…`, {
+      description: `${file.name} • ctx ${ctx}`,
+    });
+
+    // Probe llama.cpp /props to confirm reload (best-effort, with retries)
+    let reloaded = false;
+    let serverModel = '';
+    for (let i = 0; i < 5; i++) {
+      await new Promise(r => setTimeout(r, 600));
+      const info = await getLlamaCppServerInfo();
+      if (info) {
+        serverModel = info.model || '';
+        // Match by basename — server returns full path
+        const base = serverModel.split(/[\\/]/).pop() || '';
+        if (base === file.name) { reloaded = true; break; }
+      }
+    }
+
+    if (reloaded) {
+      toast.success(`Active model: ${file.name}`, {
+        id: toastId,
+        description: `Context ${ctx} tokens • llama-server reloaded successfully`,
+      });
+    } else {
+      toast.warning(`Active model set: ${file.name}`, {
+        id: toastId,
+        description: `Context ${ctx} tokens • server did not confirm reload (restart llama-server to apply)`,
+      });
+    }
   };
 
   const copyLlamaCommand = () => {
@@ -195,7 +231,10 @@ export default function IDESettingsPage() {
           </Button>
           <h1 className="text-xl font-bold">Settings</h1>
         </div>
-        <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Save</Button>
+        <div className="flex items-center gap-2">
+          <LauncherToolsDialog />
+          <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Save</Button>
+        </div>
       </header>
 
       <ScrollArea className="h-[calc(100vh-56px)]">

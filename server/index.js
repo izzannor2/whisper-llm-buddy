@@ -279,6 +279,125 @@ app.post('/file', requireSession, (req, res) => {
   }
 });
 
+// GET /logs?name=agent|llama|web|ollama|server&lines=200
+// Returns last N lines of a known log file with timestamps preserved as-is.
+const KNOWN_LOGS = {
+  agent: 'agent.log',
+  llama: 'llama.log',
+  web: 'web.log',
+  ollama: 'ollama.log',
+  server: 'server.log',
+};
+
+app.get('/logs', (req, res) => {
+  const name = String(req.query.name || '').toLowerCase();
+  const maxLines = Math.min(parseInt(String(req.query.lines || '200'), 10) || 200, 2000);
+  const fileName = KNOWN_LOGS[name];
+  if (!fileName) {
+    return res.status(400).json({ error: `Unknown log: ${name}. Allowed: ${Object.keys(KNOWN_LOGS).join(', ')}` });
+  }
+  const filePath = path.join(LOG_DIR, fileName);
+  if (!fs.existsSync(filePath)) {
+    return res.json({ name, file: fileName, exists: false, lines: [], mtime: null, size: 0 });
+  }
+  try {
+    const stat = fs.statSync(filePath);
+    // Read at most last 1MB to keep it fast
+    const readSize = Math.min(stat.size, 1024 * 1024);
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(readSize);
+    fs.readSync(fd, buf, 0, readSize, Math.max(0, stat.size - readSize));
+    fs.closeSync(fd);
+    const text = buf.toString('utf-8');
+    const all = text.split(/\r?\n/);
+    const lines = all.slice(-maxLines - 1, -1).length ? all.slice(-maxLines - 1, -1) : all.slice(-maxLines);
+    res.json({
+      name,
+      file: fileName,
+      exists: true,
+      size: stat.size,
+      mtime: stat.mtime.toISOString(),
+      lines,
+      truncated: stat.size > readSize,
+    });
+  } catch (err) {
+    res.status(500).json({ error: isDev ? err.message : 'Failed to read log' });
+  }
+});
+
+// GET /selftest — checks ports, model files, log dir, agent capability
+app.get('/selftest', async (req, res) => {
+  const checks = [];
+  const pushCheck = (name, ok, message, detail) =>
+    checks.push({ name, ok: !!ok, message, detail });
+
+  // 1. Project directories
+  for (const d of ['logs', 'models/gguf', 'models/ollama', 'bin/node', 'dist']) {
+    const p = path.join(PROJECT_ROOT, d);
+    pushCheck(`dir:${d}`, fs.existsSync(p), fs.existsSync(p) ? 'present' : 'missing', p);
+  }
+
+  // 2. GGUF models present
+  const ggufDir = path.join(PROJECT_ROOT, 'models', 'gguf');
+  let ggufFiles = [];
+  if (fs.existsSync(ggufDir)) {
+    try {
+      ggufFiles = fs.readdirSync(ggufDir).filter(f => f.toLowerCase().endsWith('.gguf'));
+    } catch {}
+  }
+  pushCheck('models:gguf', ggufFiles.length > 0,
+    ggufFiles.length > 0 ? `${ggufFiles.length} model(s) found` : 'no .gguf files in models/gguf',
+    ggufFiles);
+
+  // 3. Port reachability via http
+  const probeHttp = (host, port, pathName) => new Promise((resolve) => {
+    const req2 = http.request({ host, port, path: pathName, method: 'GET', timeout: 1500 }, (r) => {
+      resolve({ ok: r.statusCode && r.statusCode < 500, status: r.statusCode });
+      r.resume();
+    });
+    req2.on('error', () => resolve({ ok: false, status: 0 }));
+    req2.on('timeout', () => { req2.destroy(); resolve({ ok: false, status: 0 }); });
+    req2.end();
+  });
+
+  const [agentProbe, webProbe, ollamaProbe, llamaProbe] = await Promise.all([
+    probeHttp('127.0.0.1', PORT, '/status'),
+    probeHttp('127.0.0.1', 8080, '/'),
+    probeHttp('127.0.0.1', 11434, '/api/tags'),
+    probeHttp('127.0.0.1', 8081, '/health'),
+  ]);
+  pushCheck('port:agent(3847)', agentProbe.ok, agentProbe.ok ? `responds (${agentProbe.status})` : 'unreachable');
+  pushCheck('port:web(8080)', webProbe.ok, webProbe.ok ? `responds (${webProbe.status})` : 'unreachable');
+  pushCheck('port:ollama(11434)', ollamaProbe.ok, ollamaProbe.ok ? `responds (${ollamaProbe.status})` : 'not running (optional)');
+  pushCheck('port:llama-server(8081)', llamaProbe.ok, llamaProbe.ok ? `responds (${llamaProbe.status})` : 'not running (optional)');
+
+  // 4. Log dir writable
+  let logWriteOk = false;
+  try {
+    const tp = path.join(LOG_DIR, '.selftest');
+    fs.writeFileSync(tp, 'ok');
+    fs.unlinkSync(tp);
+    logWriteOk = true;
+  } catch {}
+  pushCheck('logs:writable', logWriteOk, logWriteOk ? 'ok' : 'cannot write to logs/');
+
+  const required = checks.filter(c =>
+    c.name.startsWith('dir:') ||
+    c.name === 'port:agent(3847)' ||
+    c.name === 'logs:writable'
+  );
+  const passed = checks.filter(c => c.ok).length;
+  const allCriticalOk = required.every(c => c.ok);
+
+  res.json({
+    ok: allCriticalOk,
+    passed,
+    total: checks.length,
+    timestamp: new Date().toISOString(),
+    checks,
+  });
+});
+
 // GET /processes
 app.get('/processes', (req, res) => {
   const procs = [];
