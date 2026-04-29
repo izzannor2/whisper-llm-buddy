@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ChatSidebar } from '@/components/ChatSidebar';
 import { ChatMessage } from '@/components/ChatMessage';
 import { ChatInput, ChatInputRef, type ChatInputProps } from '@/components/ChatInput';
-import { SettingsDialog } from '@/components/SettingsDialog';
+// SettingsDialog removed — settings now live exclusively at /settings
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { EmptyState } from '@/components/EmptyState';
 import { CodeLibrary } from '@/components/CodeLibrary';
@@ -54,7 +54,7 @@ export default function Index() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // settingsOpen removed — settings page is /settings
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
@@ -75,7 +75,7 @@ export default function Index() {
   const [currentAgent, setCurrentAgent] = useState<AgentType | undefined>();
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('localdev-locked') === 'true');
   const [isOfflineMode, setIsOfflineMode] = useState(() => loadSettings().offlineMode);
-  const [settingsTab, setSettingsTab] = useState<string | undefined>();
+  // settingsTab removed — pass via /settings?tab=… instead
   const [killSwitchActive, setKillSwitchActive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -183,13 +183,12 @@ export default function Index() {
 
   useEffect(() => {
     const handleOpenSettings = (e: Event) => {
-      setSettingsOpen(true);
       const tab = (e as CustomEvent)?.detail?.tab;
-      if (tab) setSettingsTab(tab);
+      navigate(tab ? `/settings?tab=${encodeURIComponent(tab)}` : '/settings');
     };
     window.addEventListener('open-settings', handleOpenSettings);
     return () => window.removeEventListener('open-settings', handleOpenSettings);
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -508,7 +507,7 @@ export default function Index() {
           onSelect={loadConversation}
           onNew={createNewConversation}
           onDelete={handleDeleteConversation}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => navigate('/settings')}
           onOpenMemory={() => setMemoryPanelOpen(true)}
            onOpenAutoBuild={() => setAutoBuildOpen(true)}
            onOpenTaskGraph={() => setTaskGraphOpen(true)}
@@ -537,8 +536,7 @@ export default function Index() {
               </span>
             </div>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
-              setSettingsOpen(true);
-              setSettingsTab('debug');
+              navigate('/settings?tab=debug');
             }}>
               Diagnostics
             </Button>
@@ -654,7 +652,7 @@ export default function Index() {
         />
       </div>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={(open) => { setSettingsOpen(open); if (!open) setSettingsTab(undefined); }} settings={settings} onSave={handleSettingsSave} initialTab={settingsTab} />
+      {/* SettingsDialog removed — see /settings page */}
       <MemoryPanel open={memoryPanelOpen} onOpenChange={setMemoryPanelOpen} />
       <AutoBuildPanel open={autoBuildOpen} onOpenChange={setAutoBuildOpen} onSendMessage={handleSendMessage} />
       <TaskGraph open={taskGraphOpen} onOpenChange={setTaskGraphOpen} />
@@ -663,7 +661,7 @@ export default function Index() {
       {settings.openClawEnabled && openClawOpen && (
         <OpenClawOverlay
           onClose={() => setOpenClawOpen(false)}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => navigate('/settings')}
           config={{ model: settings.openClawModel, autoBackup: settings.openClawAutoBackup, learningEnabled: settings.openClawLearning, murmurUpdates: settings.openClawMurmur }}
           ttsSettings={{ voice: settings.ttsVoice, rate: settings.ttsRate }}
         />
