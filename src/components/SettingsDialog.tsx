@@ -47,6 +47,169 @@ interface SettingsDialogProps {
 
 // No placeholder models - only show what's actually available
 
+// ===== Consolidated System Diagnostics =====
+interface DiagCheck { name: string; ok: boolean; message: string; detail?: any; }
+interface DiagState {
+  loading: boolean;
+  fromAgent: boolean;
+  ollamaModelsDir?: string;
+  ggufFiles?: string[];
+  checks: DiagCheck[];
+  ollamaModelCount: number;
+  ollamaModelNames: string[];
+  llamaCppRunning: boolean;
+  ttsAvailable: boolean;
+  whisperLoaded: boolean;
+  webgpuAvailable: boolean;
+}
+
+function StatusRow({ label, ok, value }: { label: string; ok: boolean | null; value: React.ReactNode }) {
+  const dot = ok === null ? 'bg-muted-foreground' : ok ? 'bg-green-500' : 'bg-amber-500';
+  return (
+    <div className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0">
+      <div className="flex items-center gap-2">
+        <span className={cn('w-2 h-2 rounded-full', dot)} />
+        <span className="text-muted-foreground">{label}</span>
+      </div>
+      <span className="font-mono text-foreground/90 truncate max-w-[60%] text-right">{value}</span>
+    </div>
+  );
+}
+
+function SystemDiagnosticsCard({ localSettings }: { localSettings: ChatSettings }) {
+  const [state, setState] = useState<DiagState>({
+    loading: false, fromAgent: false, checks: [],
+    ollamaModelCount: 0, ollamaModelNames: [],
+    llamaCppRunning: false, ttsAvailable: false,
+    whisperLoaded: false, webgpuAvailable: false,
+  });
+
+  const refresh = useCallback(async () => {
+    setState(s => ({ ...s, loading: true }));
+    const next: DiagState = {
+      loading: false, fromAgent: false, checks: [],
+      ollamaModelCount: 0, ollamaModelNames: [],
+      llamaCppRunning: false,
+      ttsAvailable: typeof window !== 'undefined' && 'speechSynthesis' in window,
+      whisperLoaded: typeof localStorage !== 'undefined' && !!localStorage.getItem('whisper-model-loaded'),
+      webgpuAvailable: typeof navigator !== 'undefined' && 'gpu' in (navigator as any),
+    };
+
+    // Agent /selftest (best-effort)
+    try {
+      const r = await fetch('http://127.0.0.1:3847/selftest', { signal: AbortSignal.timeout(3000) });
+      if (r.ok) {
+        const data = await r.json();
+        next.fromAgent = true;
+        next.ollamaModelsDir = data.ollamaModelsDir;
+        next.ggufFiles = data.ggufFiles || [];
+        next.checks = data.checks || [];
+      }
+    } catch {}
+
+    // Ollama models
+    try {
+      const r = await fetch(`${localSettings.ollamaUrl || 'http://localhost:11434'}/api/tags`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const names = (d.models || []).map((m: any) => m.name);
+        next.ollamaModelCount = names.length;
+        next.ollamaModelNames = names.slice(0, 3);
+      }
+    } catch {}
+
+    // llama.cpp
+    try {
+      const r = await fetch(`${localSettings.localUrl || 'http://127.0.0.1:8081'}/health`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      next.llamaCppRunning = r.ok;
+    } catch {}
+
+    setState(next);
+  }, [localSettings.ollamaUrl, localSettings.localUrl]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const repairVite = async () => {
+    try {
+      const status = await fetch('http://127.0.0.1:3847/status').then(r => r.json());
+      const cmd = `node -e "require('fs').rmSync('node_modules/.vite',{recursive:true,force:true})"`;
+      const res = await fetch('http://127.0.0.1:3847/exec', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-agent-session': status.sessionToken },
+        body: JSON.stringify({ command: cmd }),
+      });
+      if (res.ok) {
+        toast.success('Vite cache cleared', {
+          description: 'Restart dev server: npm run dev -- --force',
+        });
+      } else {
+        toast.error('Could not clear cache via agent — run REPAIR-APP.bat');
+      }
+    } catch {
+      toast.error('Local agent not reachable — run REPAIR-APP.bat in the project root');
+    }
+  };
+
+  const ollamaOk = state.ollamaModelCount > 0;
+  const ggufCount = state.ggufFiles?.length ?? 0;
+
+  return (
+    <div className="border rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium text-sm">System Diagnostics</h4>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={refresh} disabled={state.loading}>
+            <RotateCw className={cn('w-3 h-3 mr-1.5', state.loading && 'animate-spin')} />
+            Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={repairVite}>Repair Vite Cache</Button>
+        </div>
+      </div>
+
+      <div className="space-y-0">
+        <StatusRow
+          label="Ollama running"
+          ok={ollamaOk || state.ollamaModelCount > 0}
+          value={state.ollamaModelCount > 0 ? `yes (${state.ollamaModelCount} models)` : 'no'}
+        />
+        <StatusRow
+          label="Ollama models"
+          ok={ollamaOk ? true : null}
+          value={state.ollamaModelNames.length ? state.ollamaModelNames.join(', ') : '—'}
+        />
+        <StatusRow
+          label="Portable model path"
+          ok={state.ollamaModelsDir ? true : null}
+          value={state.ollamaModelsDir || (state.fromAgent ? 'unknown' : 'agent offline')}
+        />
+        <StatusRow
+          label="GGUF model count"
+          ok={ggufCount > 0 ? true : null}
+          value={state.fromAgent ? String(ggufCount) : 'agent offline'}
+        />
+        <StatusRow
+          label="llama.cpp server"
+          ok={state.llamaCppRunning}
+          value={state.llamaCppRunning ? 'running' : 'not running — start GGUF server'}
+        />
+        <StatusRow label="TTS available" ok={state.ttsAvailable} value={state.ttsAvailable ? 'yes' : 'no'} />
+        <StatusRow label="Whisper loaded" ok={state.whisperLoaded} value={state.whisperLoaded ? 'yes' : 'not loaded'} />
+        <StatusRow label="WebGPU" ok={state.webgpuAvailable} value={state.webgpuAvailable ? 'available' : 'unavailable'} />
+      </div>
+
+      {!state.fromAgent && (
+        <p className="text-[10px] text-muted-foreground">
+          Local agent on :3847 unreachable — folder/disk checks unavailable. Run START-PORTABLE-AI.bat.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SettingsDialog({
   open,
   onOpenChange,
