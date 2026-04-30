@@ -17,8 +17,8 @@ echo    LocalDev AI - OFFLINE MODE (USB)
 echo  ==========================================
 echo.
 
-:: Self-heal directories
-for %%D in (logs models\gguf models\ollama bin\node bin\ollama bin\llama config) do (
+:: Self-heal directories (.ollama is the portable Ollama model dir)
+for %%D in (logs models\gguf models\ollama .ollama public\updates bin\node bin\ollama bin\llama config) do (
     if not exist "%%D" mkdir "%%D" 2>nul
 )
 
@@ -76,13 +76,16 @@ for %%I in (node.exe ollama.exe llama-server.exe) do (
 :: Portable Ollama (optional)
 :: ----------------------------------------------------
 set "OLLAMA_RUNNING=0"
+:: Prefer .ollama (per spec), fall back to legacy models\ollama for back-compat
+set "OLLAMA_DIR=%ROOT%\.ollama"
+if not exist "%ROOT%\.ollama\models" if exist "%ROOT%\models\ollama\models" set "OLLAMA_DIR=%ROOT%\models\ollama"
 if exist "bin\ollama\ollama.exe" (
-    set "OLLAMA_MODELS=%ROOT%\models\ollama"
+    set "OLLAMA_MODELS=!OLLAMA_DIR!"
     set "OLLAMA_HOST=127.0.0.1:11434"
     curl -s http://localhost:11434/api/tags >nul 2>&1
     if errorlevel 1 (
         echo [2/4] [*] Starting portable Ollama...
-        start "OLLAMA" /B cmd /c "set OLLAMA_MODELS=%ROOT%\models\ollama& set OLLAMA_HOST=127.0.0.1:11434& bin\ollama\ollama.exe serve >> logs\ollama.log 2>&1"
+        start "OLLAMA" /B cmd /c "set OLLAMA_MODELS=!OLLAMA_DIR!& set OLLAMA_HOST=127.0.0.1:11434& bin\ollama\ollama.exe serve >> logs\ollama.log 2>&1"
         timeout /t 2 /nobreak >nul
         call :capture_new_pid ollama.exe
         for /l %%i in (1,1,10) do (
@@ -99,7 +102,7 @@ if exist "bin\ollama\ollama.exe" (
 )
 :ollama_done
 if "!OLLAMA_RUNNING!"=="1" (
-    echo [2/4] [OK] Ollama on :11434  (models: %ROOT%\models\ollama)
+    echo [2/4] [OK] Ollama on :11434  (models: !OLLAMA_DIR!)
 ) else (
     echo [2/4] [*] Ollama not started - app will run without it
 )

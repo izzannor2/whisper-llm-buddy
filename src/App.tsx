@@ -41,6 +41,31 @@ function AppInner() {
     if (!isFirstRunDone && !hasSettings) {
       setShowFirstRun(true);
     }
+
+    // Auto-apply bundled updates from public/updates/manifest.json
+    // Each version is applied at most once (tracked in localStorage).
+    (async () => {
+      try {
+        const { scanBundledUpdates, applyLocalUpdate, getCurrentVersion, compareVersions } =
+          await import('@/lib/update-system');
+        const APPLIED_KEY = 'localdev-bundled-applied';
+        const applied: string[] = JSON.parse(localStorage.getItem(APPLIED_KEY) || '[]');
+        const updates = await scanBundledUpdates();
+        let changed = false;
+        for (const u of updates) {
+          if (applied.includes(u.version)) continue;
+          if (compareVersions(u.version, getCurrentVersion()) > 0) {
+            const r = applyLocalUpdate(u);
+            if (r.success) { applied.push(u.version); changed = true; }
+          } else {
+            applied.push(u.version); changed = true;
+          }
+        }
+        if (changed) localStorage.setItem(APPLIED_KEY, JSON.stringify(applied));
+      } catch (err) {
+        console.warn('Bundled update auto-apply skipped:', err);
+      }
+    })();
   }, []);
 
   return (

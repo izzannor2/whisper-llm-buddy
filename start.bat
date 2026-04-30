@@ -9,20 +9,24 @@ color 0A
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
 
-:: Set portable model storage
-set "OLLAMA_MODELS=%SCRIPT_DIR%models\ollama"
+:: Set portable model storage (prefer .ollama, fall back to legacy models\ollama)
+if exist "%SCRIPT_DIR%.ollama" (
+    set "OLLAMA_MODELS=%SCRIPT_DIR%.ollama"
+) else (
+    set "OLLAMA_MODELS=%SCRIPT_DIR%models\ollama"
+)
 
 echo.
-echo  ╔══════════════════════════════════════════╗
-echo  ║         LocalDev AI - Quick Start        ║
-echo  ╚══════════════════════════════════════════╝
+echo  ==========================================
+echo         LocalDev AI - Quick Start
+echo  ==========================================
 echo  TIP: For pure offline USB usage, run
 echo       start-offline.bat instead (no internet
 echo       required, uses portable bin\ binaries).
 echo.
 
 :: Ensure directories exist (self-healing)
-for %%D in (config logs models\gguf models\ollama bin\llama bin\ollama) do (
+for %%D in (config logs models\gguf models\ollama .ollama public\updates bin\llama bin\ollama) do (
     if not exist "%%D" mkdir "%%D" 2>nul
 )
 
@@ -224,7 +228,7 @@ if !LLAMA_SERVER_RUNNING!==0 (
         if errorlevel 1 (
             echo       [*] Starting Ollama...
             set "OLLAMA_HOST=127.0.0.1:11434"
-            start "OLLAMA" /B cmd /c "set OLLAMA_HOST=127.0.0.1:11434& set OLLAMA_MODELS=%SCRIPT_DIR%models\ollama& "!OLLAMA_CMD!" serve"
+            start "OLLAMA" /B cmd /c "set OLLAMA_HOST=127.0.0.1:11434& set OLLAMA_MODELS=!OLLAMA_MODELS!& "!OLLAMA_CMD!" serve"
             echo [%date% %time%] Started Ollama >> "logs\app.log"
             for /l %%i in (1,1,10) do (
                 curl -s http://localhost:11434/api/tags >nul 2>&1
@@ -249,14 +253,14 @@ if !LLAMA_SERVER_RUNNING!==0 (
 :: ========================================
 echo [5/5] Starting development server...
 echo.
-echo ══════════════════════════════════════════
+echo ==========================================
 echo  App:     http://localhost:8080
 if defined GGUF_MODEL echo  Llama:   http://localhost:8081
 if defined OLLAMA_CMD echo  Ollama:  http://localhost:11434
 echo  Models:  %SCRIPT_DIR%models\
 echo  Logs:    %SCRIPT_DIR%logs\
 echo  Press Ctrl+C to stop
-echo ══════════════════════════════════════════
+echo ==========================================
 echo.
 
 echo [%date% %time%] App server starting on port 8080 >> "logs\app.log"

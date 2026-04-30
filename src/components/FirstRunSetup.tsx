@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Cloud, Server, HardDrive, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Cloud, Server, HardDrive, CheckCircle, XCircle, Loader2, Usb, Monitor } from 'lucide-react';
 import { ChatSettings, DEFAULT_SETTINGS, saveSettings } from '@/lib/chat-api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -14,12 +14,45 @@ interface FirstRunSetupProps {
   onComplete: (settings: ChatSettings) => void;
 }
 
-type Step = 'backend' | 'apikey' | 'test';
+type Step = 'mode' | 'checklist' | 'backend' | 'apikey' | 'test';
+
+const REQUIRED_DIRS = ['.ollama', 'models/ollama', 'models/gguf', 'public/updates', 'logs', 'config'];
 
 export function FirstRunSetup({ open, onComplete }: FirstRunSetupProps) {
-  const [step, setStep] = useState<Step>('backend');
+  const [step, setStep] = useState<Step>('mode');
   const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'fail'>('idle');
+  const [dirStatus, setDirStatus] = useState<Record<string, boolean>>({});
+  const [agentReachable, setAgentReachable] = useState<boolean | null>(null);
+
+  // Probe agent /selftest to know which folders exist on disk
+  useEffect(() => {
+    if (step !== 'checklist') return;
+    (async () => {
+      try {
+        const r = await fetch('http://127.0.0.1:3847/selftest', { signal: AbortSignal.timeout(2500) });
+        if (!r.ok) { setAgentReachable(false); return; }
+        const data = await r.json();
+        const map: Record<string, boolean> = {};
+        for (const c of data.checks || []) {
+          if (c.name?.startsWith('dir:')) map[c.name.slice(4)] = !!c.ok;
+        }
+        setDirStatus(map);
+        setAgentReachable(true);
+      } catch {
+        setAgentReachable(false);
+      }
+    })();
+  }, [step]);
+
+  const selectMode = (mode: 'portable' | 'installed') => {
+    localStorage.setItem('localdev-portable-mode', mode === 'portable' ? 'true' : 'false');
+    if (mode === 'portable') {
+      // recommend Ollama by default for portable
+      setSettings(prev => ({ ...prev, backend: 'ollama' }));
+    }
+    setStep('checklist');
+  };
 
   const selectBackend = (backend: ChatSettings['backend']) => {
     setSettings(prev => ({ ...prev, backend }));
@@ -47,12 +80,10 @@ export function FirstRunSetup({ open, onComplete }: FirstRunSetupProps) {
         clearTimeout(timeout);
         if (res.ok) { setTestStatus('success'); return; }
       } else if (settings.backend === 'cloud') {
-        // Cloud is always available
         clearTimeout(timeout);
         setTestStatus('success');
         return;
       } else {
-        // API key backends — just check key is non-empty
         clearTimeout(timeout);
         const key = settings.apiKeys[settings.backend as keyof typeof settings.apiKeys];
         if (key) { setTestStatus('success'); return; }
@@ -79,9 +110,66 @@ export function FirstRunSetup({ open, onComplete }: FirstRunSetupProps) {
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleSkip(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Welcome to LocalDev AI</DialogTitle>
+          <DialogTitle>Welcome to AI Companion Hub</DialogTitle>
           <p className="text-sm text-muted-foreground">Let's get you set up in a few seconds.</p>
         </DialogHeader>
+
+        {step === 'mode' && (
+          <div className="space-y-3 mt-4">
+            <p className="text-sm font-medium">How are you running this app?</p>
+            <button
+              className="w-full p-4 rounded-xl border-2 border-border hover:border-primary text-left transition-all"
+              onClick={() => selectMode('portable')}
+            >
+              <Usb className="w-5 h-5 mb-1 text-primary" />
+              <p className="font-medium text-sm">Portable Mode (USB / external drive)</p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Models, logs, and updates stay inside the project folder. Recommended when running from a USB stick.
+              </p>
+            </button>
+            <button
+              className="w-full p-4 rounded-xl border-2 border-border hover:border-primary text-left transition-all"
+              onClick={() => selectMode('installed')}
+            >
+              <Monitor className="w-5 h-5 mb-1 text-accent" />
+              <p className="font-medium text-sm">Installed Mode</p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Use system Ollama / global paths. Pick this if the app lives on a fixed install location.
+              </p>
+            </button>
+            <Button variant="ghost" size="sm" className="w-full" onClick={handleSkip}>Skip setup</Button>
+          </div>
+        )}
+
+        {step === 'checklist' && (
+          <div className="space-y-3 mt-4">
+            <p className="text-sm font-medium">Project folders</p>
+            {agentReachable === false && (
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs">
+                Local agent on :3847 unreachable — can't verify folders from the browser. The launcher
+                (<code>START-PORTABLE-AI.bat</code>) creates these automatically on first run.
+              </div>
+            )}
+            <div className="space-y-1">
+              {REQUIRED_DIRS.map(d => {
+                const ok = dirStatus[d];
+                return (
+                  <div key={d} className="flex items-center justify-between text-xs py-1">
+                    <code className="text-muted-foreground">{d}/</code>
+                    {agentReachable === null ? (
+                      <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                    ) : ok ? (
+                      <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                    ) : (
+                      <span className="text-amber-400">missing</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <Button className="w-full" onClick={() => setStep('backend')}>Continue</Button>
+          </div>
+        )}
 
         {step === 'backend' && (
           <div className="space-y-3 mt-4">
