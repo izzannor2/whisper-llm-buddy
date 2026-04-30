@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { SettingsDialog } from '@/components/SettingsDialog';
 import { LauncherToolsDialog } from '@/components/LauncherToolsDialog';
+import { VoiceCalibrationWizard } from '@/components/VoiceCalibrationWizard';
 import { loadSettings as loadChatSettings, saveSettings as saveChatSettings, type ChatSettings } from '@/lib/chat-api';
 
 // Simple QR code generator using canvas
@@ -232,6 +233,7 @@ export default function IDESettingsPage() {
           <h1 className="text-xl font-bold">Settings</h1>
         </div>
         <div className="flex items-center gap-2">
+          <VoiceCalibrationWizard />
           <LauncherToolsDialog />
           <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Save</Button>
         </div>
