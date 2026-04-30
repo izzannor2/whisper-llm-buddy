@@ -332,12 +332,18 @@ app.get('/selftest', async (req, res) => {
     checks.push({ name, ok: !!ok, message, detail });
 
   // 1. Project directories
-  for (const d of ['logs', 'models/gguf', 'models/ollama', 'bin/node', 'dist']) {
+  for (const d of ['logs', 'models/gguf', 'models/ollama', '.ollama', 'public/updates', 'config', 'bin/node', 'dist']) {
     const p = path.join(PROJECT_ROOT, d);
     pushCheck(`dir:${d}`, fs.existsSync(p), fs.existsSync(p) ? 'present' : 'missing', p);
   }
 
-  // 2. GGUF models present
+  // 2a. Portable Ollama model dir (per spec: .ollama, fallback models/ollama)
+  const ollamaPortable = path.join(PROJECT_ROOT, '.ollama');
+  const ollamaLegacy = path.join(PROJECT_ROOT, 'models', 'ollama');
+  const ollamaDir = fs.existsSync(path.join(ollamaPortable, 'models')) ? ollamaPortable :
+                    fs.existsSync(path.join(ollamaLegacy, 'models')) ? ollamaLegacy : ollamaPortable;
+
+  // 2b. GGUF models present
   const ggufDir = path.join(PROJECT_ROOT, 'models', 'gguf');
   let ggufFiles = [];
   if (fs.existsSync(ggufDir)) {
@@ -394,6 +400,9 @@ app.get('/selftest', async (req, res) => {
     passed,
     total: checks.length,
     timestamp: new Date().toISOString(),
+    projectRoot: PROJECT_ROOT,
+    ollamaModelsDir: ollamaDir,
+    ggufFiles,
     checks,
   });
 });
