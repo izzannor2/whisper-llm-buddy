@@ -314,11 +314,52 @@ export default function IDESettingsPage() {
                 <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><HardDrive className="h-4 w-4" /> Llama.cpp Configuration</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div><Label>Server URL</Label><Input value={settings.llamaCppUrl} onChange={(e) => updateSetting('llamaCppUrl', e.target.value)} placeholder="http://127.0.0.1:8081" /></div>
-                  <div className="flex items-center gap-2">
-                    <span className={cn('w-2 h-2 rounded-full', llamaCppConnected ? 'bg-green-500' : 'bg-red-500')} />
-                    <span className="text-sm">{llamaCppConnected ? 'Connected' : 'Not connected'}</span>
-                    <Button variant="outline" size="sm" onClick={checkLlamaCpp}>Test</Button>
-                  </div>
+                  {llamaCppConnected ? (
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-500" />
+                      <span className="text-sm">Connected</span>
+                      <Button variant="outline" size="sm" onClick={checkLlamaCpp}>Test</Button>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-muted/40 border border-border space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        <span className="text-sm font-medium">Not running — start GGUF server</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Run <code className="bg-muted px-1 py-0.5 rounded">START-GGUF-SERVER.bat</code> in
+                        the project root, or use the local agent to start it (requires the agent on :3847).
+                      </p>
+                      <div className="flex gap-2 flex-wrap">
+                        <Button variant="outline" size="sm" onClick={checkLlamaCpp}>Test again</Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            if (!selectedGgufFile) {
+                              toast.error('Pick a GGUF file first (below)');
+                              return;
+                            }
+                            try {
+                              const status = await fetch('http://127.0.0.1:3847/status').then(r => r.json());
+                              const cmd = `bin\\llama\\llama-server.exe -m models/gguf/${selectedGgufFile.name} --port 8081 --host 127.0.0.1 -ngl 99`;
+                              const res = await fetch('http://127.0.0.1:3847/exec', {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json', 'x-agent-session': status.sessionToken },
+                                body: JSON.stringify({ command: cmd }),
+                              });
+                              if (res.ok) toast.success('GGUF server starting…');
+                              else toast.error('Agent rejected the command — start it manually');
+                            } catch {
+                              toast.error('Local agent not reachable — run START-GGUF-SERVER.bat manually');
+                            }
+                          }}
+                        >
+                          Start GGUF Server
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   {llamaCppConnected && llamaCppInfo && (
                     <div className="p-3 rounded-lg bg-accent/10 border border-accent/30 text-sm">
                       <p><strong>Model:</strong> {llamaCppInfo.model || 'Unknown'}</p>
