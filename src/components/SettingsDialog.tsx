@@ -1282,6 +1282,7 @@ export function SettingsDialog({
           </TabsContent>
 
           <TabsContent value="debug" className="mt-4 space-y-4">
+            <SystemDiagnosticsCard localSettings={localSettings} />
             <DebugPanel />
 
             {/* Self-Test */}
