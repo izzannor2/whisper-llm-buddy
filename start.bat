@@ -253,14 +253,14 @@ if !LLAMA_SERVER_RUNNING!==0 (
 :: ========================================
 echo [5/5] Starting development server...
 echo.
-echo ══════════════════════════════════════════
+echo ==========================================
 echo  App:     http://localhost:8080
 if defined GGUF_MODEL echo  Llama:   http://localhost:8081
 if defined OLLAMA_CMD echo  Ollama:  http://localhost:11434
 echo  Models:  %SCRIPT_DIR%models\
 echo  Logs:    %SCRIPT_DIR%logs\
 echo  Press Ctrl+C to stop
-echo ══════════════════════════════════════════
+echo ==========================================
 echo.
 
 echo [%date% %time%] App server starting on port 8080 >> "logs\app.log"
