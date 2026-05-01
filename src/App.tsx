@@ -43,13 +43,23 @@ function AppInner() {
     }
 
     // Auto-apply bundled updates from public/updates/manifest.json
-    // Each version is applied at most once (tracked in localStorage).
+    // Tracking lives in BOTH localStorage AND config/applied-updates.json (via local agent),
+    // so a browser-storage wipe does not re-apply already-applied updates.
     (async () => {
       try {
         const { scanBundledUpdates, applyLocalUpdate, getCurrentVersion, compareVersions } =
           await import('@/lib/update-system');
         const APPLIED_KEY = 'localdev-bundled-applied';
-        const applied: string[] = JSON.parse(localStorage.getItem(APPLIED_KEY) || '[]');
+        const localApplied: string[] = JSON.parse(localStorage.getItem(APPLIED_KEY) || '[]');
+
+        // Merge with disk record (best-effort, agent may be down).
+        let diskApplied: string[] = [];
+        try {
+          const r = await fetch('http://127.0.0.1:3847/updates/applied', { signal: AbortSignal.timeout(1500) });
+          if (r.ok) diskApplied = (await r.json()).applied || [];
+        } catch {/* agent offline */}
+        const applied = Array.from(new Set([...localApplied, ...diskApplied]));
+
         const updates = await scanBundledUpdates();
         let changed = false;
         for (const u of updates) {
@@ -60,6 +70,13 @@ function AppInner() {
           } else {
             applied.push(u.version); changed = true;
           }
+          // Mirror to disk so a browser wipe doesn't replay updates.
+          try {
+            await fetch('http://127.0.0.1:3847/updates/applied', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ version: u.version }),
+            });
+          } catch {/* ignore */}
         }
         if (changed) localStorage.setItem(APPLIED_KEY, JSON.stringify(applied));
       } catch (err) {
