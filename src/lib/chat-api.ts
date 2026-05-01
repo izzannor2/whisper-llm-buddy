@@ -277,11 +277,14 @@ async function sendOllamaMessage(
   settings: ChatSettings,
   onChunk?: (chunk: string) => void
 ): Promise<string> {
+  if (!settings.ollamaModel) {
+    throw new Error('No Ollama model selected. Open Settings → Model Routing and pick a detected model.');
+  }
   const response = await fetchWithRetry(`${settings.ollamaUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: settings.ollamaModel || 'llama3.2',
+      model: settings.ollamaModel,
       messages,
       options: {
         temperature: settings.temperature,

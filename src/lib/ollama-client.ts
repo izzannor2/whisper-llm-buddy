@@ -127,7 +127,8 @@ export async function* streamChat(
 ): AsyncGenerator<string, void, unknown> {
   const settings = getIDESettings();
   const url = await getOllamaUrl();
-  const model = options?.model || settings.selectedModel || 'llama3.2';
+  const model = options?.model || settings.selectedModel;
+  if (!model) throw new Error('No local model selected. Open Settings → Model Routing.');
 
   // Add system prompt based on mode
   const systemPrompt = getSystemPromptForMode(settings.mode);
