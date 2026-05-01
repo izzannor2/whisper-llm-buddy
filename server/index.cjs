@@ -407,8 +407,139 @@ app.get('/selftest', async (req, res) => {
   });
 });
 
-// GET /processes
-app.get('/processes', (req, res) => {
+// ===== Model discovery + portable Ollama helpers =====
+
+function walkDir(root, maxDepth = 6) {
+  const out = [];
+  if (!fs.existsSync(root)) return out;
+  const stack = [{ dir: root, depth: 0 }];
+  while (stack.length) {
+    const { dir, depth } = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (depth < maxDepth) stack.push({ dir: full, depth: depth + 1 });
+      } else {
+        out.push(full);
+      }
+    }
+  }
+  return out;
+}
+
+// Proxy live Ollama tags so the UI can avoid CORS surprises
+app.get('/ollama/tags', (req, res) => {
+  const r = http.request({ host: '127.0.0.1', port: 11434, path: '/api/tags', method: 'GET', timeout: 2000 }, (resp) => {
+    let body = '';
+    resp.on('data', c => { body += c; });
+    resp.on('end', () => {
+      res.status(resp.statusCode || 502)
+         .setHeader('Content-Type', 'application/json')
+         .send(body || '{"models":[]}');
+    });
+  });
+  r.on('error', () => res.status(503).json({ error: 'Ollama not reachable', models: [] }));
+  r.on('timeout', () => { r.destroy(); res.status(504).json({ error: 'Ollama timeout', models: [] }); });
+  r.end();
+});
+
+// Read-only scan of portable Ollama manifests (works even if daemon is down)
+app.get('/scan/ollama', (req, res) => {
+  const dirs = [
+    path.join(PROJECT_ROOT, '.ollama', 'models', 'manifests'),
+    path.join(PROJECT_ROOT, 'models', 'ollama', 'models', 'manifests'),
+  ];
+  const found = [];
+  for (const d of dirs) {
+    if (!fs.existsSync(d)) continue;
+    for (const f of walkDir(d, 8)) {
+      // Manifest files are named after the tag, registry/library/<model>/<tag>
+      const rel = path.relative(d, f).replace(/\\/g, '/');
+      const parts = rel.split('/');
+      if (parts.length >= 3) {
+        const tag = parts[parts.length - 1];
+        const name = parts[parts.length - 2];
+        found.push({ name: `${name}:${tag}`, source: 'manifest', path: f });
+      }
+    }
+  }
+  res.json({ models: found, dirs: dirs.filter(d => fs.existsSync(d)) });
+});
+
+// Recursive .gguf discovery
+app.get('/scan/gguf', (req, res) => {
+  const root = path.join(PROJECT_ROOT, 'models', 'gguf');
+  const files = walkDir(root, 8).filter(f => f.toLowerCase().endsWith('.gguf'));
+  const models = files.map(f => {
+    let size = 0;
+    try { size = fs.statSync(f).size; } catch {}
+    return {
+      name: path.basename(f),
+      relPath: path.relative(PROJECT_ROOT, f).replace(/\\/g, '/'),
+      size,
+    };
+  });
+  res.json({ models, root });
+});
+
+// Locate llama-server.exe anywhere under bin/llama
+app.get('/scan/llama-server', (req, res) => {
+  const root = path.join(PROJECT_ROOT, 'bin', 'llama');
+  const candidates = walkDir(root, 6).filter(f => /llama-server(\.exe)?$/i.test(path.basename(f)));
+  res.json({
+    found: candidates.length > 0,
+    paths: candidates.map(f => path.relative(PROJECT_ROOT, f).replace(/\\/g, '/')),
+  });
+});
+
+// Persistent record of applied bundled updates (config/applied-updates.json)
+const APPLIED_UPDATES_FILE = path.join(PROJECT_ROOT, 'config', 'applied-updates.json');
+function readApplied() {
+  try { return JSON.parse(fs.readFileSync(APPLIED_UPDATES_FILE, 'utf-8')); } catch { return { applied: [] }; }
+}
+function writeApplied(data) {
+  try {
+    fs.mkdirSync(path.dirname(APPLIED_UPDATES_FILE), { recursive: true });
+    fs.writeFileSync(APPLIED_UPDATES_FILE, JSON.stringify(data, null, 2));
+    return true;
+  } catch { return false; }
+}
+app.get('/updates/applied', (req, res) => res.json(readApplied()));
+app.post('/updates/applied', (req, res) => {
+  const { version } = req.body || {};
+  if (!version || typeof version !== 'string') return res.status(400).json({ error: 'version required' });
+  const data = readApplied();
+  if (!data.applied.includes(version)) data.applied.push(version);
+  data.updatedAt = new Date().toISOString();
+  res.json({ ok: writeApplied(data), applied: data.applied });
+});
+
+// Restart portable Ollama with the project's .ollama folder
+app.post('/agent/restart-ollama', requireSession, (req, res) => {
+  const ollamaBin = path.join(PROJECT_ROOT, 'bin', 'ollama', process.platform === 'win32' ? 'ollama.exe' : 'ollama');
+  if (!fs.existsSync(ollamaBin)) return res.status(404).json({ error: 'Portable ollama not found at bin/ollama/' });
+  try {
+    // Best-effort kill of existing ollama processes (tracked only)
+    for (const [pid, child] of trackedProcesses) {
+      try { if (child.spawnfile && /ollama/i.test(child.spawnfile)) child.kill(); } catch {}
+    }
+    const child = spawn(ollamaBin, ['serve'], {
+      cwd: PROJECT_ROOT,
+      env: { ...process.env, OLLAMA_MODELS: path.join(PROJECT_ROOT, '.ollama'), OLLAMA_HOST: '127.0.0.1:11434' },
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    trackProcess(child);
+    res.json({ ok: true, pid: child.pid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
   const procs = [];
   for (const [pid, child] of trackedProcesses) {
     procs.push({ pid, killed: child.killed, exitCode: child.exitCode });
