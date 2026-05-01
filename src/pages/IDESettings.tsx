@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { SettingsDialog } from '@/components/SettingsDialog';
 import { LauncherToolsDialog } from '@/components/LauncherToolsDialog';
 import { VoiceCalibrationWizard } from '@/components/VoiceCalibrationWizard';
+import { ModelRoutingPanel } from '@/components/ModelRoutingPanel';
 import { loadSettings as loadChatSettings, saveSettings as saveChatSettings, type ChatSettings } from '@/lib/chat-api';
 
 // Simple QR code generator using canvas
@@ -519,6 +520,14 @@ export default function IDESettingsPage() {
               </section>
             </>
           )}
+
+          <Separator />
+
+          {/* Model Routing — per-role detected-model selection */}
+          <section>
+            <h2 className="text-lg font-semibold mb-4">Model Routing</h2>
+            <ModelRoutingPanel />
+          </section>
 
           <Separator />
 

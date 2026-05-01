@@ -562,7 +562,7 @@ export function SettingsDialog({
                     : 'border-border hover:border-muted-foreground'
                 )}
                 onClick={() =>
-                  setLocalSettings({ ...localSettings, backend: 'ollama', ollamaModel: 'llama3.2' })
+                  setLocalSettings({ ...localSettings, backend: 'ollama' })
                 }
               >
                 <HardDrive className="w-5 h-5 mb-1 text-purple-500" />

@@ -3,11 +3,28 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// https://vitejs.dev/config/
+// Portable directories that must NEVER be scanned, served, or watched by Vite.
+// These contain native binaries, GGUF models, llama.cpp tooling and runtime logs.
+const PORTABLE_IGNORES = [
+  "**/bin/**",
+  "**/models/**",
+  "**/.ollama/**",
+  "**/logs/**",
+  "**/config/**",
+  "**/dist/**",
+];
+
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    fs: {
+      // Hard deny — blocks Vite from serving anything inside these folders.
+      deny: ["bin", "models", ".ollama", "logs", "config", "**/llama.cpp/**"],
+    },
+    watch: {
+      ignored: PORTABLE_IGNORES,
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
@@ -17,6 +34,16 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
   optimizeDeps: {
+    // node-fetch lives inside bin/llama tooling — never let the dep scanner pull it.
+    exclude: ["node-fetch", "fsevents"],
+    entries: [
+      "index.html",
+      "src/**/*.{ts,tsx,js,jsx}",
+      "!**/bin/**",
+      "!**/models/**",
+      "!**/.ollama/**",
+      "!**/logs/**",
+    ],
     include: [
       "react",
       "react-dom",
@@ -54,5 +81,10 @@ export default defineConfig(({ mode }) => ({
       "@radix-ui/react-slot",
     ],
     force: true,
+  },
+  build: {
+    rollupOptions: {
+      external: [/^node-fetch$/, /[\\/]bin[\\/]/, /[\\/]llama\.cpp[\\/]/],
+    },
   },
 }));

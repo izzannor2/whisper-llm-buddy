@@ -116,7 +116,7 @@ export const DEFAULT_SETTINGS: IDESettings = {
   fontSize: 14,
   llmBackend: 'ollama',
   ollamaUrl: 'http://localhost:11434',
-  selectedModel: 'llama3.2',
+  selectedModel: '',
   llamaCppUrl: 'http://127.0.0.1:8081',
   llamaCppModel: '',
   llamaCppContextSize: 4096,

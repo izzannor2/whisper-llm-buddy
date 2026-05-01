@@ -180,17 +180,15 @@ Note: Commands marked (requires agent) need the LocalDev Agent running.`);
       return;
     }
 
-    // Execute through agent or simulate
+    // Execute through agent — never simulate. If agent is down, refuse.
+    if (!agentStatus.connected) {
+      addLine('error', 'Agent not running on http://localhost:3847. Start START-PORTABLE-AI.bat to enable real command execution.');
+      return;
+    }
     try {
       const result = await executeCommand(trimmed, cwd);
-      
-      if (result.output) {
-        addLine('output', result.output);
-      }
-      
-      if (result.error) {
-        addLine('error', result.error);
-      }
+      if (result.output) addLine('output', result.output);
+      if (result.error) addLine('error', result.error);
     } catch (error) {
       addLine('error', `Command failed: ${error}`);
     }
