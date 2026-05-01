@@ -540,6 +540,8 @@ app.post('/agent/restart-ollama', requireSession, (req, res) => {
 });
 
 
+// GET /processes
+app.get('/processes', (req, res) => {
   const procs = [];
   for (const [pid, child] of trackedProcesses) {
     procs.push({ pid, killed: child.killed, exitCode: child.exitCode });
