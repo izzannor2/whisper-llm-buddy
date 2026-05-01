@@ -31,7 +31,7 @@ break > "logs\pids.txt"
 echo [0/4] Running preflight checks...
 set "PREFLIGHT_FAIL=0"
 
-for %%F in ("bin\node\node.exe" "server\index.js" "server\static.cjs" "dist\index.html") do (
+for %%F in ("bin\node\node.exe" "server\index.cjs" "server\static.cjs" "dist\index.html") do (
     if not exist %%F (
         echo       [FAIL] Missing: %%F
         set "PREFLIGHT_FAIL=1"
@@ -130,7 +130,7 @@ if defined GGUF_MODEL if exist "bin\llama\llama-server.exe" (
 :: Local Agent server on 3847
 :: ----------------------------------------------------
 echo [3/4] [*] Starting local agent on :3847...
-start "AGENT" /B cmd /c "bin\node\node.exe server\index.js >> logs\agent.log 2>&1"
+start "AGENT" /B cmd /c "bin\node\node.exe server\index.cjs >> logs\agent.log 2>&1"
 timeout /t 2 /nobreak >nul
 call :capture_new_pid node.exe
 echo       [OK] Agent launched
