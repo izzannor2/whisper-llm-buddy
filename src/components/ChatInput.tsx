@@ -648,9 +648,19 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                   <Square className="w-4 h-4" />
                 </Button>
               ) : (
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-muted" onClick={handleSend} disabled={!message.trim() && attachments.length === 0}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 rounded-full hover:bg-muted"
+                  onClick={handleSend}
+                  disabled={(!message.trim() && attachments.length === 0) || noModelsBlock}
+                  title={noModelsBlock ? 'No models detected — open Settings → Models' : undefined}
+                >
                   <Send className="w-4 h-4" />
                 </Button>
+              )}
+              {noModelsBlock && (
+                <span className="text-[10px] text-amber-400 font-mono ml-2">No models detected</span>
               )}
             </div>
           </div>
