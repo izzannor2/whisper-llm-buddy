@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 import { parseCodeBlocks } from '@/lib/code-parser';
 import { writeFile } from '@/lib/file-system';
+import { useModelsAvailable } from '@/hooks/use-models-available';
 import { toast } from 'sonner';
 
 interface BuildStep {

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import ReactMarkdown from 'react-markdown';
 import { parseCodeBlocks } from '@/lib/code-parser';
 import { isWhisperLoaded, getDownloadedModels, transcribeAudio, loadWhisperModel, getSelectedWhisperModel } from '@/lib/local-stt';
+import { useModelsAvailable } from '@/hooks/use-models-available';
 import { toast } from 'sonner';
 
 interface Message extends ChatMessageType {
