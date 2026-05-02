@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 import { parseCodeBlocks } from '@/lib/code-parser';
 import { writeFile } from '@/lib/file-system';
+import { useModelsAvailable } from '@/hooks/use-models-available';
 import { toast } from 'sonner';
 
 interface BuildStep {
@@ -30,6 +31,7 @@ export function AutoBuildPanel({ open, onOpenChange, onSendMessage }: AutoBuildP
   const [isBuilding, setIsBuilding] = useState(false);
   const [progress, setProgress] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
+  const { hasAny: hasLocalModels } = useModelsAvailable();
 
   const startBuild = useCallback(async () => {
     if (!description.trim() || isBuilding) return;
@@ -135,7 +137,17 @@ export function AutoBuildPanel({ open, onOpenChange, onSendMessage }: AutoBuildP
               onChange={(e) => setDescription(e.target.value)}
               className="min-h-[120px]"
             />
-            <Button onClick={startBuild} disabled={!description.trim()} className="w-full gap-2">
+            {!hasLocalModels && (
+              <p className="text-xs text-amber-400">
+                No models detected — open Settings → Models to install one before building.
+              </p>
+            )}
+            <Button
+              onClick={startBuild}
+              disabled={!description.trim() || !hasLocalModels}
+              className="w-full gap-2"
+              title={!hasLocalModels ? 'No models detected' : undefined}
+            >
               <Rocket className="w-4 h-4" />
               Start Building
             </Button>

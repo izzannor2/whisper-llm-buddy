@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import ReactMarkdown from 'react-markdown';
 import { parseCodeBlocks } from '@/lib/code-parser';
 import { isWhisperLoaded, getDownloadedModels, transcribeAudio, loadWhisperModel, getSelectedWhisperModel } from '@/lib/local-stt';
+import { useModelsAvailable } from '@/hooks/use-models-available';
 import { toast } from 'sonner';
 
 interface Message extends ChatMessageType {
@@ -84,6 +85,7 @@ export function IDEChat({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const modeInfo = MODE_INFO[mode];
+  const { hasAny: hasLocalModels } = useModelsAvailable();
 
   const showPlanButton = mode === 'app-builder' || mode === 'ai-improvement';
 
@@ -292,7 +294,13 @@ export function IDEChat({
               onClick={toggleRecording} disabled={isTranscribing}>
               {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
-            <Button size="icon" className="h-8 w-8 rounded-full" onClick={handleSubmit} disabled={!input.trim() || isLoading}>
+            <Button
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              onClick={handleSubmit}
+              disabled={!input.trim() || isLoading || !hasLocalModels}
+              title={!hasLocalModels ? 'No models detected — open Settings → Models' : undefined}
+            >
               <Send className="h-4 w-4" />
             </Button>
           </div>

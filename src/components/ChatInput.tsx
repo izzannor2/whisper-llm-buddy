@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { isWhisperLoaded, loadWhisperModel, transcribeAudio, getSelectedWhisperModel, getDownloadedModels, isVoiceReady, isSelectedModelCached, getAnyCachedModel } from '@/lib/local-stt';
 import { loadSettings, saveSettings, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, ChatSettings } from '@/lib/chat-api';
 import { getModeTheme } from '@/lib/mode-themes';
+import { useModelsAvailable } from '@/hooks/use-models-available';
 
 import { MessageAttachment } from '@/lib/db';
 
@@ -115,6 +116,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const [attachments, setAttachments] = useState<Attachment[]>([]);
 
     const [whisperAvailable, setWhisperAvailable] = useState(() => isVoiceReady());
+    const { hasAny: hasLocalModels } = useModelsAvailable();
+    const isLocalBackend = settings.backend === 'ollama' || settings.backend === 'local';
+    const noModelsBlock = isLocalBackend && !hasLocalModels;
 
     const getBackendDisplayName = () => {
       switch (settings.backend) {
@@ -644,9 +648,19 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                   <Square className="w-4 h-4" />
                 </Button>
               ) : (
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-muted" onClick={handleSend} disabled={!message.trim() && attachments.length === 0}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 rounded-full hover:bg-muted"
+                  onClick={handleSend}
+                  disabled={(!message.trim() && attachments.length === 0) || noModelsBlock}
+                  title={noModelsBlock ? 'No models detected — open Settings → Models' : undefined}
+                >
                   <Send className="w-4 h-4" />
                 </Button>
+              )}
+              {noModelsBlock && (
+                <span className="text-[10px] text-amber-400 font-mono ml-2">No models detected</span>
               )}
             </div>
           </div>

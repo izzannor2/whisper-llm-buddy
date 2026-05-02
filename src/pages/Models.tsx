@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Star, Play, Square, Trash2, Wifi, Globe, Cpu,
-  Monitor, Download, ExternalLink, RefreshCw, Loader2, Search,
+  Monitor, Download, ExternalLink, RefreshCw, Loader2, Search, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,8 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useAgentStatus } from '@/hooks/use-agent-status';
 
 interface LocalModel {
   id: string;
@@ -60,11 +62,43 @@ export default function Models() {
   const [hfSearch, setHfSearch] = useState('');
   const [ollamaPullName, setOllamaPullName] = useState('');
   const [isPulling, setIsPulling] = useState(false);
+  const [ollamaInfo, setOllamaInfo] = useState<{ running: boolean; liveCount: number; manifestCount: number; expectedDir: string } | null>(null);
+  const [isRestartingOllama, setIsRestartingOllama] = useState(false);
+  const agent = useAgentStatus();
 
   const aiScore = calculateAIScore();
 
   // Scan local models on mount
-  useEffect(() => { scanLocalModels(); }, []);
+  useEffect(() => { scanLocalModels(); refreshOllamaInfo(); }, []);
+
+  const refreshOllamaInfo = useCallback(async () => {
+    try {
+      const r = await fetch('http://127.0.0.1:3847/agent/ollama-info', { signal: AbortSignal.timeout(2000) });
+      if (r.ok) setOllamaInfo(await r.json());
+    } catch { setOllamaInfo(null); }
+  }, []);
+
+  const restartOllama = useCallback(async () => {
+    if (!agent.sessionToken) { toast.error('Local agent not running on :3847'); return; }
+    setIsRestartingOllama(true);
+    try {
+      const r = await fetch('http://127.0.0.1:3847/agent/restart-ollama', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-agent-session': agent.sessionToken },
+      });
+      const data = await r.json();
+      if (r.ok) {
+        toast.success(`Ollama restarted with portable models dir`);
+        setTimeout(() => { scanLocalModels(); refreshOllamaInfo(); }, 1500);
+      } else {
+        toast.error(data.error || 'Failed to restart Ollama');
+      }
+    } catch (e: any) {
+      toast.error(`Restart failed: ${e?.message || e}`);
+    } finally {
+      setIsRestartingOllama(false);
+    }
+  }, [agent.sessionToken, refreshOllamaInfo]);
 
   const scanLocalModels = useCallback(async () => {
     setIsScanning(true);
@@ -253,7 +287,7 @@ export default function Models() {
             <Input
               value={ollamaPullName}
               onChange={e => setOllamaPullName(e.target.value)}
-              placeholder="llama3.2:3b"
+              placeholder="model:tag"
               className="h-8 text-xs font-mono"
               onKeyDown={e => e.key === 'Enter' && pullOllamaModel()}
             />
@@ -306,6 +340,29 @@ export default function Models() {
         </header>
 
         <ScrollArea className="flex-1 p-6">
+          {/* Ollama folder mismatch warning */}
+          {ollamaInfo && ollamaInfo.running && ollamaInfo.liveCount === 0 && ollamaInfo.manifestCount > 0 && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Ollama is using a different model folder</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p className="text-sm">
+                  Ollama is running but reports 0 models, while {ollamaInfo.manifestCount} manifest(s) exist in the
+                  portable folder <code className="bg-muted px-1 rounded text-xs">{ollamaInfo.expectedDir}</code>.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={restartOllama}
+                  disabled={isRestartingOllama || !agent.connected}
+                >
+                  {isRestartingOllama ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-2" />}
+                  Restart Ollama Portable
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Runtime Status */}
           <div className="mb-6">
             <h3 className="text-xs text-muted-foreground font-mono mb-2">Runtime Status</h3>
@@ -366,7 +423,7 @@ export default function Models() {
               {models.length === 0 && !isScanning && (
                 <div className="text-center py-8 text-muted-foreground">
                   <Cpu className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">No local models detected</p>
+                  <p className="text-sm">No models detected</p>
                   <p className="text-xs mt-1">Start Ollama or llama-server, then click Scan</p>
                 </div>
               )}
