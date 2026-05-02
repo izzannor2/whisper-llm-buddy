@@ -516,6 +516,30 @@ app.post('/updates/applied', (req, res) => {
   res.json({ ok: writeApplied(data), applied: data.applied });
 });
 
+// Snapshot of Ollama state — used by UI to detect "wrong model folder" mismatch
+app.get('/agent/ollama-info', (req, res) => {
+  const expectedDir = path.join(PROJECT_ROOT, '.ollama');
+  const manifestRoot = path.join(expectedDir, 'models', 'manifests');
+  let manifestCount = 0;
+  try {
+    if (fs.existsSync(manifestRoot)) {
+      manifestCount = walkDir(manifestRoot, 8).length;
+    }
+  } catch {}
+  const r = http.request({ host: '127.0.0.1', port: 11434, path: '/api/tags', method: 'GET', timeout: 1500 }, (resp) => {
+    let body = '';
+    resp.on('data', (c) => { body += c; });
+    resp.on('end', () => {
+      let liveCount = 0;
+      try { liveCount = (JSON.parse(body).models || []).length; } catch {}
+      res.json({ running: true, liveCount, manifestCount, expectedDir });
+    });
+  });
+  r.on('error', () => res.json({ running: false, liveCount: 0, manifestCount, expectedDir }));
+  r.on('timeout', () => { r.destroy(); res.json({ running: false, liveCount: 0, manifestCount, expectedDir }); });
+  r.end();
+});
+
 // Restart portable Ollama with the project's .ollama folder
 app.post('/agent/restart-ollama', requireSession, (req, res) => {
   const ollamaBin = path.join(PROJECT_ROOT, 'bin', 'ollama', process.platform === 'win32' ? 'ollama.exe' : 'ollama');
