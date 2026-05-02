@@ -116,6 +116,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const [attachments, setAttachments] = useState<Attachment[]>([]);
 
     const [whisperAvailable, setWhisperAvailable] = useState(() => isVoiceReady());
+    const { hasAny: hasLocalModels } = useModelsAvailable();
+    const isLocalBackend = settings.backend === 'ollama' || settings.backend === 'local';
+    const noModelsBlock = isLocalBackend && !hasLocalModels;
 
     const getBackendDisplayName = () => {
       switch (settings.backend) {
