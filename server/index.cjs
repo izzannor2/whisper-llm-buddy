@@ -542,22 +542,32 @@ app.get('/agent/ollama-info', (req, res) => {
 
 // Restart portable Ollama with the project's .ollama folder
 app.post('/agent/restart-ollama', requireSession, (req, res) => {
-  const ollamaBin = path.join(PROJECT_ROOT, 'bin', 'ollama', process.platform === 'win32' ? 'ollama.exe' : 'ollama');
-  if (!fs.existsSync(ollamaBin)) return res.status(404).json({ error: 'Portable ollama not found at bin/ollama/' });
+  const portableBin = path.join(PROJECT_ROOT, 'bin', 'ollama', process.platform === 'win32' ? 'ollama.exe' : 'ollama');
+  const ollamaBin = fs.existsSync(portableBin) ? portableBin : 'ollama';
+  const modelsDir = path.join(PROJECT_ROOT, '.ollama');
   try {
-    // Best-effort kill of existing ollama processes (tracked only)
-    for (const [pid, child] of trackedProcesses) {
+    for (const [, child] of trackedProcesses) {
       try { if (child.spawnfile && /ollama/i.test(child.spawnfile)) child.kill(); } catch {}
     }
-    const child = spawn(ollamaBin, ['serve'], {
-      cwd: PROJECT_ROOT,
-      env: { ...process.env, OLLAMA_MODELS: path.join(PROJECT_ROOT, '.ollama'), OLLAMA_HOST: '127.0.0.1:11434' },
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
-    trackProcess(child);
-    res.json({ ok: true, pid: child.pid });
+    try {
+      if (process.platform === 'win32') exec('taskkill /IM ollama.exe /F', () => {});
+      else exec('pkill -f ollama', () => {});
+    } catch {}
+    setTimeout(() => {
+      try {
+        const child = spawn(ollamaBin, ['serve'], {
+          cwd: PROJECT_ROOT,
+          env: { ...process.env, OLLAMA_MODELS: modelsDir, OLLAMA_HOST: '127.0.0.1:11434' },
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.unref();
+        trackProcess(child);
+        res.json({ ok: true, pid: child.pid, modelsDir, bin: ollamaBin });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    }, 600);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
