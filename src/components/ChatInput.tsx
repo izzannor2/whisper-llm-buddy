@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { isWhisperLoaded, loadWhisperModel, transcribeAudio, getSelectedWhisperModel, getDownloadedModels, isVoiceReady, isSelectedModelCached, getAnyCachedModel } from '@/lib/local-stt';
 import { loadSettings, saveSettings, CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS, ChatSettings } from '@/lib/chat-api';
 import { getModeTheme } from '@/lib/mode-themes';
+import { useModelsAvailable } from '@/hooks/use-models-available';
 
 import { MessageAttachment } from '@/lib/db';
 
