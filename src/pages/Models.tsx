@@ -340,6 +340,29 @@ export default function Models() {
         </header>
 
         <ScrollArea className="flex-1 p-6">
+          {/* Ollama folder mismatch warning */}
+          {ollamaInfo && ollamaInfo.running && ollamaInfo.liveCount === 0 && ollamaInfo.manifestCount > 0 && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Ollama is using a different model folder</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p className="text-sm">
+                  Ollama is running but reports 0 models, while {ollamaInfo.manifestCount} manifest(s) exist in the
+                  portable folder <code className="bg-muted px-1 rounded text-xs">{ollamaInfo.expectedDir}</code>.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={restartOllama}
+                  disabled={isRestartingOllama || !agent.connected}
+                >
+                  {isRestartingOllama ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-2" />}
+                  Restart Ollama Portable
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Runtime Status */}
           <div className="mb-6">
             <h3 className="text-xs text-muted-foreground font-mono mb-2">Runtime Status</h3>
