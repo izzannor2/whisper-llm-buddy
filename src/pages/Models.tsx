@@ -423,7 +423,7 @@ export default function Models() {
               {models.length === 0 && !isScanning && (
                 <div className="text-center py-8 text-muted-foreground">
                   <Cpu className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">No local models detected</p>
+                  <p className="text-sm">No models detected</p>
                   <p className="text-xs mt-1">Start Ollama or llama-server, then click Scan</p>
                 </div>
               )}
