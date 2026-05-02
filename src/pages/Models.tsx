@@ -62,11 +62,43 @@ export default function Models() {
   const [hfSearch, setHfSearch] = useState('');
   const [ollamaPullName, setOllamaPullName] = useState('');
   const [isPulling, setIsPulling] = useState(false);
+  const [ollamaInfo, setOllamaInfo] = useState<{ running: boolean; liveCount: number; manifestCount: number; expectedDir: string } | null>(null);
+  const [isRestartingOllama, setIsRestartingOllama] = useState(false);
+  const agent = useAgentStatus();
 
   const aiScore = calculateAIScore();
 
   // Scan local models on mount
-  useEffect(() => { scanLocalModels(); }, []);
+  useEffect(() => { scanLocalModels(); refreshOllamaInfo(); }, []);
+
+  const refreshOllamaInfo = useCallback(async () => {
+    try {
+      const r = await fetch('http://127.0.0.1:3847/agent/ollama-info', { signal: AbortSignal.timeout(2000) });
+      if (r.ok) setOllamaInfo(await r.json());
+    } catch { setOllamaInfo(null); }
+  }, []);
+
+  const restartOllama = useCallback(async () => {
+    if (!agent.sessionToken) { toast.error('Local agent not running on :3847'); return; }
+    setIsRestartingOllama(true);
+    try {
+      const r = await fetch('http://127.0.0.1:3847/agent/restart-ollama', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-agent-session': agent.sessionToken },
+      });
+      const data = await r.json();
+      if (r.ok) {
+        toast.success(`Ollama restarted with portable models dir`);
+        setTimeout(() => { scanLocalModels(); refreshOllamaInfo(); }, 1500);
+      } else {
+        toast.error(data.error || 'Failed to restart Ollama');
+      }
+    } catch (e: any) {
+      toast.error(`Restart failed: ${e?.message || e}`);
+    } finally {
+      setIsRestartingOllama(false);
+    }
+  }, [agent.sessionToken, refreshOllamaInfo]);
 
   const scanLocalModels = useCallback(async () => {
     setIsScanning(true);
