@@ -253,7 +253,7 @@ export default function Models() {
             <Input
               value={ollamaPullName}
               onChange={e => setOllamaPullName(e.target.value)}
-              placeholder="llama3.2:3b"
+              placeholder="model:tag"
               className="h-8 text-xs font-mono"
               onKeyDown={e => e.key === 'Enter' && pullOllamaModel()}
             />

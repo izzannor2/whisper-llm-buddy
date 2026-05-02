@@ -43,7 +43,7 @@ export function generateStartupScripts(settings: IDESettings): {
   macos: string;
 } {
   const ollamaUrl = settings.ollamaUrl || 'http://localhost:11434';
-  const model = settings.selectedModel || 'llama3.2';
+  const model = settings.selectedModel || '<your-model>';
 
   const windows = `@echo off
 REM LocalDev AI Startup Script for Windows
@@ -261,7 +261,7 @@ This project was created with LocalDev AI, a local-first development environment
 ### Prerequisites
 - Node.js 18+ installed
 - Ollama installed (https://ollama.ai)
-- Model: ${settings.selectedModel || 'llama3.2'}
+- Model: ${settings.selectedModel || '<your-model>'}
 
 ### Quick Start
 1. Run the startup script for your platform:
@@ -274,7 +274,7 @@ This project was created with LocalDev AI, a local-first development environment
    ollama serve
    
    # Pull the model (if not already)
-   ollama pull ${settings.selectedModel || 'llama3.2'}
+   ollama pull ${settings.selectedModel || '<your-model>'}
    
    # Install dependencies
    npm install
@@ -294,7 +294,7 @@ ${generateFileTree(project.files)}
 
 ### Ollama Settings
 - URL: ${settings.ollamaUrl || 'http://localhost:11434'}
-- Model: ${settings.selectedModel || 'llama3.2'}
+- Model: ${settings.selectedModel || '<your-model>'}
 
 ### IDE Mode
 - Current Mode: ${settings.mode}

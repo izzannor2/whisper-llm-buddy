@@ -367,7 +367,7 @@ export function SettingsDialog({
             setLocalSettings({ ...localSettings, ollamaModel: models[0] });
           }
         } else {
-          toast.info('Ollama is running but no models installed. Run: ollama pull llama3.2');
+          toast.info('Ollama is running but no models installed. Pull one from the Models page.');
         }
       } else {
         toast.error(`Ollama responded with error: ${response.status}`);
@@ -761,7 +761,7 @@ export function SettingsDialog({
                           ollamaModel: e.target.value,
                         })
                       }
-                      placeholder="llama3.2"
+                      placeholder="model:tag"
                       className="bg-muted"
                     />
                   )}
@@ -771,7 +771,7 @@ export function SettingsDialog({
                       : 'Click refresh to scan for models, or enter manually'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Pull models with: <code className="bg-muted px-1 rounded">ollama pull llama3.2</code>
+                    Pull models from the Models page or with <code className="bg-muted px-1 rounded">ollama pull &lt;model&gt;</code>
                   </p>
                 </div>
               </div>
