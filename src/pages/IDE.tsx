@@ -518,6 +518,8 @@ export default function IDE() {
                     <span className="ml-1 px-1.5 py-0.5 text-xs bg-destructive text-destructive-foreground rounded-full">{debugLogs.filter(l => l.type === 'error').length}</span>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="system" className="gap-1"><Cpu className="h-3 w-3" />System</TabsTrigger>
+                <TabsTrigger value="build" className="gap-1"><RocketIcon className="h-3 w-3" />Build</TabsTrigger>
               </TabsList>
               <TabsContent value="preview" className="flex-1 m-0">
                 <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
