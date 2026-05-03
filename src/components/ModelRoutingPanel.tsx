@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle2, Sparkles, Cpu, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
 import {
   MODEL_ROLES,
   loadRouting,
+  saveRouting,
   setRoleRouting,
   type ModelRole,
   type RoutingEntry,
@@ -84,17 +85,77 @@ export function ModelRoutingPanel() {
 
   const noLocal = !hasAnyLocalModel(snap);
 
+  const applyRecommended = useCallback(() => {
+    if (!snap || !hasAnyLocalModel(snap)) {
+      toast.error('No local models detected to recommend.');
+      return;
+    }
+    // Recommendation: largest detected local model wins assistant/ide/improvement,
+    // smallest wins voice for low latency. Vision/embeddings only set if the
+    // model name hints at it.
+    const local = [...snap.ollama, ...snap.gguf];
+    const sortedBySize = [...local].sort((a, b) => (b.size || 0) - (a.size || 0));
+    const big = sortedBySize[0];
+    const small = sortedBySize[sortedBySize.length - 1] || big;
+    const vision = local.find(m => /vision|llava|vl|image/i.test(m.name)) || null;
+    const embed  = local.find(m => /embed|nomic|bge/i.test(m.name)) || null;
+    const next = loadRouting();
+    const assign = (role: ModelRole, m: typeof big) => {
+      next[role] = { provider: m.provider as RoutingEntry['provider'], model: m.name };
+    };
+    if (big)   { assign('assistant', big); assign('ide', big); assign('improvement', big); assign('app-builder', big); }
+    if (small) { assign('voice', small); }
+    if (vision) assign('vision', vision);
+    if (embed)  assign('embeddings', embed);
+    saveRouting(next);
+    setRouting(next);
+    toast.success('Recommended routing applied.');
+  }, [snap]);
+
+  const scanHardware = useCallback(async () => {
+    try {
+      const r = await fetch('http://127.0.0.1:3847/scan/hardware', { signal: AbortSignal.timeout(2500) });
+      if (!r.ok) throw new Error(`agent ${r.status}`);
+      const hw = await r.json();
+      const ramGb = (hw.totalMemBytes / 1024 / 1024 / 1024).toFixed(1);
+      toast.success(`CPU ${hw.cpuPercent}% · ${hw.cpuCores} cores · RAM ${hw.memPercent}% of ${ramGb}GB${hw.gpu ? ' · ' + hw.gpu : ''}`);
+    } catch (e: any) {
+      toast.error(`Hardware scan failed: ${e.message || e}`);
+    }
+  }, []);
+
+  const resetRouting = useCallback(() => {
+    const empty = MODEL_ROLES.reduce((acc, r) => {
+      acc[r.id] = { provider: 'auto' as const, model: '' };
+      return acc;
+    }, {} as Record<ModelRole, RoutingEntry>);
+    saveRouting(empty);
+    setRouting(empty);
+    toast.success('Routing reset.');
+  }, []);
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div>
             <CardTitle className="text-base">Model Routing</CardTitle>
             <CardDescription>Pick which detected model each workspace should use.</CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Rescan
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={applyRecommended} disabled={!snap}>
+              <Sparkles className="w-4 h-4 mr-2" /> Recommended
+            </Button>
+            <Button variant="outline" size="sm" onClick={scanHardware}>
+              <Cpu className="w-4 h-4 mr-2" /> Scan Hardware
+            </Button>
+            <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Rescan Models
+            </Button>
+            <Button variant="outline" size="sm" onClick={resetRouting}>
+              <RotateCcw className="w-4 h-4 mr-2" /> Reset
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

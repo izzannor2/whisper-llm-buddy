@@ -592,8 +592,324 @@ app.post('/process/kill', requireSession, (req, res) => {
   res.json({ success: true });
 });
 
+// ===== Hardware scan =====
+const os = require('os');
+
+let cpuPrev = os.cpus().map(c => ({ ...c.times }));
+function cpuPercent() {
+  const cur = os.cpus().map(c => ({ ...c.times }));
+  let idle = 0, total = 0;
+  for (let i = 0; i < cur.length; i++) {
+    const a = cpuPrev[i] || cur[i];
+    const b = cur[i];
+    const di = b.idle - a.idle;
+    const dt = (b.user + b.nice + b.sys + b.idle + b.irq) - (a.user + a.nice + a.sys + a.idle + a.irq);
+    idle += di; total += dt;
+  }
+  cpuPrev = cur;
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((1 - idle / total) * 100)));
+}
+
+let cachedGpu = null;
+function detectGpu(cb) {
+  if (cachedGpu !== null) return cb(cachedGpu);
+  const cmd = process.platform === 'win32'
+    ? 'wmic path win32_VideoController get name'
+    : 'lspci | grep -i vga';
+  exec(cmd, { timeout: 2500 }, (err, stdout) => {
+    if (err || !stdout) { cachedGpu = ''; return cb(''); }
+    const lines = stdout.split(/\r?\n/).map(l => l.trim()).filter(l => l && !/^name$/i.test(l));
+    cachedGpu = lines[0] || '';
+    cb(cachedGpu);
+  });
+}
+
+function hardwareSnapshot(cb) {
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  const snap = {
+    cpuPercent: cpuPercent(),
+    cpuModel: (os.cpus()[0] && os.cpus()[0].model) || 'Unknown',
+    cpuCores: os.cpus().length,
+    totalMemBytes: totalMem,
+    usedMemBytes: usedMem,
+    memPercent: Math.round((usedMem / totalMem) * 100),
+    platform: process.platform,
+    arch: process.arch,
+    uptimeSec: Math.round(os.uptime()),
+    loadAvg: os.loadavg(),
+    timestamp: new Date().toISOString(),
+  };
+  detectGpu((gpu) => { snap.gpu = gpu; cb(snap); });
+}
+
+app.get('/scan/hardware', (req, res) => {
+  hardwareSnapshot((snap) => res.json(snap));
+});
+
+// Server-Sent Events stream of hardware metrics, 1Hz.
+app.get('/scan/hardware/live', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders && res.flushHeaders();
+  let alive = true;
+  const tick = () => {
+    if (!alive) return;
+    hardwareSnapshot((snap) => {
+      if (!alive) return;
+      try { res.write(`data: ${JSON.stringify(snap)}\n\n`); } catch { alive = false; }
+    });
+  };
+  tick();
+  const iv = setInterval(tick, 1000);
+  req.on('close', () => { alive = false; clearInterval(iv); try { res.end(); } catch {} });
+});
+
+// ===== Debug endpoints =====
+let lastErrorRecord = null;
+function recordError(source, err) {
+  lastErrorRecord = {
+    source,
+    message: (err && (err.message || String(err))) || 'Unknown error',
+    stack: err && err.stack ? String(err.stack).split('\n').slice(0, 8).join('\n') : null,
+    at: new Date().toISOString(),
+  };
+}
+process.on('uncaughtException', (e) => { recordError('uncaughtException', e); log(`UNCAUGHT: ${e.stack || e}`); });
+process.on('unhandledRejection', (e) => { recordError('unhandledRejection', e); log(`UNHANDLED: ${e && e.stack || e}`); });
+
+app.get('/debug/snapshot', (req, res) => {
+  hardwareSnapshot((hw) => {
+    let pkgVersion = '0.0.0';
+    try { pkgVersion = require(path.join(PROJECT_ROOT, 'package.json')).version || pkgVersion; } catch {}
+    res.json({
+      ok: true,
+      at: new Date().toISOString(),
+      agent: { up: true, port: PORT, sessionToken: SESSION_TOKEN, uptimeSec: Math.round(process.uptime()), version: pkgVersion },
+      preview: previewState(),
+      lastError: lastErrorRecord,
+      hardware: hw,
+      processes: Array.from(trackedProcesses.keys()),
+      projectRoot: PROJECT_ROOT,
+    });
+  });
+});
+
+app.get('/debug/bundle', (req, res) => {
+  hardwareSnapshot((hw) => {
+    const bundle = {
+      generatedAt: new Date().toISOString(),
+      projectRoot: PROJECT_ROOT,
+      platform: process.platform,
+      arch: process.arch,
+      nodeVersion: process.version,
+      hardware: hw,
+      preview: previewState(),
+      lastError: lastErrorRecord,
+      logs: {},
+    };
+    for (const [name, file] of Object.entries(KNOWN_LOGS)) {
+      const fp = path.join(LOG_DIR, file);
+      if (!fs.existsSync(fp)) { bundle.logs[name] = null; continue; }
+      try {
+        const stat = fs.statSync(fp);
+        const readSize = Math.min(stat.size, 64 * 1024);
+        const fd = fs.openSync(fp, 'r');
+        const buf = Buffer.alloc(readSize);
+        fs.readSync(fd, buf, 0, readSize, Math.max(0, stat.size - readSize));
+        fs.closeSync(fd);
+        bundle.logs[name] = buf.toString('utf-8').split(/\r?\n/).slice(-200);
+      } catch (e) {
+        bundle.logs[name] = [`<read failed: ${e.message}>`];
+      }
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="debug-bundle-${Date.now()}.json"`);
+    res.send(JSON.stringify(bundle, null, 2));
+  });
+});
+
+// ===== Live Preview / Dev-server orchestration =====
+// Manages an isolated preview workspace under .preview-workspace/session-<ts>
+// We DO NOT delete previous sessions while a server may still hold file handles —
+// this avoids EPERM on Windows. Old sessions are pruned only when no process is
+// known to be alive, and even then we tolerate failure.
+const PREVIEW_ROOT = path.join(PROJECT_ROOT, '.preview-workspace');
+let previewProc = null;
+let previewMeta = { status: 'idle', port: 0, sessionDir: null, startedAt: null, lastError: null, pid: null };
+
+function previewState() {
+  return {
+    status: previewMeta.status,
+    port: previewMeta.port,
+    url: previewMeta.port ? `http://127.0.0.1:${previewMeta.port}` : null,
+    sessionDir: previewMeta.sessionDir ? path.relative(PROJECT_ROOT, previewMeta.sessionDir).replace(/\\/g, '/') : null,
+    startedAt: previewMeta.startedAt,
+    pid: previewMeta.pid,
+    lastError: previewMeta.lastError,
+  };
+}
+
+function pickPort(start = 5180) {
+  return new Promise((resolve) => {
+    const net = require('net');
+    const tryPort = (p) => {
+      if (p > start + 200) return resolve(0);
+      const srv = net.createServer();
+      srv.once('error', () => tryPort(p + 1));
+      srv.once('listening', () => srv.close(() => resolve(p)));
+      srv.listen(p, '127.0.0.1');
+    };
+    tryPort(start);
+  });
+}
+
+function ensurePreviewWorkspace(sessionId, files) {
+  if (!fs.existsSync(PREVIEW_ROOT)) fs.mkdirSync(PREVIEW_ROOT, { recursive: true });
+  const sessionDir = path.join(PREVIEW_ROOT, `session-${sessionId}`);
+  fs.mkdirSync(sessionDir, { recursive: true });
+
+  // Minimal Vite scaffold — only write missing files so re-runs are cheap.
+  const writeIfMissing = (rel, content) => {
+    const fp = path.join(sessionDir, rel);
+    if (fs.existsSync(fp)) return;
+    fs.mkdirSync(path.dirname(fp), { recursive: true });
+    fs.writeFileSync(fp, content);
+  };
+
+  writeIfMissing('package.json', JSON.stringify({
+    name: `preview-${sessionId}`,
+    private: true,
+    type: 'module',
+    scripts: { dev: 'vite' },
+  }, null, 2));
+
+  writeIfMissing('index.html', `<!doctype html><html><head><meta charset="utf-8"/><title>Preview</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>`);
+
+  writeIfMissing('vite.config.ts',
+`import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+export default defineConfig({
+  plugins: [react()],
+  resolve: { alias: { '@': path.resolve(__dirname, './src') } },
+  server: { host: '127.0.0.1', strictPort: true },
+});`);
+
+  writeIfMissing('src/main.tsx',
+`import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+createRoot(document.getElementById('root')!).render(<App />);`);
+
+  writeIfMissing('src/App.tsx',
+`export default function App(){ return <div style={{fontFamily:'sans-serif',padding:24}}><h1>Preview ready</h1><p>Generated files will appear here.</p></div>; }`);
+
+  // Write/overwrite caller-supplied files
+  if (Array.isArray(files)) {
+    for (const f of files) {
+      if (!f || typeof f.path !== 'string' || typeof f.content !== 'string') continue;
+      const safeRel = f.path.replace(/^[/\\]+/, '').replace(/\.\.[\\/]/g, '');
+      const fp = path.join(sessionDir, safeRel);
+      if (!fp.startsWith(sessionDir)) continue;
+      fs.mkdirSync(path.dirname(fp), { recursive: true });
+      fs.writeFileSync(fp, f.content);
+    }
+  }
+  return sessionDir;
+}
+
+function stopPreviewProc() {
+  if (!previewProc) return;
+  try { previewProc.kill('SIGTERM'); } catch {}
+  try {
+    if (process.platform === 'win32' && previewProc.pid) {
+      exec(`taskkill /PID ${previewProc.pid} /T /F`, () => {});
+    }
+  } catch {}
+  previewProc = null;
+}
+
+app.get('/dev-server/status', (req, res) => res.json(previewState()));
+
+app.post('/dev-server/start', requireSession, async (req, res) => {
+  try {
+    const { files, sessionId } = req.body || {};
+    const sid = sessionId || String(Date.now());
+    const sessionDir = ensurePreviewWorkspace(sid, files);
+    if (previewProc) stopPreviewProc();
+
+    const port = await pickPort(5180);
+    if (!port) {
+      previewMeta = { ...previewMeta, status: 'error', lastError: 'No free port', port: 0 };
+      return res.status(500).json({ error: 'No free port available' });
+    }
+
+    // Reuse host node_modules via NODE_PATH so we don't reinstall per-session.
+    const nodeModules = path.join(PROJECT_ROOT, 'node_modules');
+    const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    previewMeta = { status: 'starting', port, sessionDir, startedAt: new Date().toISOString(), lastError: null, pid: null };
+
+    const child = spawn(npx, ['vite', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
+      cwd: sessionDir,
+      env: { ...process.env, NODE_PATH: nodeModules, FORCE_COLOR: '0' },
+      shell: process.platform === 'win32',
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    previewProc = child;
+    previewMeta.pid = child.pid;
+    trackProcess(child);
+
+    const onLine = (chunk, kind) => {
+      const text = chunk.toString();
+      try { fs.appendFileSync(path.join(LOG_DIR, 'preview.log'), text); } catch {}
+      if (/Local:\s+http/i.test(text) || /ready in /i.test(text)) {
+        previewMeta.status = 'live';
+      }
+      if (kind === 'stderr' && /error/i.test(text)) {
+        previewMeta.lastError = text.trim().slice(-500);
+      }
+    };
+    child.stdout.on('data', (c) => onLine(c, 'stdout'));
+    child.stderr.on('data', (c) => onLine(c, 'stderr'));
+    child.on('exit', (code) => {
+      if (previewMeta.status !== 'idle') {
+        previewMeta.status = code === 0 ? 'idle' : 'error';
+        previewMeta.lastError = previewMeta.lastError || `Vite exited with code ${code}`;
+        previewMeta.port = 0;
+      }
+      if (previewProc === child) previewProc = null;
+    });
+
+    // Optimistically wait up to 8s for "live"
+    const started = Date.now();
+    const wait = setInterval(() => {
+      if (previewMeta.status === 'live' || Date.now() - started > 8000 || previewMeta.status === 'error') {
+        clearInterval(wait);
+        res.json(previewState());
+      }
+    }, 200);
+  } catch (err) {
+    recordError('dev-server/start', err);
+    previewMeta = { ...previewMeta, status: 'error', lastError: err.message };
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/dev-server/stop', requireSession, (req, res) => {
+  stopPreviewProc();
+  previewMeta = { status: 'idle', port: 0, sessionDir: previewMeta.sessionDir, startedAt: null, lastError: null, pid: null };
+  res.json(previewState());
+});
+
 // Express error middleware
 app.use((err, req, res, next) => {
+  recordError('express', err);
   log(`ERROR: ${err.stack || err.message}`);
   res.status(err.status || 500).json({
     error: isDev ? err.message : 'Internal server error',
