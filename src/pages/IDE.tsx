@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SystemStatusBar } from '@/components/SystemStatusBar';
 import { HardwareMetricsPanel } from '@/components/ide/HardwareMetricsPanel';
+import { IDEStatusFooter } from '@/components/ide/IDEStatusFooter';
 import { BuildPipelinePanel } from '@/components/ide/BuildPipelinePanel';
 import { Cpu, Rocket as RocketIcon } from 'lucide-react';
 
@@ -457,7 +458,7 @@ export default function IDE() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <SystemStatusBar compact buildState={isLoading ? 'generating' : 'idle'} />
+          <SystemStatusBar buildState={isLoading ? 'generating' : 'idle'} />
           <TTSControls compact />
           <ConnectionIndicator mode={settings.connectionMode} ollamaConnected={ollamaConnected} />
           <DropdownMenu>
@@ -597,6 +598,8 @@ export default function IDE() {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      <IDEStatusFooter agentConnected={agentStatus.connected} />
 
       <FileNameDialog
         open={fileDialog.open}
