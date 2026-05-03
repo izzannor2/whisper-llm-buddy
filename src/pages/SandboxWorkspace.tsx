@@ -10,6 +10,7 @@ import { applyModeTheme } from '@/lib/mode-themes';
 import { runPython } from '@/lib/python-runner';
 import { cn } from '@/lib/utils';
 import { ProjectFile } from '@/lib/ide-types';
+import { SystemStatusBar } from '@/components/SystemStatusBar';
 
 interface OutputLine {
   type: 'stdout' | 'stderr' | 'info';
@@ -171,6 +172,7 @@ export default function SandboxWorkspace() {
         </div>
 
         <div className="flex items-center gap-2">
+          <SystemStatusBar compact buildState={isRunning ? 'building' : 'idle'} />
           <div className="flex items-center gap-1 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20">
             <AlertTriangle className="w-3 h-3 text-amber-400" />
             <span className="text-[10px] text-amber-400 font-medium">Experimental</span>

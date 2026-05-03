@@ -27,6 +27,7 @@ import { writeFile } from '@/lib/file-system';
 import { DiffPreview } from '@/components/DiffPreview';
 import { buildPreviewHTML } from '@/lib/preview-builder';
 import { VoiceCallMode } from '@/components/VoiceCallMode';
+import { SystemStatusBar } from '@/components/SystemStatusBar';
 
 interface FileNode { name: string; path: string; type: 'file' | 'directory'; children?: FileNode[]; }
 interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; }
@@ -639,6 +640,7 @@ export default function ImproveWorkspace() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <SystemStatusBar compact buildState={isLoading ? 'generating' : 'idle'} className="mr-1" />
           <Button variant="ghost" size="icon" className="h-8 w-8 text-green-400 hover:text-green-300" onClick={() => setShowVoiceCall(true)} title="Voice call">
             <Phone className="h-4 w-4" />
           </Button>

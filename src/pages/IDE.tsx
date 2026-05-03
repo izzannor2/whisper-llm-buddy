@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { SystemStatusBar } from '@/components/SystemStatusBar';
 
 interface Message extends ChatMessage {
   id: string;
@@ -453,6 +454,7 @@ export default function IDE() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <SystemStatusBar compact buildState={isLoading ? 'generating' : 'idle'} />
           <TTSControls compact />
           <ConnectionIndicator mode={settings.connectionMode} ollamaConnected={ollamaConnected} />
           <DropdownMenu>
