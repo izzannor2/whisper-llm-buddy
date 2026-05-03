@@ -105,7 +105,7 @@ export function SystemStatusBar({ className, buildState = 'idle', compact = fals
           <Eye className="w-3 h-3" /> {previewLabel}{previewUrl ? ` :${new URL(previewUrl).port}` : ''}
         </Badge>
       </a>
-      {hw && (
+      {hw && !compact && (
         <>
           <Badge variant="outline" className="gap-1.5 text-muted-foreground border-border">
             <Cpu className="w-3 h-3" /> CPU {hw.cpuPercent}%
