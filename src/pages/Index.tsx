@@ -584,6 +584,7 @@ export default function Index() {
               Safe Mode
             </div>
           )}
+          <div className="ml-auto"><SystemStatusBar buildState={isLoading ? 'generating' : 'idle'} /></div>
         </div>
 
         {/* Kill switch activated banner */}
