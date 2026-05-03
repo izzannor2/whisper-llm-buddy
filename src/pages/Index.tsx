@@ -17,6 +17,7 @@ import { LockScreen } from '@/components/LockScreen';
 import { VoiceCallMode } from '@/components/VoiceCallMode';
 import { MemoryPanel } from '@/components/MemoryPanel';
 import { AgentActivityPanel, AgentStep } from '@/components/AgentActivityPanel';
+import { SystemStatusBar } from '@/components/SystemStatusBar';
 import { AutoBuildPanel } from '@/components/AutoBuildPanel';
 import { TaskGraph } from '@/components/TaskGraph';
 import { IDEMode } from '@/lib/ide-types';
