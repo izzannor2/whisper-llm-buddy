@@ -17,7 +17,7 @@ type PreviewState = 'not-started' | 'starting' | 'live' | 'error';
 interface PreviewSnap { status: string; port: number; url: string | null; }
 interface HwSnap { cpuPercent: number; memPercent: number; }
 
-export function SystemStatusBar({ className, buildState = 'idle' }: { className?: string; buildState?: BuildState }) {
+export function SystemStatusBar({ className, buildState = 'idle', compact = false }: { className?: string; buildState?: BuildState; compact?: boolean }) {
   const agent = useAgentStatus(5000);
   const { snapshot, hasAny } = useModelsAvailable();
   const [hw, setHw] = useState<HwSnap | null>(null);
