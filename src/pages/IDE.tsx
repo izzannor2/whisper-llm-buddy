@@ -33,6 +33,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SystemStatusBar } from '@/components/SystemStatusBar';
+import { HardwareMetricsPanel } from '@/components/ide/HardwareMetricsPanel';
+import { BuildPipelinePanel } from '@/components/ide/BuildPipelinePanel';
+import { Cpu, Rocket as RocketIcon } from 'lucide-react';
 
 interface Message extends ChatMessage {
   id: string;
