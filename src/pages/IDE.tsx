@@ -578,6 +578,21 @@ export default function IDE() {
                   </div>
                 </div>
               </TabsContent>
+              <TabsContent value="system" className="flex-1 m-0">
+                <HardwareMetricsPanel agentConnected={agentStatus.connected} />
+              </TabsContent>
+              <TabsContent value="build" className="flex-1 m-0">
+                <BuildPipelinePanel
+                  files={project?.files || []}
+                  onFilesUpdate={(files) => {
+                    if (!project) return;
+                    const updated = { ...project, files, updatedAt: Date.now() };
+                    setProject(updated);
+                    saveProject(updated);
+                  }}
+                  onPreview={(files) => generatePreview(files)}
+                />
+              </TabsContent>
             </Tabs>
           </div>
         </ResizablePanel>
