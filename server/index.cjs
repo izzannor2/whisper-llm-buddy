@@ -625,6 +625,47 @@ function detectGpu(cb) {
   });
 }
 
+let cachedDisk = null;
+let cachedDiskAt = 0;
+function detectDisk(cb) {
+  const now = Date.now();
+  if (cachedDisk && now - cachedDiskAt < 5000) return cb(cachedDisk);
+  const finish = (d) => { cachedDisk = d; cachedDiskAt = now; cb(d); };
+  try {
+    if (process.platform === 'win32') {
+      const drive = (PROJECT_ROOT.match(/^([A-Za-z]):/) || [, 'C'])[1];
+      exec(`wmic logicaldisk where "DeviceID='${drive}:'" get FreeSpace,Size /value`,
+        { timeout: 3000 }, (err, stdout) => {
+          if (err || !stdout) return finish({ available: false });
+          const free = Number((stdout.match(/FreeSpace=(\d+)/) || [])[1]) || 0;
+          const size = Number((stdout.match(/Size=(\d+)/) || [])[1]) || 0;
+          if (!size) return finish({ available: false });
+          finish({
+            available: true, mount: `${drive}:\\`,
+            diskTotalBytes: size, diskFreeBytes: free,
+            diskUsedBytes: size - free,
+            diskPercent: Math.round(((size - free) / size) * 100),
+          });
+        });
+    } else {
+      exec(`df -kP "${PROJECT_ROOT}"`, { timeout: 3000 }, (err, stdout) => {
+        if (err || !stdout) return finish({ available: false });
+        const lines = stdout.trim().split(/\n/);
+        const last = lines[lines.length - 1].split(/\s+/);
+        const total = Number(last[1]) * 1024;
+        const used = Number(last[2]) * 1024;
+        const avail = Number(last[3]) * 1024;
+        if (!total) return finish({ available: false });
+        finish({
+          available: true, mount: last[5] || '/',
+          diskTotalBytes: total, diskFreeBytes: avail, diskUsedBytes: used,
+          diskPercent: Math.round((used / total) * 100),
+        });
+      });
+    }
+  } catch { finish({ available: false }); }
+}
+
 function hardwareSnapshot(cb) {
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
@@ -642,7 +683,10 @@ function hardwareSnapshot(cb) {
     loadAvg: os.loadavg(),
     timestamp: new Date().toISOString(),
   };
-  detectGpu((gpu) => { snap.gpu = gpu; cb(snap); });
+  detectGpu((gpu) => {
+    snap.gpu = gpu;
+    detectDisk((disk) => { snap.disk = disk; cb(snap); });
+  });
 }
 
 app.get('/scan/hardware', (req, res) => {

@@ -33,6 +33,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SystemStatusBar } from '@/components/SystemStatusBar';
+import { HardwareMetricsPanel } from '@/components/ide/HardwareMetricsPanel';
+import { BuildPipelinePanel } from '@/components/ide/BuildPipelinePanel';
+import { Cpu, Rocket as RocketIcon } from 'lucide-react';
 
 interface Message extends ChatMessage {
   id: string;
@@ -56,7 +59,7 @@ export default function IDE() {
   const [errors, setErrors] = useState<string[]>([]);
   const [systemCommands, setSystemCommands] = useState<SystemCommand[]>([]);
   const [plugins, setPlugins] = useState<Plugin[]>([]);
-  const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins' | 'debug'>('preview');
+  const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins' | 'debug' | 'system' | 'build'>('preview');
   const [debugLogs, setDebugLogs] = useState<Array<{ type: 'error' | 'info'; message: string; timestamp: number }>>([]);
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | undefined>();
@@ -515,6 +518,8 @@ export default function IDE() {
                     <span className="ml-1 px-1.5 py-0.5 text-xs bg-destructive text-destructive-foreground rounded-full">{debugLogs.filter(l => l.type === 'error').length}</span>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="system" className="gap-1"><Cpu className="h-3 w-3" />System</TabsTrigger>
+                <TabsTrigger value="build" className="gap-1"><RocketIcon className="h-3 w-3" />Build</TabsTrigger>
               </TabsList>
               <TabsContent value="preview" className="flex-1 m-0">
                 <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
@@ -572,6 +577,21 @@ export default function IDE() {
                     )}
                   </div>
                 </div>
+              </TabsContent>
+              <TabsContent value="system" className="flex-1 m-0">
+                <HardwareMetricsPanel agentConnected={agentStatus.connected} />
+              </TabsContent>
+              <TabsContent value="build" className="flex-1 m-0">
+                <BuildPipelinePanel
+                  files={project?.files || []}
+                  onFilesUpdate={(files) => {
+                    if (!project) return;
+                    const updated = { ...project, files, updatedAt: Date.now() };
+                    setProject(updated);
+                    saveProject(updated);
+                  }}
+                  onPreview={(files) => generatePreview(files)}
+                />
               </TabsContent>
             </Tabs>
           </div>
