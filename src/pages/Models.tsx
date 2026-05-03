@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAgentStatus } from '@/hooks/use-agent-status';
+import { SystemStatusBar } from '@/components/SystemStatusBar';
 
 interface LocalModel {
   id: string;
@@ -316,6 +317,7 @@ export default function Models() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <SystemStatusBar compact />
             <Button variant="outline" size="sm" className="h-8 px-3 font-mono" onClick={() => setShowMachineSpecs(true)}>
               <span className="w-2 h-2 rounded-full bg-accent mr-2" />{aiScore.score}
             </Button>

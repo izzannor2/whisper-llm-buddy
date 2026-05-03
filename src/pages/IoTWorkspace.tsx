@@ -19,6 +19,7 @@ import { VoiceCallMode } from '@/components/VoiceCallMode';
 import { executeCommand as agentExec, checkAgentStatus, getAgentStatus, connectToAgent, onOutput } from '@/lib/local-backend-agent';
 import { useAgentStatus } from '@/hooks/use-agent-status';
 import { Hammer, Trash2 } from 'lucide-react';
+import { SystemStatusBar } from '@/components/SystemStatusBar';
 
 interface Message {
   id: string;
@@ -227,6 +228,7 @@ export default function IoTWorkspace() {
           <span className="text-xs text-teal-400/80 font-mono">{selectedFile.name}</span>
         </div>
         <div className="flex items-center gap-2">
+          <SystemStatusBar compact />
           <Button variant="ghost" size="icon" className="h-8 w-8 text-green-400 hover:text-green-300" onClick={() => setShowVoiceCall(true)} title="Voice call">
             <Phone className="h-4 w-4" />
           </Button>
