@@ -2,7 +2,9 @@
 
 export type IDEMode = 
   | 'app-builder'
+  | 'ide-coding'
   | 'embedded-iot'
+  | '3d-printing'
   | 'system-helper'
   | 'ai-improvement'
   | 'learning'
@@ -167,10 +169,20 @@ export const MODE_INFO: Record<IDEMode, { name: string; icon: string; descriptio
     icon: '🏗️',
     description: 'Build full-stack web apps, dashboards, and landing pages',
   },
+  'ide-coding': {
+    name: 'IDE / Coding',
+    icon: '💻',
+    description: 'General coding chat and snippet authoring',
+  },
   'embedded-iot': {
     name: 'Embedded / IoT',
     icon: '📡',
     description: 'Generate code for ESP32, Arduino, and Raspberry Pi',
+  },
+  '3d-printing': {
+    name: '3D Printing',
+    icon: '🧱',
+    description: 'Generate OpenSCAD models, preview, and export STL',
   },
   'system-helper': {
     name: 'System Helper',
