@@ -62,50 +62,61 @@ export function PreviewHealthCard(props: PreviewHealthCardProps) {
 
   return (
     <Card className="border-border/60">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <CardTitle className="text-sm">Preview Health</CardTitle>
-            <CardDescription className="text-xs">Real status of the App Builder preview surface.</CardDescription>
-          </div>
-          {modeBadge}
-        </div>
-      </CardHeader>
-      <CardContent className="text-xs space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded border border-border p-2">
-            <div className="text-muted-foreground">URL</div>
-            <div className="font-mono break-all">{props.previewUrl || '—'}</div>
-          </div>
-          <div className="rounded border border-border p-2">
-            <div className="text-muted-foreground">Port</div>
-            <div className="font-mono">{props.previewPort ?? '—'}</div>
-          </div>
-          <div className="rounded border border-border p-2 col-span-2">
-            <div className="text-muted-foreground">Session folder</div>
-            <div className="font-mono break-all">{props.previewSessionDir || '—'}</div>
-          </div>
-          <div className="rounded border border-border p-2 col-span-2">
-            <div className="text-muted-foreground">Last build error</div>
-            <div className="font-mono break-all text-destructive">
-              {props.previewLastError || (lastBuildErr ? lastBuildErr.message : '(none)')}
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="pb-2 cursor-pointer hover:bg-muted/30 transition-colors select-none">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
+                <div>
+                  <CardTitle className="text-sm">Preview Health</CardTitle>
+                  {open && (
+                    <CardDescription className="text-xs">Real status of the App Builder preview surface.</CardDescription>
+                  )}
+                </div>
+              </div>
+              {modeBadge}
             </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          {props.onRestart && (
-            <Button size="sm" variant="outline" onClick={props.onRestart} disabled={!props.agentConnected}>
-              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Restart Preview
-            </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={copyUrl} disabled={!props.previewUrl}>
-            <Copy className="h-3.5 w-3.5 mr-1" /> Copy URL
-          </Button>
-          <Button size="sm" variant="outline" onClick={copyDebug}>
-            <Bug className="h-3.5 w-3.5 mr-1" /> Copy Preview Debug
-          </Button>
-        </div>
-      </CardContent>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="text-xs space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded border border-border p-2">
+                <div className="text-muted-foreground">URL</div>
+                <div className="font-mono break-all">{props.previewUrl || '—'}</div>
+              </div>
+              <div className="rounded border border-border p-2">
+                <div className="text-muted-foreground">Port</div>
+                <div className="font-mono">{props.previewPort ?? '—'}</div>
+              </div>
+              <div className="rounded border border-border p-2 col-span-2">
+                <div className="text-muted-foreground">Session folder</div>
+                <div className="font-mono break-all">{props.previewSessionDir || '—'}</div>
+              </div>
+              <div className="rounded border border-border p-2 col-span-2">
+                <div className="text-muted-foreground">Last build error</div>
+                <div className="font-mono break-all text-destructive">
+                  {props.previewLastError || (lastBuildErr ? lastBuildErr.message : '(none)')}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {props.onRestart && (
+                <Button size="sm" variant="outline" onClick={props.onRestart} disabled={!props.agentConnected}>
+                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Restart Preview
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={copyUrl} disabled={!props.previewUrl}>
+                <Copy className="h-3.5 w-3.5 mr-1" /> Copy URL
+              </Button>
+              <Button size="sm" variant="outline" onClick={copyDebug}>
+                <Bug className="h-3.5 w-3.5 mr-1" /> Copy Preview Debug
+              </Button>
+            </div>
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
