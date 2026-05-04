@@ -123,6 +123,16 @@ export function SystemStatusBar({ className, buildState = 'idle', compact = fals
       <Badge variant="outline" className={cn('gap-1.5 max-w-[180px] truncate', modelTone)}>
         <Brain className="w-3 h-3 shrink-0" /> <span className="truncate">{modelLabel}</span>
       </Badge>
+      {agent.connected && lastBeat && (
+        <Badge variant="outline" className="gap-1.5 text-muted-foreground border-border">
+          ♥ {Math.max(0, Math.floor((now - lastBeat) / 1000))}s
+        </Badge>
+      )}
+      {hw && (hw.cpuPercent >= 90 || hw.memPercent >= 90) && (
+        <Badge variant="outline" className="gap-1.5 text-destructive border-destructive/40">
+          ⚠ High load
+        </Badge>
+      )}
     </div>
   );
 }
