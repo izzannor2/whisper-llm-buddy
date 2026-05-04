@@ -47,16 +47,18 @@ export function validateScad(code: string): ScadValidation {
   return { ok: errors.length === 0, errors };
 }
 
-export async function generateScad(prompt: string, signal?: AbortSignal): Promise<string> {
-  const reply = await sendChatMessage({
-    messages: [
+export async function generateScad(prompt: string): Promise<string> {
+  const settings = loadSettings();
+  const text = await sendChatMessage(
+    [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: prompt },
     ],
-    signal,
-  } as any);
-  const text = typeof reply === 'string' ? reply : (reply as any)?.content || '';
-  return stripFences(text);
+    settings,
+    undefined,
+    { role: '3d-printing' } as any,
+  );
+  return stripFences(text || '');
 }
 
 export async function generateScadWithFix(
