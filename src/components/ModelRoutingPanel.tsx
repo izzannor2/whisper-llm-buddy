@@ -214,6 +214,7 @@ export function ModelRoutingPanel() {
           </div>
         </div>
 
+        <div className="space-y-3">
           {MODEL_ROLES.map(role => {
             const value = entryToValue(routing[role.id]);
             const entry = routing[role.id];
