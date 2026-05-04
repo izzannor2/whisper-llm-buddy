@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CheckCircle2, XCircle, Loader2, Play } from 'lucide-react';
 import { generateScad, validateScad } from '@/lib/openscad';
-import { getOpenScadStatus, renderStl, get3DStatus } from '@/lib/stl-export';
+import { getOpenScadStatus, renderStl, get3DStatus, saveScad } from '@/lib/stl-export';
 
 type Status = 'pending' | 'running' | 'pass' | 'fail';
 interface Check {
@@ -17,8 +17,10 @@ const INITIAL: Check[] = [
   { id: 'mode-visible', label: '3D Printing mode appears in UI', status: 'pending' },
   { id: 'voice-controls', label: 'Voice controls render in 3D mode', status: 'pending' },
   { id: 'status-endpoint', label: '/3d/status endpoint responds', status: 'pending' },
-  { id: 'scad-gen', label: 'OpenSCAD generation creates valid .scad', status: 'pending' },
-  { id: 'stl-export', label: 'STL export returns missing-OpenSCAD message when CLI is absent (no fake STL created)', status: 'pending' },
+  { id: 'openscad-status', label: '/openscad/status endpoint responds', status: 'pending' },
+  { id: 'save-scad', label: '/3d/save-scad persists model.scad', status: 'pending' },
+  { id: 'scad-gen', label: 'OpenSCAD generation creates valid .scad (passes validator)', status: 'pending' },
+  { id: 'stl-export', label: 'STL export returns clear missing-OpenSCAD message when CLI absent (no fake STL)', status: 'pending' },
 ];
 
 export function AcceptanceChecklist() {
@@ -70,7 +72,19 @@ export function AcceptanceChecklist() {
       update('status-endpoint', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
     }
 
-    // 4. SCAD generation
+    // 4. /openscad/status endpoint
+    update('openscad-status', { status: 'running' });
+    try {
+      const s = await getOpenScadStatus();
+      update('openscad-status', {
+        status: typeof s.available === 'boolean' ? 'pass' : 'fail',
+        detail: s.available ? `available (${s.version || 'unknown'})` : (s.error || 'not available'),
+      });
+    } catch (e) {
+      update('openscad-status', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 5. SCAD generation
     update('scad-gen', { status: 'running' });
     let scad = '';
     try {
@@ -84,7 +98,19 @@ export function AcceptanceChecklist() {
       update('scad-gen', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
     }
 
-    // 3. STL export honesty: if CLI absent, must return clear error and NO buffer
+    // 6. Save SCAD endpoint
+    update('save-scad', { status: 'running' });
+    try {
+      const r = await saveScad(scad || 'cube(10);', 'acceptance_test');
+      update('save-scad', {
+        status: r.ok ? 'pass' : 'fail',
+        detail: r.ok ? (r.scadPath || 'saved') : (r.error || 'save failed'),
+      });
+    } catch (e) {
+      update('save-scad', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 7. STL export honesty: if CLI absent, must return clear error and NO buffer
     update('stl-export', { status: 'running' });
     try {
       const s = await getOpenScadStatus();

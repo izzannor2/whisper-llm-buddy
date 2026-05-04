@@ -45,15 +45,17 @@ export function validateScad(code: string): ScadValidation {
   if (!/(cube|cylinder|sphere|polyhedron|linear_extrude|rotate_extrude|module\s+\w+)/.test(code)) {
     errors.push('No geometry primitives or modules found.');
   }
-  // Missing semicolons: scan non-empty, non-comment, non-brace lines
+  // Missing semicolons: scan non-empty, non-comment, non-brace/bracket lines
   const lines = code.split('\n');
   const badLines: number[] = [];
   lines.forEach((raw, i) => {
     const line = raw.replace(/\/\/.*$/, '').trim();
     if (!line) return;
-    if (/[{};,]$/.test(line)) return;
-    if (/^(module|function|if|else|for|intersection_for|let|use|include)\b/.test(line)) return;
-    if (line.endsWith(')') && /\b(module|function|if|for|else|union|difference|intersection|hull|minkowski)\b/.test(line)) return;
+    // Lines ending in structural chars that legitimately don't take a semicolon
+    if (/[{}\[\];,(]$/.test(line)) return;
+    // Lines ending with ) are usually a transformation header followed by a block on the next line
+    if (line.endsWith(')')) return;
+    if (/^(module|function|if|else|for|intersection_for|let|use|include|union|difference|intersection|hull|minkowski)\b/.test(line)) return;
     badLines.push(i + 1);
   });
   if (badLines.length) errors.push(`Possible missing semicolons on line(s): ${badLines.slice(0, 5).join(', ')}${badLines.length > 5 ? '…' : ''}.`);
