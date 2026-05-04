@@ -481,7 +481,7 @@ export default function ImproveWorkspace() {
         ...allMsgsBefore.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       ];
       let fullResponse = '';
-      await sendChatMessage(chatMsgs, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; });
+      await sendChatMessage(chatMsgs, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; }, { role: 'improvement' });
       setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse }]);
       return fullResponse;
     } catch { return ''; }
