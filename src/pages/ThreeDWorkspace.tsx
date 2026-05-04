@@ -160,6 +160,8 @@ export default function ThreeDWorkspace() {
                 <pre className="text-xs p-3 whitespace-pre-wrap font-mono">{scad || '// Generated OpenSCAD will appear here'}</pre>
               </ScrollArea>
             </Card>
+
+            <AcceptanceChecklist />
           </div>
         </ResizablePanel>
 
