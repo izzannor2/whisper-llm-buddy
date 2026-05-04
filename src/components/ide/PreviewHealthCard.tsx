@@ -20,6 +20,7 @@ interface PreviewHealthCardProps {
 
 export function PreviewHealthCard(props: PreviewHealthCardProps) {
   const [busErrors, setBusErrors] = useState<BusEvent[]>(() => getBuffer());
+  const [open, setOpen] = useState(false);
   useEffect(() => subscribe(() => setBusErrors(getBuffer())), []);
 
   const lastBuildErr = [...busErrors].reverse().find(e => e.source === 'preview' || e.source === 'unknown');
