@@ -634,11 +634,8 @@ app.get('/agent/ollama-info', (req, res) => {
   r.end();
 });
 
-// Alias to match documented spec: POST /3d/export-stl
-app.post('/3d/export-stl', (req, res, next) => {
-  req.url = '/openscad/render';
-  app._router.handle(req, res, next);
-});
+// Alias to match documented spec: POST /3d/export-stl (shared handler, no private internals)
+app.post('/3d/export-stl', renderStlHandler);
 
 // GET /3d/status — quick status for 3D printing mode
 app.get('/3d/status', (req, res) => {
@@ -647,10 +644,11 @@ app.get('/3d/status', (req, res) => {
       ok: true,
       openscadAvailable: s.available,
       openscadVersion: s.available ? s.version : null,
+      openscadBin: s.bin,
       lastScadPath: threeDState.lastScadPath,
       lastStlPath: threeDState.lastStlPath,
       lastError: threeDState.lastError,
-      projectsDir: path.join(process.cwd(), 'projects', '3d'),
+      projectsDir: threeDProjectsDir(),
     });
   });
 });
@@ -660,7 +658,7 @@ app.post('/3d/save-scad', (req, res) => {
   const { scad, name } = req.body || {};
   if (typeof scad !== 'string' || !scad.trim()) return res.status(400).json({ ok: false, error: 'scad required' });
   const safeName = String(name || 'model').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'model';
-  const outDir = path.join(process.cwd(), 'projects', '3d', safeName);
+  const outDir = path.join(threeDProjectsDir(), safeName);
   try { fs.mkdirSync(outDir, { recursive: true }); } catch {}
   const scadPath = path.join(outDir, 'model.scad');
   const metaPath = path.join(outDir, 'metadata.json');
@@ -674,23 +672,23 @@ app.post('/3d/save-scad', (req, res) => {
   }
 });
 
-// 3D diagnostics: openscad availability + last export info
+// 3D diagnostics: openscad availability + last export info (uses shared probe)
 app.get('/3d/diagnostics', (req, res) => {
-  const { execFile } = require('child_process');
-  execFile('openscad', ['--version'], { timeout: 4000 }, (err, stdout, stderr) => {
+  probeOpenScad((s) => {
     const installInstructions = {
       windows: 'winget install OpenSCAD.OpenSCAD',
       macos: 'brew install --cask openscad',
       linux: 'sudo apt install openscad',
     };
     res.json({
-      openscadAvailable: !err,
-      openscadVersion: err ? null : (stdout || stderr || '').trim(),
+      openscadAvailable: s.available,
+      openscadVersion: s.available ? s.version : null,
+      openscadBin: s.bin,
       lastScadPath: threeDState.lastScadPath,
       lastStlPath: threeDState.lastStlPath,
       lastError: threeDState.lastError,
-      projectsDir: path.join(process.cwd(), 'projects', '3d'),
-      installInstructions: err ? installInstructions : null,
+      projectsDir: threeDProjectsDir(),
+      installInstructions: s.available ? null : installInstructions,
     });
   });
 });
