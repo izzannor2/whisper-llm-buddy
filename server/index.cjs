@@ -572,6 +572,34 @@ app.get('/agent/ollama-info', (req, res) => {
   r.end();
 });
 
+// Alias to match documented spec: POST /3d/export-stl
+app.post('/3d/export-stl', (req, res, next) => {
+  req.url = '/openscad/render';
+  app._router.handle(req, res, next);
+});
+
+// 3D diagnostics: openscad availability + last export info
+const threeDState = { lastScadPath: null, lastStlPath: null, lastError: null };
+app.get('/3d/diagnostics', (req, res) => {
+  const { execFile } = require('child_process');
+  execFile('openscad', ['--version'], { timeout: 4000 }, (err, stdout, stderr) => {
+    const installInstructions = {
+      windows: 'winget install OpenSCAD.OpenSCAD',
+      macos: 'brew install --cask openscad',
+      linux: 'sudo apt install openscad',
+    };
+    res.json({
+      openscadAvailable: !err,
+      openscadVersion: err ? null : (stdout || stderr || '').trim(),
+      lastScadPath: threeDState.lastScadPath,
+      lastStlPath: threeDState.lastStlPath,
+      lastError: threeDState.lastError,
+      projectsDir: path.join(process.cwd(), 'projects', '3d'),
+      installInstructions: err ? installInstructions : null,
+    });
+  });
+});
+
 // Restart portable Ollama with the project's .ollama folder
 app.post('/agent/restart-ollama', requireSession, (req, res) => {
   const portableBin = path.join(PROJECT_ROOT, 'bin', 'ollama', process.platform === 'win32' ? 'ollama.exe' : 'ollama');
