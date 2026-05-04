@@ -131,10 +131,18 @@ export async function getModelRegistry(force = false): Promise<ModelRegistrySnap
   inflight = (async () => {
     const errors: string[] = [];
     const [ollama, gguf] = await Promise.all([discoverOllama(errors), discoverGguf(errors)]);
+    const dedupe = (arr: DiscoveredModel[]) => {
+      const seen = new Map<string, DiscoveredModel>();
+      for (const m of arr) {
+        const key = `${m.provider}::${m.relPath || m.name}`;
+        if (!seen.has(key)) seen.set(key, m);
+      }
+      return [...seen.values()];
+    };
     const snapshot: ModelRegistrySnapshot = {
-      ollama: ollama.models,
-      gguf: gguf.models,
-      cloud: [], // cloud models live in chat-api CLOUD_MODELS; routing UI imports them separately.
+      ollama: dedupe(ollama.models),
+      gguf: dedupe(gguf.models),
+      cloud: [],
       ollamaSource: ollama.src,
       ggufSource: gguf.src,
       errors,
