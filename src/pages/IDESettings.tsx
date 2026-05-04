@@ -333,7 +333,7 @@ export default function IDESettingsPage() {
 
             {/* VOICE — embed SettingsDialog opened on the voice tab so users get TTS + voice models */}
             <TabsContent value="voice">
-              <SettingsDialog inline settings={chatSettings} onSave={handleChatSettingsSave} initialTab="voice" />
+              <SettingsDialog inline settings={chatSettings} onSave={handleChatSettingsSave} initialTab="voice" hideTabs={['backend','models','apikeys','prompt','debug','plugins','updates','account','hardware','model']} />
             </TabsContent>
 
             {/* UPDATES */}
@@ -354,7 +354,7 @@ export default function IDESettingsPage() {
                   <CardDescription>API keys, prompts, plugins, hardware, account, debug.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <SettingsDialog inline settings={chatSettings} onSave={handleChatSettingsSave} initialTab={initialChatTab || 'apikeys'} />
+                  <SettingsDialog inline settings={chatSettings} onSave={handleChatSettingsSave} initialTab={initialChatTab || 'apikeys'} hideTabs={['models','voicemodels','voice','updates','backend']} />
                 </CardContent>
               </Card>
             </TabsContent>
