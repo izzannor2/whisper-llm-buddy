@@ -601,7 +601,6 @@ app.post('/3d/export-stl', (req, res, next) => {
 });
 
 // 3D diagnostics: openscad availability + last export info
-const threeDState = { lastScadPath: null, lastStlPath: null, lastError: null };
 app.get('/3d/diagnostics', (req, res) => {
   const { execFile } = require('child_process');
   execFile('openscad', ['--version'], { timeout: 4000 }, (err, stdout, stderr) => {
