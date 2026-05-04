@@ -15,9 +15,10 @@ export type ModelRole =
   | 'app-builder'
   | 'improvement'
   | 'vision'
-  | 'embeddings';
+  | 'embeddings'
+  | '3d-printing';
 
-export const MODEL_ROLES: { id: ModelRole; label: string; description: string }[] = [
+export const MODEL_ROLES: { id: ModelRole; label: string; description: string; recommended?: string[] }[] = [
   { id: 'assistant',   label: 'Assistant Chat',     description: 'Default chat workspace and general questions.' },
   { id: 'voice',       label: 'Voice Chat',         description: 'Voice Call mode and TTS-driven conversation.' },
   { id: 'ide',         label: 'Coding IDE',         description: 'Inline IDE chat, code completion and refactors.' },
@@ -25,6 +26,7 @@ export const MODEL_ROLES: { id: ModelRole; label: string; description: string }[
   { id: 'improvement', label: 'AI Improvement',     description: 'Self-improvement and refactor suggestions.' },
   { id: 'vision',      label: 'Vision / Image',     description: 'Image analysis and multimodal prompts.' },
   { id: 'embeddings',  label: 'Embeddings / Memory',description: 'Semantic memory and search embeddings.' },
+  { id: '3d-printing', label: '3D Printing (OpenSCAD)', description: 'OpenSCAD code generation for 3D parts.', recommended: ['qwen2.5-coder', 'deepseek-coder', 'devstral', 'codellama'] },
 ];
 
 export interface RoutingEntry {
