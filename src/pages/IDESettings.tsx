@@ -96,9 +96,11 @@ export default function IDESettingsPage() {
 
   const modeCards: { mode: IDEMode; icon: React.ReactNode }[] = [
     { mode: 'app-builder', icon: <Cpu className="h-5 w-5" /> },
-    { mode: 'embedded-iot', icon: <Plug className="h-5 w-5" /> },
-    { mode: 'system-helper', icon: <Shield className="h-5 w-5" /> },
+    { mode: 'ide-coding', icon: <Code2 className="h-5 w-5" /> },
     { mode: 'ai-improvement', icon: <Brain className="h-5 w-5" /> },
+    { mode: 'embedded-iot', icon: <Plug className="h-5 w-5" /> },
+    { mode: '3d-printing', icon: <Box className="h-5 w-5" /> },
+    { mode: 'system-helper', icon: <Shield className="h-5 w-5" /> },
     { mode: 'learning', icon: <BookOpen className="h-5 w-5" /> },
     { mode: 'sandbox', icon: <FlaskConical className="h-5 w-5" /> },
     { mode: 'jailbreak', icon: <AlertTriangle className="h-5 w-5" /> },
