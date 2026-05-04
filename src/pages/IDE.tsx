@@ -593,6 +593,7 @@ export default function IDE() {
             <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as typeof rightPanelTab)} className="flex-1 flex flex-col">
               <TabsList className="w-full justify-start rounded-none border-b border-border bg-card px-2">
                 <TabsTrigger value="preview" className="gap-1"><Play className="h-3 w-3" />Preview</TabsTrigger>
+                <TabsTrigger value="health" className="gap-1"><Bug className="h-3 w-3" />Health</TabsTrigger>
                 <TabsTrigger value="terminal" className="gap-1"><TerminalIcon className="h-3 w-3" />Terminal</TabsTrigger>
                 <TabsTrigger value="commands" className="gap-1">
                   <TerminalIcon className="h-3 w-3" />Commands
@@ -611,16 +612,6 @@ export default function IDE() {
                 <TabsTrigger value="build" className="gap-1"><RocketIcon className="h-3 w-3" />Build</TabsTrigger>
               </TabsList>
               <TabsContent value="preview" className="flex-1 m-0 flex flex-col">
-                <div className="px-2 pt-2"><PreviewHealthCard
-                  isServerRunning={isServerRunning}
-                  hasPreview={!!(previewUrl || previewHtml || previewBlobUrl)}
-                  agentConnected={agentStatus.connected}
-                  previewUrl={previewUrl}
-                  previewPort={previewMeta.port}
-                  previewSessionDir={previewMeta.sessionDir}
-                  previewLastError={previewMeta.lastError}
-                  onRestart={handleRestartServer}
-                /></div>
                 <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
                   isServerRunning={isServerRunning} isGenerating={isPreviewGenerating} logs={logs} errors={errors}
                   agentConnected={agentStatus.connected}
@@ -653,6 +644,18 @@ export default function IDE() {
                       toast.info('No preview available to open');
                     }
                   }} />
+              </TabsContent>
+              <TabsContent value="health" className="flex-1 m-0 overflow-auto">
+                <div className="p-2"><PreviewHealthCard
+                  isServerRunning={isServerRunning}
+                  hasPreview={!!(previewUrl || previewHtml || previewBlobUrl)}
+                  agentConnected={agentStatus.connected}
+                  previewUrl={previewUrl}
+                  previewPort={previewMeta.port}
+                  previewSessionDir={previewMeta.sessionDir}
+                  previewLastError={previewMeta.lastError}
+                  onRestart={handleRestartServer}
+                /></div>
               </TabsContent>
               <TabsContent value="terminal" className="flex-1 m-0"><Terminal className="h-full" /></TabsContent>
               <TabsContent value="commands" className="flex-1 m-0">
