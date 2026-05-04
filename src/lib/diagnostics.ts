@@ -66,6 +66,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     devServerStatus,
     ollamaInfo,
     updatesApplied,
+    threeD,
     agentLog, webLog, llamaLog, ollamaLog, serverLog,
   ] = await Promise.all([
     get('/status'),
@@ -74,6 +75,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     get('/dev-server/status'),
     get('/agent/ollama-info'),
     get('/updates/applied'),
+    get('/3d/diagnostics'),
     get('/logs?name=agent&lines=200'),
     get('/logs?name=web&lines=200'),
     get('/logs?name=llama&lines=200'),
