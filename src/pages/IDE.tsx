@@ -700,6 +700,7 @@ export default function IDE() {
             </Tabs>
           </div>
         </ResizablePanel>
+        )}
       </ResizablePanelGroup>
 
       <IDEStatusFooter agentConnected={agentStatus.connected} />
