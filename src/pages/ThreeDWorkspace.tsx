@@ -162,6 +162,9 @@ export default function ThreeDWorkspace() {
                 <FileCode className="w-4 h-4 text-muted-foreground" />
                 <span className="text-xs font-medium">model.scad</span>
                 <div className="ml-auto flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={handleSaveScad} disabled={!scad}>
+                    Save
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={handleDownloadScad} disabled={!scad}>
                     <Download className="w-3.5 h-3.5 mr-1.5" />.scad
                   </Button>
