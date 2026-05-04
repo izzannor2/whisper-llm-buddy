@@ -425,6 +425,17 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
               <TooltipContent side="top"><p>Click to copy preview URL</p></TooltipContent>
             </Tooltip>
           )}
+          {previewUrl && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => { navigator.clipboard.writeText(previewUrl); }}
+              title="Copy preview URL"
+            >
+              Copy URL
+            </Button>
+          )}
           {(logs.length > 0 || errors.length > 0) && (
             <Button
               variant="ghost"
@@ -442,6 +453,32 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
               Copy logs
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => {
+              const debug = {
+                isServerRunning,
+                agentConnected,
+                previewUrl: previewUrl || null,
+                previewPort: previewPort ?? null,
+                previewSessionDir: previewSessionDir ?? null,
+                previewLastError: previewLastError ?? null,
+                hasSrcdoc,
+                hasPreview,
+                logsCount: logs.length,
+                errorsCount: errors.length,
+                lastErrors: errors.slice(-5),
+                lastLogs: logs.slice(-5),
+                generatedAt: new Date().toISOString(),
+              };
+              navigator.clipboard.writeText(JSON.stringify(debug, null, 2));
+            }}
+            title="Copy preview debug snapshot"
+          >
+            Copy debug
+          </Button>
           {isServerRunning && onRestartServer && (
             <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={onRestartServer} title="Restart preview server">
               Restart
