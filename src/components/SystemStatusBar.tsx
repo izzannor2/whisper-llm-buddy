@@ -23,6 +23,11 @@ export function SystemStatusBar({ className, buildState = 'idle', compact = fals
   const [hw, setHw] = useState<HwSnap | null>(null);
   const [preview, setPreview] = useState<PreviewState>('not-started');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [lastBeat, setLastBeat] = useState<number | null>(null);
+  const [now, setNow] = useState<number>(Date.now());
+
+  useEffect(() => { const iv = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(iv); }, []);
+  useEffect(() => { if (agent.connected) setLastBeat(Date.now()); }, [agent.connected, agent.version]);
 
   // Hardware polling — falls back silently if the agent is offline.
   useEffect(() => {
@@ -31,7 +36,7 @@ export function SystemStatusBar({ className, buildState = 'idle', compact = fals
     const tick = async () => {
       try {
         const r = await fetch('http://127.0.0.1:3847/scan/hardware', { signal: AbortSignal.timeout(2000) });
-        if (r.ok && alive) setHw(await r.json());
+        if (r.ok && alive) { setHw(await r.json()); setLastBeat(Date.now()); }
       } catch { /* ignore */ }
     };
     tick();
