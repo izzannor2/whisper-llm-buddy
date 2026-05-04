@@ -52,7 +52,7 @@ const MODES_LIST: { id: IDEMode | 'chat'; name: string; description: string }[] 
   { id: 'ai-improvement', name: 'AI Improvement', description: 'Modify this app itself (self-improve)' },
   { id: 'learning', name: 'Learning Mode', description: 'Learn your coding style and preferences' },
   { id: 'sandbox', name: 'Sandbox', description: 'Safe experimental environment' },
-  { id: 'jailbreak', name: 'Uncensored', description: 'Custom system prompts (advanced)' },
+  { id: 'jailbreak', name: 'Advanced Prompt Override', description: 'Custom system prompt (advanced)' },
   { id: 'plugin', name: 'Plugin Mode', description: 'Manage and use custom plugins' },
 ];
 
