@@ -517,6 +517,7 @@ app.post('/updates/applied', (req, res) => {
 });
 
 // ===== OpenSCAD: status + render =====
+const threeDState = { lastScadPath: null, lastStlPath: null, lastError: null };
 app.get('/openscad/status', (req, res) => {
   const { execFile } = require('child_process');
   execFile('openscad', ['--version'], { timeout: 4000 }, (err, stdout, stderr) => {
