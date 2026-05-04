@@ -58,7 +58,19 @@ export function AcceptanceChecklist() {
       update('voice-controls', { status: 'fail', detail: String(e) });
     }
 
-    // 3. SCAD generation
+    // 3. /3d/status endpoint
+    update('status-endpoint', { status: 'running' });
+    try {
+      const s = await get3DStatus();
+      update('status-endpoint', {
+        status: s.ok ? 'pass' : 'fail',
+        detail: s.ok ? `openscadAvailable=${s.openscadAvailable}` : (s.error || 'no response'),
+      });
+    } catch (e) {
+      update('status-endpoint', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 4. SCAD generation
     update('scad-gen', { status: 'running' });
     let scad = '';
     try {
