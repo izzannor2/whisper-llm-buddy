@@ -43,6 +43,8 @@ interface SettingsDialogProps {
   initialTab?: string;
   /** When true, render content inline (no Dialog wrapper). Used by the consolidated /settings page. */
   inline?: boolean;
+  /** Hide tabs whose values appear here. Used to dedupe with /settings parent tabs. */
+  hideTabs?: string[];
 }
 
 // No placeholder models - only show what's actually available
@@ -217,7 +219,9 @@ export function SettingsDialog({
   onSave,
   initialTab,
   inline = false,
+  hideTabs = [],
 }: SettingsDialogProps) {
+  const isHidden = (v: string) => hideTabs.includes(v);
   const [localSettings, setLocalSettings] = useState<ChatSettings>(settings);
   const [localModels, setLocalModels] = useState<string[]>([]);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
@@ -487,35 +491,45 @@ export function SettingsDialog({
         </DialogHeader>
       )}
 
-        <Tabs defaultValue={initialTab || "backend"} key={initialTab} className="mt-4">
+        <Tabs defaultValue={initialTab || (isHidden('backend') ? 'apikeys' : 'backend')} key={initialTab} className="mt-4">
           <TabsList className="flex flex-wrap gap-1 h-auto bg-muted p-1">
-            <TabsTrigger value="backend" className="text-xs">Backend</TabsTrigger>
-            <TabsTrigger value="models" className="text-xs">Models</TabsTrigger>
-            <TabsTrigger value="voicemodels" className="text-xs flex items-center gap-1">
-              <Download className="w-3 h-3" />
-              <span className="hidden sm:inline">Voice</span>
-            </TabsTrigger>
-            <TabsTrigger value="hardware" className="text-xs">Hardware</TabsTrigger>
-            <TabsTrigger value="model" className="text-xs">Config</TabsTrigger>
-            <TabsTrigger value="apikeys" className="text-xs">API Keys</TabsTrigger>
-            <TabsTrigger value="voice" className="text-xs">TTS</TabsTrigger>
-            <TabsTrigger value="prompt" className="text-xs">Prompt</TabsTrigger>
-            <TabsTrigger value="debug" className="text-xs flex items-center gap-1">
-              <Bug className="w-3 h-3" />
-              <span className="hidden sm:inline">Debug</span>
-            </TabsTrigger>
-            <TabsTrigger value="plugins" className="text-xs flex items-center gap-1">
-              <Plug className="w-3 h-3" />
-              <span className="hidden sm:inline">Plugins</span>
-            </TabsTrigger>
-            <TabsTrigger value="updates" className="text-xs flex items-center gap-1">
-              <Package className="w-3 h-3" />
-              <span className="hidden sm:inline">Updates</span>
-            </TabsTrigger>
-            <TabsTrigger value="account" className="text-xs flex items-center gap-1">
-              <User className="w-3 h-3" />
-              <span className="hidden sm:inline">Account</span>
-            </TabsTrigger>
+            {!isHidden('backend') && <TabsTrigger value="backend" className="text-xs">Backend</TabsTrigger>}
+            {!isHidden('models') && <TabsTrigger value="models" className="text-xs">Models</TabsTrigger>}
+            {!isHidden('voicemodels') && (
+              <TabsTrigger value="voicemodels" className="text-xs flex items-center gap-1">
+                <Download className="w-3 h-3" />
+                <span className="hidden sm:inline">Voice</span>
+              </TabsTrigger>
+            )}
+            {!isHidden('hardware') && <TabsTrigger value="hardware" className="text-xs">Hardware</TabsTrigger>}
+            {!isHidden('model') && <TabsTrigger value="model" className="text-xs">Config</TabsTrigger>}
+            {!isHidden('apikeys') && <TabsTrigger value="apikeys" className="text-xs">API Keys</TabsTrigger>}
+            {!isHidden('voice') && <TabsTrigger value="voice" className="text-xs">TTS</TabsTrigger>}
+            {!isHidden('prompt') && <TabsTrigger value="prompt" className="text-xs">Prompt</TabsTrigger>}
+            {!isHidden('debug') && (
+              <TabsTrigger value="debug" className="text-xs flex items-center gap-1">
+                <Bug className="w-3 h-3" />
+                <span className="hidden sm:inline">Debug</span>
+              </TabsTrigger>
+            )}
+            {!isHidden('plugins') && (
+              <TabsTrigger value="plugins" className="text-xs flex items-center gap-1">
+                <Plug className="w-3 h-3" />
+                <span className="hidden sm:inline">Plugins</span>
+              </TabsTrigger>
+            )}
+            {!isHidden('updates') && (
+              <TabsTrigger value="updates" className="text-xs flex items-center gap-1">
+                <Package className="w-3 h-3" />
+                <span className="hidden sm:inline">Updates</span>
+              </TabsTrigger>
+            )}
+            {!isHidden('account') && (
+              <TabsTrigger value="account" className="text-xs flex items-center gap-1">
+                <User className="w-3 h-3" />
+                <span className="hidden sm:inline">Account</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="backend" className="space-y-4 mt-4">
