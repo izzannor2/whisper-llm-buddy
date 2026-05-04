@@ -70,6 +70,9 @@ export default function IDE() {
   const [isPreviewGenerating, setIsPreviewGenerating] = useState(false);
   const [fileDialog, setFileDialog] = useState<{ open: boolean; parentPath: string; isDirectory: boolean }>({ open: false, parentPath: '/', isDirectory: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; path: string }>({ open: false, path: '' });
+  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [filesCollapsed, setFilesCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   // Listen for debug messages from preview iframe
   useEffect(() => {
