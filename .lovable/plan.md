@@ -1,79 +1,146 @@
-# Whole-app QA & Consistency Pass
 
-## 1. Rename "Jailbreak / Uncensored" → "Advanced Prompt Override"
-Drop "jailbreak"/"uncensored" branding. Keep functionality as advanced custom system prompt mode.
+# Refinement + 3D Printing Pass
 
-Files to update:
-- `src/components/ChatSidebar.tsx` — mode entry `key:'jailbreak'` → label "Advanced Prompt Override", description "Custom system prompt (advanced)".
-- `src/components/ModesSidebar.tsx` — same rename.
-- `src/components/EmptyState.tsx` — banner: "Custom prompt active. Does not bypass model/provider safety rules."
-- `src/lib/ide-types.ts` — description: "Custom system prompt — does not bypass safety rules".
-- `src/pages/IDESettings.tsx` (Advanced tab) — relabel toggle to "Advanced Prompt Override". Add explicit warning Alert: *"Custom prompts can make the assistant less reliable. They do not bypass model/provider safety rules."*
-- Keep storage keys (`jailbreakEnabled`, `jailbreakPrompt`) untouched for backward compat — only UI labels change. Add internal getter `getOverridePrompt(settings)` in `src/lib/chat-api.ts` for use across modes.
+## 1. Mode Cleanup
 
-## 2. Consistent Override Application
-Add a single helper `applyPromptOverride(systemPrompt, settings)` that appends override prompt (when enabled) to the end of the base system prompt. Wire into:
+Collapse the mode list in `ModesSidebar.tsx` and `ide-types.ts` to six top-level modes:
 
-- Assistant chat — `src/pages/Index.tsx` (already concatenates `settings.systemPrompt` — confirm path).
-- App Builder — `src/pages/IDE.tsx` (currently overwrites `effectiveSettings.systemPrompt`; switch to append).
-- IDE chat — `src/components/ide/IDEChat.tsx`.
-- AI Improvement — `src/pages/ImproveWorkspace.tsx` (currently passes `systemPrompt: ''` — must include override).
-- Voice mode — `src/components/VoiceCallMode.tsx`.
-- IoT, Sandbox, Planning, Autonomous, OpenClaw — same helper.
+- App Builder (`app-builder`)
+- IDE / Coding (`ide-coding` — new id; replaces "Chat" entry, used for general coding chat)
+- AI Improvement (`ai-improvement`)
+- Embedded / IoT (`embedded-iot`)
+- 3D Printing (`3d-printing` — new)
+- Advanced (group containing: System Helper, Sandbox, Plugin, Advanced Prompt Override, Learning)
 
-For modes that intentionally don't apply it (e.g. embeddings, tool sub-calls), surface a small footer note in the chat header: **"Prompt override not applied in this mode."** when `jailbreakEnabled` is true but unused.
+Implementation:
+- Add `'3d-printing'` and `'ide-coding'` to `IDEMode` union and `MODE_INFO`.
+- In `ModesSidebar`, render the six primary entries flat, then a collapsible "Advanced" section (using existing `Collapsible` UI) containing the relocated modes.
+- Remove the standalone "Chat" pseudo-entry (it was just app-builder remap) — IDE/Coding takes its place.
+- Update `MODES_LIST`, `MODE_ICONS`, and any `currentMode` checks. Keep legacy ids functional via a small migration in `ide-store.ts` (e.g. map old `system-helper` selection to still work if persisted).
 
-## 3. Prompt Override Presets
-Add preset dropdown above the textarea in IDESettings Advanced tab:
+## 2. Settings as Single Source of Truth
 
-- Strict Coder — terse code-only answers, no prose.
-- App Builder — multi-file scaffolding focus.
-- Debugging Assistant — root-cause oriented, asks for logs.
-- Offline Local Assistant — assumes no internet, prefers local tools.
-- Creative Brainstormer — ideation, divergent options.
+Audit and consolidate. All of these must live only inside `IDESettings` / Settings page tabs:
 
-Stored in new `src/lib/prompt-presets.ts`. Selecting a preset fills the textarea (still user-editable). No unsafe/illegal templates.
+- Model routing (currently `ModelRoutingPanel` — embed in Settings → "Routing" tab)
+- Jailbreak / override (Settings → "Advanced")
+- Backend (ollama / llama.cpp / cloud — Settings → "Backend")
+- Voice (Settings → "Voice")
 
-## 4. Whole-app Route Smoke Test
-- Add `scripts/route-smoke-test.bat` (and `.sh`) that runs `npx vite build` then a quick puppeteer-free check by curling the dev server for `/`, `/models`, `/ide`, `/settings`, `/improve`, `/iot`, `/sandbox` (HTTP 200 + non-empty body).
-- Add npm script `"smoke": "node scripts/route-smoke-test.mjs"` and a Node version that spawns `vite preview` then probes routes. Logs pass/fail per route.
+Actions:
+- Remove inline routing/override/backend toggles from the chat header, sidebar footer, and any panel that duplicates them. Replace with a "Open Settings → <Tab>" deep link using the existing `Settings Deep Linking` event.
+- The sidebar footer keeps only: Online/Offline status badge + Settings button.
 
-## 5. App Builder Preview Health Card
-New `src/components/ide/PreviewHealthCard.tsx` rendered in IDE above/inside PreviewPane:
-- Mode: live | iframe fallback | offline (from existing preview state)
-- Preview URL (copyable)
-- Session folder (from `/dev-server/status`)
-- Last build error (from error-bus filtered `source:'preview'|'build'`)
-- Buttons: Restart Preview, Copy Preview Debug (reuse PreviewPane handlers)
+## 3. New Mode: 3D Printing
 
-## 6. Model Usage Audit (debug metadata)
-Update `src/lib/chat-api.ts` `sendChatMessage` to accept optional `meta: { role: ModelRole }` and emit a debug event after each call:
+New files:
+
+- `src/pages/ThreeDWorkspace.tsx` — the workspace route (`/3d`).
+- `src/lib/openscad.ts` — code helpers: prompt → OpenSCAD via Lovable AI, validate, save.
+- `src/lib/stl-export.ts` — calls local agent (port 3847) to run `openscad -o file.stl file.scad`.
+- `src/components/threed/ScadPromptPanel.tsx` — prompt + template buttons.
+- `src/components/threed/ScadCodePanel.tsx` — generated `.scad` source with copy/download.
+- `src/components/threed/StlViewer.tsx` — three.js viewer (loads `STLLoader`).
+- `src/components/threed/OpenScadInstall.tsx` — install instructions when CLI absent.
+
+Behavior:
+- AI generates OpenSCAD source via existing Lovable AI gateway (edge function `chat`, system prompt: "Output valid OpenSCAD only").
+- Files saved under `/projects/3d/<name>/model.scad` through the local agent's file API; download works via Blob in the browser too (no agent required).
+- Optional STL conversion: agent endpoint `POST /openscad/render` runs `openscad -o out.stl in.scad`. If the binary is missing, surface the install panel.
+- Does NOT touch the existing preview iframe / Vite preview server.
+
+Add route in `App.tsx`:
+```tsx
+const ThreeDWorkspace = lazy(() => import('./pages/ThreeDWorkspace'));
+<Route path="/3d" element={<ThreeDWorkspace />} />
 ```
-{ role, provider, model, fallbackReason, responseMs }
+
+## 4. 3D UI Layout
+
+`ThreeDWorkspace` layout (resizable horizontal split):
+
+```text
++----------------------+--------------------------+
+| Prompt + Templates   |  3D Preview (STL viewer) |
+| (gear, enclosure,    |                          |
+|  RC parts, mount,    |                          |
+|  bracket, knob)      +--------------------------+
+| Status indicator     |  Generated .scad code    |
+|                      |  + Download .scad / .stl |
++----------------------+--------------------------+
 ```
-Push to `error-bus` as `source:'model'` info-level event and to a new ring buffer in `src/lib/diagnostics.ts` (`getModelCallLog()`). Render last 20 calls in DiagnosticsPanel under a new "Recent Model Calls" section. All caller sites pass their role.
 
-## 7. Update System — Test Package Generator
-In `UpdatesPanel.tsx` add button **"Create test update package"** → generates a harmless JSON:
-```json
-{ "version": "test-<timestamp>", "name": "Test Update", "description": "Harmless QA package", "changes": [] }
+Templates are one-click prompt seeds (e.g. "Parametric spur gear, 20 teeth, 5 mm bore").
+
+## 5. STL Export Path
+
+Local agent (`server/index.cjs`) gets new endpoint:
+```js
+POST /openscad/render  { scad: string, name: string }
+  -> spawn 'openscad', ['-o', `${name}.stl`, '-']
+  -> returns { ok, stlPath } or { ok:false, missing:true }
 ```
-Downloads via Blob. User can then re-import via existing "Import update package JSON" to test full import → apply → rollback flow.
 
-## 8. Final No-Fake-Data Scan
-Confirmed clean from search; remaining cosmetic:
-- `model-routing.ts` line 32 comment uses `llama3.2:3b` as example — change to generic `<provider:model>` placeholder.
-- `model-registry.ts` line 15 comment — same.
-- Verify ModelManager presets (if any) labeled as **"Templates — not installed"** when shown.
+Detection via `GET /openscad/status` running `openscad --version`. If missing, the UI shows `OpenScadInstall` with platform-specific commands (`winget install OpenSCAD.OpenSCAD`, `brew install --cask openscad`, `apt install openscad`).
 
-## Acceptance
-- `scripts/acceptance.bat` extended to also call `route-smoke-test`.
-- Build passes `npx vite build`.
-- No occurrences of "jailbreak"/"uncensored" in user-facing strings.
-- Override toggle shows safety-rules warning.
-- Override actually included in all 5 listed surfaces (verified by debug log showing system prompt length increase).
-- Diagnostics tab shows last model calls with role/provider/model/fallback/ms.
+## 6. Auto-Fix Loop (App Builder + 3D Printing)
 
-## Files
-**New**: `src/lib/prompt-presets.ts`, `src/components/ide/PreviewHealthCard.tsx`, `scripts/route-smoke-test.bat`, `scripts/route-smoke-test.mjs`
-**Edited**: `src/components/ChatSidebar.tsx`, `src/components/ModesSidebar.tsx`, `src/components/EmptyState.tsx`, `src/lib/ide-types.ts`, `src/pages/IDESettings.tsx`, `src/lib/chat-api.ts`, `src/pages/Index.tsx`, `src/pages/IDE.tsx`, `src/components/ide/IDEChat.tsx`, `src/pages/ImproveWorkspace.tsx`, `src/components/VoiceCallMode.tsx`, `src/pages/IoTWorkspace.tsx`, `src/pages/SandboxWorkspace.tsx`, `src/components/PlanningView.tsx`, `src/lib/autonomous-mode.ts`, `src/lib/openclaw-agent.ts`, `src/components/ide/PreviewPane.tsx`, `src/components/settings/DiagnosticsPanel.tsx`, `src/lib/diagnostics.ts`, `src/components/settings/UpdatesPanel.tsx`, `src/lib/model-routing.ts`, `src/lib/model-registry.ts`, `scripts/acceptance.bat`, `package.json`
+New helper `src/lib/auto-fix.ts`:
+
+```text
+generate(prompt) -> code
+loop up to 3 times:
+  validate(code)               // build for app-builder, syntax for OpenSCAD
+  if ok: break
+  code = aiFix(code, errors)   // re-prompt with errors
+return { code, attempts, fixed }
+```
+
+- App Builder validation hooks into existing `build-pipeline.ts` errors.
+- 3D validation: try OpenSCAD CLI dry-run when present; otherwise a lightweight regex/syntax check.
+
+## 7. Status Indicators
+
+Single shared component `src/components/StatusPill.tsx` with states: `idle | thinking | generating | fixing | done | error`. Used in App Builder header and 3D workspace. Drives off the existing chat streaming + auto-fix events.
+
+## 8. Model Recommendations
+
+`src/lib/model-recommendations.ts`:
+- Inputs: active mode, hardware capability score (already computed by Model Capability Scoring memory).
+- Output: ordered recommended model ids per backend (ollama / llama.cpp / cloud).
+- Example: 3D Printing on low-RAM box → `qwen2.5-coder:3b` local or `google/gemini-3-flash-preview` cloud.
+- Surfaced as a "Recommended" badge inside the model dropdowns in Settings → Backend, and a one-line hint in each workspace.
+
+## 9. Project Structure
+
+Standardize outputs under `./projects/`:
+
+```text
+projects/
+  apps/<project-name>/
+  code/<snippet-or-script>/
+  3d/<model-name>/
+```
+
+- Update `project-export.ts` and the local agent file root to use these subfolders.
+- Existing exports get migrated lazily (move on first save, otherwise leave).
+
+## 10. Remove Unused / Duplicated UI
+
+After audit, remove or consolidate:
+- Duplicate routing/backend toggles outside Settings (see §2).
+- The "Chat" pseudo-mode entry (replaced by IDE/Coding).
+- Any tab content shells that render nothing in the right pane.
+- Unused imports / dead `MODE_INFO` keys after the cleanup.
+
+## Files Touched (summary)
+
+- Edit: `src/lib/ide-types.ts`, `src/lib/ide-store.ts`, `src/components/ModesSidebar.tsx`, `src/App.tsx`, `src/pages/IDESettings.tsx`, `src/pages/IDE.tsx`, `src/components/SettingsDialog.tsx`, `src/components/ModelRoutingPanel.tsx`, `server/index.cjs`, `src/lib/project-export.ts`.
+- Add: `src/pages/ThreeDWorkspace.tsx`, `src/lib/openscad.ts`, `src/lib/stl-export.ts`, `src/lib/auto-fix.ts`, `src/lib/model-recommendations.ts`, `src/components/StatusPill.tsx`, `src/components/threed/*` (4 files).
+- Remove/inline: duplicate routing/backend controls outside Settings, "Chat" sidebar entry.
+
+## Out of Scope
+
+- No new auth, no DB schema changes.
+- No changes to the Vite preview server or existing IDE preview iframe.
+- Brave / web search behavior stays as-is (offline by policy).
