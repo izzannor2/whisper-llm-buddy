@@ -516,7 +516,39 @@ app.post('/updates/applied', (req, res) => {
   res.json({ ok: writeApplied(data), applied: data.applied });
 });
 
-// Snapshot of Ollama state — used by UI to detect "wrong model folder" mismatch
+// ===== OpenSCAD: status + render =====
+app.get('/openscad/status', (req, res) => {
+  const { execFile } = require('child_process');
+  execFile('openscad', ['--version'], { timeout: 4000 }, (err, stdout, stderr) => {
+    if (err) return res.json({ available: false, error: err.code === 'ENOENT' ? 'OpenSCAD not installed' : (err.message || 'unknown') });
+    res.json({ available: true, version: (stdout || stderr || '').trim() });
+  });
+});
+
+app.post('/openscad/render', (req, res) => {
+  const { scad, name } = req.body || {};
+  if (typeof scad !== 'string' || !scad.trim()) return res.status(400).json({ error: 'scad required' });
+  const safeName = String(name || 'model').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'model';
+  const outDir = path.join(process.cwd(), 'projects', '3d', safeName);
+  try { fs.mkdirSync(outDir, { recursive: true }); } catch {}
+  const scadPath = path.join(outDir, `${safeName}.scad`);
+  const stlPath = path.join(outDir, `${safeName}.stl`);
+  try { fs.writeFileSync(scadPath, scad, 'utf8'); }
+  catch (e) { return res.status(500).json({ error: 'write failed: ' + e.message }); }
+  const { execFile } = require('child_process');
+  execFile('openscad', ['-o', stlPath, scadPath], { timeout: 60000 }, (err, _stdout, stderr) => {
+    if (err) {
+      if (err.code === 'ENOENT') return res.status(424).json({ error: 'OpenSCAD CLI not installed', missing: true });
+      return res.status(500).json({ error: stderr || err.message });
+    }
+    try {
+      const buf = fs.readFileSync(stlPath);
+      res.setHeader('Content-Type', 'application/sla');
+      res.setHeader('X-Stl-Path', stlPath);
+      res.send(buf);
+    } catch (e) { res.status(500).json({ error: 'read failed: ' + e.message }); }
+  });
+});
 app.get('/agent/ollama-info', (req, res) => {
   const expectedDir = path.join(PROJECT_ROOT, '.ollama');
   const manifestRoot = path.join(expectedDir, 'models', 'manifests');
