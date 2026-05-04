@@ -3,7 +3,7 @@
  * AppError class + handleError() for consistent error normalization, logging, and toast display.
  */
 
-import { toast } from 'sonner';
+import { emitError } from './error-bus';
 
 export class AppError extends Error {
   code: string;
@@ -46,12 +46,13 @@ export function handleError(err: unknown, context?: string): AppError {
   // Log
   console.error(`[${appError.code}]${context ? ` (${context})` : ''}: ${appError.message}`, appError.context);
 
-  // Toast
-  if (appError.recoverable) {
-    toast.warning(appError.message, { duration: 4000 });
-  } else {
-    toast.error(appError.message, { duration: 6000 });
-  }
+  // Route through central bus (which also handles toasting)
+  emitError({
+    source: 'unknown',
+    message: appError.message,
+    detail: { code: appError.code, context: appError.context },
+    level: appError.recoverable ? 'warn' : 'error',
+  });
 
   // Emit to activity log if available
   if (typeof window !== 'undefined' && (window as any).__activityLog) {

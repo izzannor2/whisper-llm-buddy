@@ -23,6 +23,11 @@ export function SystemStatusBar({ className, buildState = 'idle', compact = fals
   const [hw, setHw] = useState<HwSnap | null>(null);
   const [preview, setPreview] = useState<PreviewState>('not-started');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [lastBeat, setLastBeat] = useState<number | null>(null);
+  const [now, setNow] = useState<number>(Date.now());
+
+  useEffect(() => { const iv = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(iv); }, []);
+  useEffect(() => { if (agent.connected) setLastBeat(Date.now()); }, [agent.connected, agent.version]);
 
   // Hardware polling — falls back silently if the agent is offline.
   useEffect(() => {
@@ -31,7 +36,7 @@ export function SystemStatusBar({ className, buildState = 'idle', compact = fals
     const tick = async () => {
       try {
         const r = await fetch('http://127.0.0.1:3847/scan/hardware', { signal: AbortSignal.timeout(2000) });
-        if (r.ok && alive) setHw(await r.json());
+        if (r.ok && alive) { setHw(await r.json()); setLastBeat(Date.now()); }
       } catch { /* ignore */ }
     };
     tick();
@@ -118,6 +123,16 @@ export function SystemStatusBar({ className, buildState = 'idle', compact = fals
       <Badge variant="outline" className={cn('gap-1.5 max-w-[180px] truncate', modelTone)}>
         <Brain className="w-3 h-3 shrink-0" /> <span className="truncate">{modelLabel}</span>
       </Badge>
+      {agent.connected && lastBeat && (
+        <Badge variant="outline" className="gap-1.5 text-muted-foreground border-border">
+          ♥ {Math.max(0, Math.floor((now - lastBeat) / 1000))}s
+        </Badge>
+      )}
+      {hw && (hw.cpuPercent >= 90 || hw.memPercent >= 90) && (
+        <Badge variant="outline" className="gap-1.5 text-destructive border-destructive/40">
+          ⚠ High load
+        </Badge>
+      )}
     </div>
   );
 }

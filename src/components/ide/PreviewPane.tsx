@@ -368,13 +368,29 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
       {/* Status bar */}
       <div className="flex items-center justify-between px-3 py-1 border-t border-border text-xs text-muted-foreground bg-card">
         <div className="flex items-center gap-2">
-          <span className={cn('w-2 h-2 rounded-full', hasPreview ? 'bg-accent' : 'bg-muted')} />
-          <span>{isServerRunning ? 'Server running' : hasPreview ? 'Instant preview' : 'No preview'}</span>
+          <span className={cn('w-2 h-2 rounded-full', isServerRunning ? 'bg-green-500' : hasPreview ? 'bg-amber-500' : agentConnected === false ? 'bg-destructive' : 'bg-muted')} />
+          <span>
+            {isServerRunning
+              ? 'Live server ready'
+              : hasPreview
+                ? 'Instant preview active. Live server not ready.'
+                : agentConnected === false
+                  ? 'Agent unavailable — start the local agent on port 3847'
+                  : 'No preview yet'}
+          </span>
+          {errors.length > 0 && (
+            <span className="text-destructive">· last error: {errors[errors.length - 1].slice(0, 80)}</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {lastUpdated && timeSinceUpdate && <span>Updated {timeSinceUpdate}</span>}
           {isResponsive && <span className="font-mono">{device.label}</span>}
-          {isServerRunning && previewUrl && <span className="font-mono">{previewUrl}</span>}
+          {isServerRunning && previewUrl && (
+            <>
+              <span className="font-mono">{previewUrl}</span>
+              <span className="font-mono">port {(() => { try { return new URL(previewUrl).port || '—'; } catch { return '—'; } })()}</span>
+            </>
+          )}
         </div>
       </div>
     </div>

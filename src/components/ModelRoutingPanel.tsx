@@ -16,9 +16,14 @@ import {
   loadRouting,
   saveRouting,
   setRoleRouting,
+  loadToggles,
+  saveToggles,
   type ModelRole,
   type RoutingEntry,
+  type RoutingToggles,
 } from '@/lib/model-routing';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS } from '@/lib/chat-api';
 
 const AUTO_VALUE = '__auto__';
@@ -51,8 +56,14 @@ function valueToEntry(v: string): RoutingEntry {
 export function ModelRoutingPanel() {
   const [snap, setSnap] = useState<ModelRegistrySnapshot | null>(null);
   const [routing, setRouting] = useState(() => loadRouting());
+  const [toggles, setTogglesState] = useState<RoutingToggles>(() => loadToggles());
   const [loading, setLoading] = useState(false);
   const [includeCloud, setIncludeCloud] = useState(true);
+  const updateToggle = (k: keyof RoutingToggles, v: boolean) => {
+    const next = { ...toggles, [k]: v };
+    setTogglesState(next);
+    saveToggles(next);
+  };
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -185,6 +196,23 @@ export function ModelRoutingPanel() {
             </div>
           </div>
         )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-md border border-border bg-muted/20">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label className="text-sm">Use first available fallback</Label>
+              <p className="text-xs text-muted-foreground">When the chosen model is missing, use any installed model instead.</p>
+            </div>
+            <Switch checked={toggles.useFirstAvailableFallback} onCheckedChange={v => updateToggle('useFirstAvailableFallback', v)} />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label className="text-sm">Auto switch model based on task</Label>
+              <p className="text-xs text-muted-foreground">Pick the role-appropriate model per request (vision, embeddings, etc).</p>
+            </div>
+            <Switch checked={toggles.autoSwitchByTask} onCheckedChange={v => updateToggle('autoSwitchByTask', v)} />
+          </div>
+        </div>
 
         <div className="space-y-3">
           {MODEL_ROLES.map(role => {
