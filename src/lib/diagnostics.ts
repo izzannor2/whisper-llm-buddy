@@ -102,6 +102,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     ollamaInfo,
     updatesApplied,
     modelRegistry: registry,
+    threeD,
     routing: { roles: loadRouting(), toggles: loadToggles() },
     updateHistory: getUpdateHistory(),
     recentLogs: { agent: agentLog, web: webLog, llama: llamaLog, ollama: ollamaLog, server: serverLog },
