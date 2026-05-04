@@ -7,6 +7,7 @@ import { Copy, Download, RefreshCw, Server, Cpu, HardDrive, Activity, AlertTrian
 import { toast } from 'sonner';
 import { buildBundle, copyBundle, copySupportReport, downloadBundle, type DiagnosticBundle } from '@/lib/diagnostics';
 import { subscribe, getBuffer, type BusEvent, emitError } from '@/lib/error-bus';
+import { getModelCallLog, clearModelCallLog, type ModelCallRecord } from '@/lib/chat-api';
 
 function StatusDot({ s }: { s: 'ok' | 'missing' | 'error' | 'offline' }) {
   if (s === 'ok') return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 inline" />;
@@ -18,10 +19,13 @@ export function DiagnosticsPanel() {
   const [bundle, setBundle] = useState<DiagnosticBundle | null>(null);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<BusEvent[]>(() => getBuffer());
+  const [calls, setCalls] = useState<ModelCallRecord[]>(() => getModelCallLog());
 
   useEffect(() => {
     const unsub = subscribe(() => setErrors(getBuffer()));
-    return unsub;
+    const onCall = () => setCalls(getModelCallLog());
+    window.addEventListener('model-call-logged', onCall);
+    return () => { unsub(); window.removeEventListener('model-call-logged', onCall); };
   }, []);
 
   const refresh = async () => {
@@ -120,6 +124,43 @@ export function DiagnosticsPanel() {
           <Button size="sm" variant="outline" onClick={() => test('GGUF scan', 'http://127.0.0.1:3847/scan/gguf')}>
             <HardDrive className="h-4 w-4 mr-2" /> Test GGUF
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Recent Model Calls</CardTitle>
+              <CardDescription>Last {calls.length} AI calls — role · backend · model · time · fallback.</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Badge variant="outline">{calls.length}</Badge>
+              <Button size="sm" variant="ghost" onClick={() => { clearModelCallLog(); setCalls([]); }}>Clear</Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[200px] rounded border border-border">
+            {calls.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No model calls yet.</div>
+            ) : (
+              <ul className="text-xs font-mono divide-y divide-border">
+                {calls.slice().reverse().slice(0, 20).map((c, i) => (
+                  <li key={i} className={`px-3 py-1.5 flex gap-2 flex-wrap ${c.ok ? '' : 'text-destructive'}`}>
+                    <span className="text-muted-foreground">{new Date(c.timestamp).toLocaleTimeString()}</span>
+                    <span className="text-primary">[{c.role}]</span>
+                    <span>{c.backend}</span>
+                    <span className="text-muted-foreground">{c.model}</span>
+                    <span className="ml-auto">{c.responseMs}ms</span>
+                    {c.fallback && <span className="text-amber-400">fallback({c.fallbackReason?.slice(0, 40) || ''})</span>}
+                    {c.overrideApplied && <span className="text-amber-300">override</span>}
+                    {!c.ok && <span className="break-all">{c.error}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ScrollArea>
         </CardContent>
       </Card>
 
