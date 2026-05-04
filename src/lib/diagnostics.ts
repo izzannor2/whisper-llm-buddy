@@ -51,6 +51,7 @@ export interface DiagnosticBundle {
   ollamaInfo: BundleEntry;
   updatesApplied: BundleEntry;
   modelRegistry: BundleEntry;
+  threeD: BundleEntry;
   routing: { roles: ReturnType<typeof loadRouting>; toggles: ReturnType<typeof loadToggles> };
   updateHistory: ReturnType<typeof getUpdateHistory>;
   recentLogs: Record<'agent' | 'web' | 'llama' | 'ollama' | 'server', BundleEntry>;
