@@ -552,11 +552,15 @@ app.get('/openscad/status', (req, res) => {
   });
 });
 
-app.post('/openscad/render', (req, res) => {
+function threeDProjectsDir() {
+  return path.join(PROJECT_ROOT, 'projects', '3d');
+}
+
+function renderStlHandler(req, res) {
   const { scad, name } = req.body || {};
   if (typeof scad !== 'string' || !scad.trim()) return res.status(400).json({ ok: false, error: 'scad required (non-empty string)' });
   const safeName = String(name || 'model').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'model';
-  const outDir = path.join(process.cwd(), 'projects', '3d', safeName);
+  const outDir = path.join(threeDProjectsDir(), safeName);
   try { fs.mkdirSync(outDir, { recursive: true }); } catch {}
   const scadPath = path.join(outDir, 'model.scad');
   const stlPath = path.join(outDir, 'model.stl');
@@ -574,7 +578,7 @@ app.post('/openscad/render', (req, res) => {
       try { if (fs.existsSync(stlPath)) fs.unlinkSync(stlPath); } catch {}
       return res.status(422).json({
         ok: false,
-        error: 'OpenSCAD CLI not found. Install OpenSCAD to export STL.',
+        error: 'OpenSCAD CLI not installed. Install OpenSCAD to export STL.',
         missing: true,
         install: {
           windows: 'winget install OpenSCAD.OpenSCAD',
@@ -604,7 +608,9 @@ app.post('/openscad/render', (req, res) => {
       }
     });
   });
-});
+}
+
+app.post('/openscad/render', renderStlHandler);
 app.get('/agent/ollama-info', (req, res) => {
   const expectedDir = path.join(PROJECT_ROOT, '.ollama');
   const manifestRoot = path.join(expectedDir, 'models', 'manifests');
