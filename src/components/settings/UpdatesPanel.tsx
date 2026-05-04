@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, FlaskConical, Download, Upload, Trash2, PlayCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FlaskConical, Download, Upload, Trash2, PlayCircle, RotateCcw, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { UpdatePanel } from '@/components/UpdatePanel';
@@ -13,6 +13,9 @@ import {
   applyLocalUpdate,
   getUpdateHistory,
   UPDATE_HISTORY_KEY,
+  getBackup,
+  rollback,
+  importLocalUpdateFile,
 } from '@/lib/update-system';
 import { emitError } from '@/lib/error-bus';
 
@@ -30,15 +33,17 @@ export function UpdatesPanel() {
   const [diskApplied, setDiskApplied] = useState<{ ok: boolean; count: number; lastError?: string; error?: string } | null>(null);
   const [bundled, setBundled] = useState<number | null>(null);
   const [lastErr, setLastErr] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [backup, setBackup] = useState(getBackup());
+  const historyInputRef = useRef<HTMLInputElement>(null);
+  const packageInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
+    setBackup(getBackup());
     if (agent.connected) {
       try {
         const r = await fetch('http://127.0.0.1:3847/updates/applied', { signal: AbortSignal.timeout(2500) });
         if (r.ok) {
           const list: AppliedShape | unknown[] = await r.json();
-          // Accept both { applied: [] } and []
           const arr = Array.isArray(list) ? list : Array.isArray(list?.applied) ? list.applied : [];
           const lastError = !Array.isArray(list) ? list?.lastError : undefined;
           setDiskApplied({ ok: true, count: arr.length, lastError });
@@ -94,10 +99,10 @@ export function UpdatesPanel() {
     }
   };
 
-  const clearHistory = () => {
-    if (!confirm('Clear local applied-update record? This does not revert applied changes.')) return;
+  const clearBrowserHistory = () => {
+    if (!confirm('Clear browser update history? This only clears localStorage records in this browser. Disk records (config/applied-updates.json) are NOT touched.')) return;
     localStorage.removeItem(UPDATE_HISTORY_KEY);
-    toast.success('Applied-update record cleared');
+    toast.success('Browser update history cleared');
     refresh();
   };
 
@@ -111,7 +116,7 @@ export function UpdatesPanel() {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
-  const importJson = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const importHistory = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
@@ -122,14 +127,47 @@ export function UpdatesPanel() {
         toast.success(`Imported ${data.history.length} history entries`);
         refresh();
       } else {
-        toast.error('JSON missing "history" array');
+        toast.error('JSON missing "history" array — use "Import update package JSON" for update packages');
       }
     } catch (err: any) {
       const msg = err?.message || String(err);
       setLastErr(msg);
-      emitError({ source: 'update', message: `Import failed: ${msg}` });
+      emitError({ source: 'update', message: `History import failed: ${msg}` });
     } finally {
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (historyInputRef.current) historyInputRef.current.value = '';
+    }
+  };
+
+  const importPackage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const r = await importLocalUpdateFile(file);
+      if (r.success && r.update) {
+        toast.success(`Imported update package v${r.update.version} — apply it from the list below`);
+        refresh();
+      } else {
+        toast.error(r.error || 'Invalid update package');
+      }
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      setLastErr(msg);
+      emitError({ source: 'update', message: `Package import failed: ${msg}` });
+    } finally {
+      if (packageInputRef.current) packageInputRef.current.value = '';
+    }
+  };
+
+  const doRollback = () => {
+    if (!backup) { toast.info('No backup available'); return; }
+    if (!confirm(`Roll back to ${backup.version}? This restores app version + saved settings only. Source files on disk are NOT touched.`)) return;
+    const r = rollback();
+    if (r.success) {
+      setVersion(getCurrentVersion());
+      toast.success(`Rolled back to ${r.restoredVersion}`);
+      refresh();
+    } else {
+      toast.error('Rollback failed — no backup found');
     }
   };
 
@@ -181,16 +219,20 @@ export function UpdatesPanel() {
           <Button size="sm" onClick={applyAllBundled}>
             <PlayCircle className="h-4 w-4 mr-2" /> Apply bundled updates now
           </Button>
-          <Button size="sm" variant="outline" onClick={clearHistory}>
-            <Trash2 className="h-4 w-4 mr-2" /> Clear applied update record
+          <Button size="sm" variant="outline" onClick={clearBrowserHistory}>
+            <Trash2 className="h-4 w-4 mr-2" /> Clear browser update history
           </Button>
           <Button size="sm" variant="outline" onClick={exportHistory}>
             <Download className="h-4 w-4 mr-2" /> Export update history
           </Button>
-          <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
-            <Upload className="h-4 w-4 mr-2" /> Import update JSON
+          <Button size="sm" variant="outline" onClick={() => packageInputRef.current?.click()}>
+            <Package className="h-4 w-4 mr-2" /> Import update package JSON
           </Button>
-          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={importJson} />
+          <Button size="sm" variant="outline" onClick={() => historyInputRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-2" /> Import update history JSON
+          </Button>
+          <input ref={packageInputRef} type="file" accept=".json" className="hidden" onChange={importPackage} />
+          <input ref={historyInputRef} type="file" accept=".json" className="hidden" onChange={importHistory} />
         </CardContent>
         {(lastErr || diskApplied?.lastError) && (
           <CardContent className="pt-0">
@@ -208,6 +250,37 @@ export function UpdatesPanel() {
             </div>
           </CardContent>
         )}
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Rollback</CardTitle>
+          <CardDescription>
+            Restores the previous app version + last saved settings only.
+            Source files on disk are <strong>not</strong> reverted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded border border-border p-3">
+            <div className="text-xs text-muted-foreground">Latest backup version</div>
+            <div className="text-lg font-mono">{backup?.version ?? '—'}</div>
+          </div>
+          <div className="rounded border border-border p-3">
+            <div className="text-xs text-muted-foreground">Backup taken</div>
+            <div className="text-lg font-mono">
+              {backup?.timestamp ? new Date(backup.timestamp).toLocaleString() : '—'}
+            </div>
+          </div>
+          <div className="rounded border border-border p-3">
+            <div className="text-xs text-muted-foreground">Rollback available</div>
+            <div className="text-lg font-mono">{backup ? 'yes' : 'no'}</div>
+          </div>
+        </CardContent>
+        <CardContent className="pt-0">
+          <Button size="sm" variant="destructive" disabled={!backup} onClick={doRollback}>
+            <RotateCcw className="h-4 w-4 mr-2" /> Roll back to {backup?.version || '—'}
+          </Button>
+        </CardContent>
       </Card>
 
       <UpdatePanel />
