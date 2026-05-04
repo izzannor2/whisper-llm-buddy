@@ -29,7 +29,7 @@ export const MODEL_ROLES: { id: ModelRole; label: string; description: string }[
 
 export interface RoutingEntry {
   provider: 'ollama' | 'gguf' | 'cloud' | 'auto';
-  model: string; // e.g. "llama3.2:3b" or "models/gguf/Qwen-7B-Q4.gguf" or "google/gemini-2.5-flash"; "" = use default
+  model: string; // detected provider:model identifier; "" = use default
 }
 
 export type ModelRouting = Record<ModelRole, RoutingEntry>;

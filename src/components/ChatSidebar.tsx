@@ -60,7 +60,7 @@ const MODES_LIST: { key: string; id: IDEMode; name: string; icon: any; descripti
   { key: 'ai-improvement', id: 'ai-improvement', name: 'AI Improvement', icon: Sparkles, description: 'Self-modification' },
   { key: 'learning', id: 'learning', name: 'Learning Mode', icon: GraduationCap, description: 'Learn your style' },
   { key: 'sandbox', id: 'sandbox', name: 'Sandbox', icon: FlaskConical, description: 'Safe experiments' },
-  { key: 'jailbreak', id: 'jailbreak', name: 'Uncensored', icon: AlertTriangle, description: 'Custom system prompts' },
+  { key: 'jailbreak', id: 'jailbreak', name: 'Advanced Prompt Override', icon: AlertTriangle, description: 'Custom system prompt (advanced)' },
   { key: 'plugin', id: 'plugin', name: 'Plugin Mode', icon: Plug, description: 'Custom plugins & tools' },
   { key: 'all-in-one', id: 'app-builder', name: 'All-in-One AI', icon: Crown, description: 'Unlimited capabilities' },
 ];

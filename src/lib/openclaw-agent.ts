@@ -252,7 +252,8 @@ export async function* chatWithOpenClaw(
       const promise = sendChatMessage(
         currentMessages,
         { ...settings, systemPrompt: '' },
-        (chunk) => { chunks.push(chunk); }
+        (chunk) => { chunks.push(chunk); },
+        { role: 'openclaw' },
       ).then(() => { done = true; }).catch(e => { error = e; done = true; });
       
       while (!done || chunks.length > 0) {

@@ -12,7 +12,7 @@
  */
 
 export interface DiscoveredModel {
-  id: string;                       // unique key, e.g. "ollama:llama3.2:3b" or "gguf:Qwen-7B-Q4.gguf"
+  id: string;                       // unique key, e.g. "ollama:<name>" or "gguf:<file>"
   name: string;                     // display name
   provider: 'ollama' | 'gguf' | 'cloud';
   source: 'live' | 'agent-proxy' | 'manifest-scan' | 'gguf-scan' | 'cloud';

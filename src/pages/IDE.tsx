@@ -6,6 +6,7 @@ import { FileTree } from '@/components/ide/FileTree';
 import { FileNameDialog, DeleteConfirmDialog } from '@/components/ide/FileDialogs';
 import { CodeEditor } from '@/components/ide/CodeEditor';
 import { PreviewPane } from '@/components/ide/PreviewPane';
+import { PreviewHealthCard } from '@/components/ide/PreviewHealthCard';
 import { IDEChat } from '@/components/ide/IDEChat';
 import { ConnectionIndicator } from '@/components/ide/ConnectionIndicator';
 import { SystemCommandPanel } from '@/components/ide/SystemCommandPanel';
@@ -337,7 +338,7 @@ export default function IDE() {
             liveStreamPreview(updatedFiles);
           }
         }
-      });
+      }, { role: settings.mode === 'ai-improvement' ? 'improvement' : 'app-builder' });
 
       const assistantMessage: Message = { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() };
       setMessages(prev => [...prev, assistantMessage]);
@@ -551,7 +552,17 @@ export default function IDE() {
                 <TabsTrigger value="system" className="gap-1"><Cpu className="h-3 w-3" />System</TabsTrigger>
                 <TabsTrigger value="build" className="gap-1"><RocketIcon className="h-3 w-3" />Build</TabsTrigger>
               </TabsList>
-              <TabsContent value="preview" className="flex-1 m-0">
+              <TabsContent value="preview" className="flex-1 m-0 flex flex-col">
+                <div className="px-2 pt-2"><PreviewHealthCard
+                  isServerRunning={isServerRunning}
+                  hasPreview={!!(previewUrl || previewHtml || previewBlobUrl)}
+                  agentConnected={agentStatus.connected}
+                  previewUrl={previewUrl}
+                  previewPort={previewMeta.port}
+                  previewSessionDir={previewMeta.sessionDir}
+                  previewLastError={previewMeta.lastError}
+                  onRestart={handleRestartServer}
+                /></div>
                 <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
                   isServerRunning={isServerRunning} isGenerating={isPreviewGenerating} logs={logs} errors={errors}
                   agentConnected={agentStatus.connected}

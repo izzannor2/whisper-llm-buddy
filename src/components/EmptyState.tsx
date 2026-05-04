@@ -73,10 +73,10 @@ const MODE_CONTENT: Record<string, {
     banner: { text: 'Experimental — nothing here affects your real projects', type: 'info' },
   },
   jailbreak: {
-    title: "Override Mode",
-    description: "Advanced mode with custom system prompts. Your custom persona from Settings is active.",
-    suggestions: ["Configure custom system prompts", "Override default AI behavior", "Set up specialized assistant persona"],
-    banner: { text: '⚠ Custom system prompt active — use responsibly', type: 'danger' },
+    title: "Advanced Prompt Override",
+    description: "Your custom system prompt is appended to the default one. It does not bypass model/provider safety rules.",
+    suggestions: ["Configure a custom system prompt", "Pick a preset (Strict Coder, Debugging, ...)", "Refine the assistant's tone"],
+    banner: { text: 'Custom prompt active. Does not bypass model/provider safety rules.', type: 'warning' },
   },
   plugin: {
     title: "Plugin Mode",
@@ -183,9 +183,9 @@ export function EmptyState({ mode = 'app-builder', modeKey }: EmptyStateProps) {
   if (key === 'jailbreak') {
     return (
       <div className="flex flex-col h-full p-6">
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg mb-4 text-sm font-medium border bg-red-500/10 border-red-500/30 text-red-400 animate-pulse">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg mb-4 text-sm font-medium border bg-amber-500/10 border-amber-500/30 text-amber-300">
           <Skull className="w-4 h-4 shrink-0" />
-          ⚠ Custom system prompt active — use responsibly
+          Custom prompt active. Does not bypass model/provider safety rules.
         </div>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-red-500/30 bg-red-950/30">

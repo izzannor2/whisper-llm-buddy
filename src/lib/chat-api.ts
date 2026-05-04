@@ -184,22 +184,102 @@ export interface ChatResult {
   fallbackReason?: string;
 }
 
+/**
+ * Append the user's "Advanced Prompt Override" custom system prompt to a
+ * base system prompt. Reads from IDE settings (legacy keys preserved).
+ * Does NOT bypass model/provider safety rules.
+ */
+export function applyPromptOverride(basePrompt: string): { prompt: string; applied: boolean } {
+  try {
+    const raw = localStorage.getItem('ide-settings');
+    if (!raw) return { prompt: basePrompt, applied: false };
+    const ide = JSON.parse(raw);
+    if (!ide?.jailbreakEnabled || !ide?.jailbreakPrompt) return { prompt: basePrompt, applied: false };
+    const extra = String(ide.jailbreakPrompt).trim();
+    if (!extra) return { prompt: basePrompt, applied: false };
+    return {
+      prompt: basePrompt
+        ? `${basePrompt}\n\n--- User Custom Override ---\n${extra}`
+        : extra,
+      applied: true,
+    };
+  } catch {
+    return { prompt: basePrompt, applied: false };
+  }
+}
+
+export interface ChatCallMeta {
+  /** Logical role / surface making the call (e.g. 'assistant', 'ide', 'app-builder', 'voice', 'improvement'). */
+  role?: string;
+}
+
+export interface ModelCallRecord {
+  timestamp: number;
+  role: string;
+  backend: string;
+  model: string;
+  responseMs: number;
+  ok: boolean;
+  fallback: boolean;
+  fallbackReason?: string;
+  overrideApplied: boolean;
+  error?: string;
+}
+
+const MODEL_CALL_BUFFER: ModelCallRecord[] = [];
+const MODEL_CALL_BUFFER_MAX = 50;
+
+export function getModelCallLog(): ModelCallRecord[] {
+  return MODEL_CALL_BUFFER.slice();
+}
+export function clearModelCallLog(): void {
+  MODEL_CALL_BUFFER.length = 0;
+}
+function pushModelCall(rec: ModelCallRecord) {
+  MODEL_CALL_BUFFER.push(rec);
+  if (MODEL_CALL_BUFFER.length > MODEL_CALL_BUFFER_MAX) MODEL_CALL_BUFFER.shift();
+  try { window.dispatchEvent(new CustomEvent('model-call-logged', { detail: rec })); } catch {}
+}
+
+function backendModelLabel(s: ChatSettings): string {
+  switch (s.backend) {
+    case 'ollama': return s.ollamaModel || '(no model)';
+    case 'local': return 'llama.cpp';
+    case 'huggingface': return s.huggingfaceModel || '(no model)';
+    default: return s.model || '(no model)';
+  }
+}
+
 export async function sendChatMessage(
   messages: ChatMessage[],
   settings: ChatSettings,
-  onChunk?: (chunk: string) => void
+  onChunk?: (chunk: string) => void,
+  meta?: ChatCallMeta,
 ): Promise<string> {
   // If offline mode is enabled, only allow local backends
   if (settings.offlineMode && !['local', 'ollama'].includes(settings.backend)) {
     throw new Error('Offline mode is enabled. Only local (Llama.cpp) and Ollama backends are available.');
   }
 
-  const allMessages = settings.systemPrompt 
-    ? [{ role: 'system' as const, content: settings.systemPrompt }, ...messages]
+  // Apply Advanced Prompt Override consistently across every surface.
+  const { prompt: effectivePrompt, applied: overrideApplied } = applyPromptOverride(settings.systemPrompt || '');
+  const allMessages = effectivePrompt
+    ? [{ role: 'system' as const, content: effectivePrompt }, ...messages]
     : messages;
+
+  const role = meta?.role || 'unknown';
+  const startedAt = Date.now();
+  let fallback = false;
+  let fallbackReason: string | undefined;
+  let usedBackend = settings.backend;
+  let usedModel = backendModelLabel(settings);
 
   try {
     const response = await dispatchToBackend(allMessages, settings, onChunk);
+    pushModelCall({
+      timestamp: startedAt, role, backend: usedBackend, model: usedModel,
+      responseMs: Date.now() - startedAt, ok: true, fallback: false, overrideApplied,
+    });
     return response;
   } catch (err) {
     // Model fallback: if primary fails and it's not cloud, retry with cloud
@@ -210,8 +290,31 @@ export async function sendChatMessage(
         toast.warning('Primary model failed, switching to cloud backup');
       } catch {}
       const fallbackSettings = { ...settings, backend: 'cloud' as const, model: 'gemini-flash' };
-      return sendCloudMessage(allMessages, fallbackSettings, onChunk);
+      fallback = true;
+      fallbackReason = err instanceof Error ? err.message : String(err);
+      usedBackend = 'cloud';
+      usedModel = 'gemini-flash';
+      try {
+        const out = await sendCloudMessage(allMessages, fallbackSettings, onChunk);
+        pushModelCall({
+          timestamp: startedAt, role, backend: usedBackend, model: usedModel,
+          responseMs: Date.now() - startedAt, ok: true, fallback, fallbackReason, overrideApplied,
+        });
+        return out;
+      } catch (e2) {
+        pushModelCall({
+          timestamp: startedAt, role, backend: usedBackend, model: usedModel,
+          responseMs: Date.now() - startedAt, ok: false, fallback, fallbackReason, overrideApplied,
+          error: e2 instanceof Error ? e2.message : String(e2),
+        });
+        throw e2;
+      }
     }
+    pushModelCall({
+      timestamp: startedAt, role, backend: usedBackend, model: usedModel,
+      responseMs: Date.now() - startedAt, ok: false, fallback: false, overrideApplied,
+      error: err instanceof Error ? err.message : String(err),
+    });
     throw err;
   }
 }

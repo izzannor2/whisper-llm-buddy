@@ -188,9 +188,9 @@ export const MODE_INFO: Record<IDEMode, { name: string; icon: string; descriptio
     description: 'Learn your coding style and preferences over time',
   },
   'jailbreak': {
-    name: 'Override / Jailbreak',
+    name: 'Advanced Prompt Override',
     icon: '⚠️',
-    description: 'Apply custom system prompts (advanced/unsafe)',
+    description: 'Custom system prompt — does not bypass safety rules',
   },
   'plugin': {
     name: 'Plugin Mode',

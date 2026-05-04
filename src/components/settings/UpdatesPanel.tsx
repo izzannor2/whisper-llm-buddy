@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, FlaskConical, Download, Upload, Trash2, PlayCircle, RotateCcw, Package } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FlaskConical, Download, Upload, Trash2, PlayCircle, RotateCcw, Package, FilePlus2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { UpdatePanel } from '@/components/UpdatePanel';
@@ -230,6 +230,26 @@ export function UpdatesPanel() {
           </Button>
           <Button size="sm" variant="outline" onClick={() => historyInputRef.current?.click()}>
             <Upload className="h-4 w-4 mr-2" /> Import update history JSON
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => {
+            const pkg = {
+              version: `test-${Date.now()}`,
+              name: 'Test Update',
+              description: 'Harmless QA package — no patches applied',
+              releaseDate: new Date().toISOString(),
+              changes: ['Test update package — safe to import, apply, and rollback'],
+              patches: [],
+            };
+            const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `test-update-${pkg.version}.json`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            toast.success('Test update package downloaded — re-import it to verify the flow');
+          }}>
+            <FilePlus2 className="h-4 w-4 mr-2" /> Create test update package
           </Button>
           <input ref={packageInputRef} type="file" accept=".json" className="hidden" onChange={importPackage} />
           <input ref={historyInputRef} type="file" accept=".json" className="hidden" onChange={importHistory} />

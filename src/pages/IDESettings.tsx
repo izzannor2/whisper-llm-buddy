@@ -308,12 +308,48 @@ export default function IDESettingsPage() {
                 <>
                   <Separator />
                   <section>
-                    <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-500" />Jailbreak / Override</h2>
-                    <Card className="border-amber-500/50 bg-amber-500/5">
+                    <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-500" />Advanced Prompt Override</h2>
+                    <Card className="border-amber-500/40 bg-amber-500/5">
                       <CardContent className="p-4 space-y-4">
-                        <p className="text-sm text-amber-400">⚠️ Custom system prompts override default behavior.</p>
-                        <div className="flex items-center justify-between"><Label>Enable Override</Label><Switch checked={settings.jailbreakEnabled} onCheckedChange={(v) => updateSetting('jailbreakEnabled', v)} /></div>
-                        {settings.jailbreakEnabled && <Textarea value={settings.jailbreakPrompt} onChange={(e) => updateSetting('jailbreakPrompt', e.target.value)} placeholder="Enter custom system prompt..." rows={6} />}
+                        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+                          Custom prompts can make the assistant less reliable. They do <strong>not</strong> bypass model/provider safety rules.
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Label>Enable Advanced Prompt Override</Label>
+                          <Switch checked={settings.jailbreakEnabled} onCheckedChange={(v) => updateSetting('jailbreakEnabled', v)} />
+                        </div>
+                        {settings.jailbreakEnabled && (
+                          <>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Templates (load into the box, then edit)</Label>
+                              <Select onValueChange={(id) => {
+                                import('@/lib/prompt-presets').then(({ getPreset }) => {
+                                  const p = getPreset(id);
+                                  if (p) updateSetting('jailbreakPrompt', p.prompt);
+                                });
+                              }}>
+                                <SelectTrigger className="mt-1"><SelectValue placeholder="Pick a preset…" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="strict-coder">Strict Coder — terse, code-only</SelectItem>
+                                  <SelectItem value="app-builder">App Builder — multi-file scaffolding</SelectItem>
+                                  <SelectItem value="debugging">Debugging Assistant — root-cause oriented</SelectItem>
+                                  <SelectItem value="offline-local">Offline Local Assistant — assumes no internet</SelectItem>
+                                  <SelectItem value="creative">Creative Brainstormer — ideation</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Textarea
+                              value={settings.jailbreakPrompt}
+                              onChange={(e) => updateSetting('jailbreakPrompt', e.target.value)}
+                              placeholder="Custom system prompt… (appended to the default mode prompt)"
+                              rows={8}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Applied in: Assistant chat, App Builder, IDE chat, AI Improvement, Voice mode.
+                              Some sub-flows (tool calls, embeddings) intentionally do not apply it.
+                            </p>
+                          </>
+                        )}
                       </CardContent>
                     </Card>
                   </section>

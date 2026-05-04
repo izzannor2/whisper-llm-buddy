@@ -171,7 +171,7 @@ export default function IoTWorkspace() {
 
       const settings = loadSettings();
       let fullResponse = '';
-      await sendChatMessage(chatMessages, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
+      await sendChatMessage(chatMessages, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); }, { role: 'iot' });
 
       const newMessages = [...messages, userMessage, { id: generateId(), role: 'assistant' as const, content: fullResponse, timestamp: Date.now() }];
       setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() }]);
@@ -207,7 +207,7 @@ export default function IoTWorkspace() {
       ];
       const settings = loadSettings();
       let fullResponse = '';
-      await sendChatMessage(chatMessages, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; });
+      await sendChatMessage(chatMessages, { ...settings, systemPrompt: '' }, (chunk) => { fullResponse += chunk; }, { role: 'iot' });
       setMessages(prev => [...prev, { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() }]);
       return fullResponse;
     } catch { return ''; }
