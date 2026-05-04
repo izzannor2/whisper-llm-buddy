@@ -517,6 +517,7 @@ app.post('/updates/applied', (req, res) => {
 });
 
 // ===== OpenSCAD: status + render =====
+const threeDState = { lastScadPath: null, lastStlPath: null, lastError: null };
 app.get('/openscad/status', (req, res) => {
   const { execFile } = require('child_process');
   execFile('openscad', ['--version'], { timeout: 4000 }, (err, stdout, stderr) => {
@@ -533,20 +534,41 @@ app.post('/openscad/render', (req, res) => {
   try { fs.mkdirSync(outDir, { recursive: true }); } catch {}
   const scadPath = path.join(outDir, `${safeName}.scad`);
   const stlPath = path.join(outDir, `${safeName}.stl`);
-  try { fs.writeFileSync(scadPath, scad, 'utf8'); }
-  catch (e) { return res.status(500).json({ error: 'write failed: ' + e.message }); }
+  const metaPath = path.join(outDir, 'metadata.json');
+  try {
+    fs.writeFileSync(scadPath, scad, 'utf8');
+    fs.writeFileSync(metaPath, JSON.stringify({ name: safeName, createdAt: new Date().toISOString() }, null, 2));
+  } catch (e) { return res.status(500).json({ error: 'write failed: ' + e.message }); }
+  threeDState.lastScadPath = scadPath;
   const { execFile } = require('child_process');
   execFile('openscad', ['-o', stlPath, scadPath], { timeout: 60000 }, (err, _stdout, stderr) => {
     if (err) {
-      if (err.code === 'ENOENT') return res.status(424).json({ error: 'OpenSCAD CLI not installed', missing: true });
+      threeDState.lastError = err.code === 'ENOENT' ? 'OpenSCAD CLI not installed' : (stderr || err.message);
+      threeDState.lastStlPath = null;
+      if (err.code === 'ENOENT') {
+        return res.status(424).json({
+          error: 'OpenSCAD CLI not installed. Install it to enable STL export.',
+          missing: true,
+          install: {
+            windows: 'winget install OpenSCAD.OpenSCAD',
+            macos: 'brew install --cask openscad',
+            linux: 'sudo apt install openscad',
+          },
+        });
+      }
       return res.status(500).json({ error: stderr || err.message });
     }
     try {
       const buf = fs.readFileSync(stlPath);
+      threeDState.lastStlPath = stlPath;
+      threeDState.lastError = null;
       res.setHeader('Content-Type', 'application/sla');
       res.setHeader('X-Stl-Path', stlPath);
       res.send(buf);
-    } catch (e) { res.status(500).json({ error: 'read failed: ' + e.message }); }
+    } catch (e) {
+      threeDState.lastError = 'read failed: ' + e.message;
+      res.status(500).json({ error: 'read failed: ' + e.message });
+    }
   });
 });
 app.get('/agent/ollama-info', (req, res) => {
@@ -570,6 +592,33 @@ app.get('/agent/ollama-info', (req, res) => {
   r.on('error', () => res.json({ running: false, liveCount: 0, manifestCount, expectedDir }));
   r.on('timeout', () => { r.destroy(); res.json({ running: false, liveCount: 0, manifestCount, expectedDir }); });
   r.end();
+});
+
+// Alias to match documented spec: POST /3d/export-stl
+app.post('/3d/export-stl', (req, res, next) => {
+  req.url = '/openscad/render';
+  app._router.handle(req, res, next);
+});
+
+// 3D diagnostics: openscad availability + last export info
+app.get('/3d/diagnostics', (req, res) => {
+  const { execFile } = require('child_process');
+  execFile('openscad', ['--version'], { timeout: 4000 }, (err, stdout, stderr) => {
+    const installInstructions = {
+      windows: 'winget install OpenSCAD.OpenSCAD',
+      macos: 'brew install --cask openscad',
+      linux: 'sudo apt install openscad',
+    };
+    res.json({
+      openscadAvailable: !err,
+      openscadVersion: err ? null : (stdout || stderr || '').trim(),
+      lastScadPath: threeDState.lastScadPath,
+      lastStlPath: threeDState.lastStlPath,
+      lastError: threeDState.lastError,
+      projectsDir: path.join(process.cwd(), 'projects', '3d'),
+      installInstructions: err ? installInstructions : null,
+    });
+  });
 });
 
 // Restart portable Ollama with the project's .ollama folder

@@ -51,6 +51,7 @@ export interface DiagnosticBundle {
   ollamaInfo: BundleEntry;
   updatesApplied: BundleEntry;
   modelRegistry: BundleEntry;
+  threeD: BundleEntry;
   routing: { roles: ReturnType<typeof loadRouting>; toggles: ReturnType<typeof loadToggles> };
   updateHistory: ReturnType<typeof getUpdateHistory>;
   recentLogs: Record<'agent' | 'web' | 'llama' | 'ollama' | 'server', BundleEntry>;
@@ -65,6 +66,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     devServerStatus,
     ollamaInfo,
     updatesApplied,
+    threeD,
     agentLog, webLog, llamaLog, ollamaLog, serverLog,
   ] = await Promise.all([
     get('/status'),
@@ -73,6 +75,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     get('/dev-server/status'),
     get('/agent/ollama-info'),
     get('/updates/applied'),
+    get('/3d/diagnostics'),
     get('/logs?name=agent&lines=200'),
     get('/logs?name=web&lines=200'),
     get('/logs?name=llama&lines=200'),
@@ -99,6 +102,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     ollamaInfo,
     updatesApplied,
     modelRegistry: registry,
+    threeD,
     routing: { roles: loadRouting(), toggles: loadToggles() },
     updateHistory: getUpdateHistory(),
     recentLogs: { agent: agentLog, web: webLog, llama: llamaLog, ollama: ollamaLog, server: serverLog },

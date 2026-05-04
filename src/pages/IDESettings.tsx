@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Save, Wifi, WifiOff, RefreshCw, AlertTriangle, Cpu, Plug, FlaskConical, Brain, BookOpen, Shield, Server, HardDrive, Globe, Copy, QrCode, Smartphone } from 'lucide-react';
+import { ArrowLeft, Save, Wifi, WifiOff, RefreshCw, AlertTriangle, Cpu, Plug, FlaskConical, Brain, BookOpen, Shield, Server, HardDrive, Globe, Copy, QrCode, Smartphone, Box, Code2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -96,9 +96,11 @@ export default function IDESettingsPage() {
 
   const modeCards: { mode: IDEMode; icon: React.ReactNode }[] = [
     { mode: 'app-builder', icon: <Cpu className="h-5 w-5" /> },
-    { mode: 'embedded-iot', icon: <Plug className="h-5 w-5" /> },
-    { mode: 'system-helper', icon: <Shield className="h-5 w-5" /> },
+    { mode: 'ide-coding', icon: <Code2 className="h-5 w-5" /> },
     { mode: 'ai-improvement', icon: <Brain className="h-5 w-5" /> },
+    { mode: 'embedded-iot', icon: <Plug className="h-5 w-5" /> },
+    { mode: '3d-printing', icon: <Box className="h-5 w-5" /> },
+    { mode: 'system-helper', icon: <Shield className="h-5 w-5" /> },
     { mode: 'learning', icon: <BookOpen className="h-5 w-5" /> },
     { mode: 'sandbox', icon: <FlaskConical className="h-5 w-5" /> },
     { mode: 'jailbreak', icon: <AlertTriangle className="h-5 w-5" /> },
