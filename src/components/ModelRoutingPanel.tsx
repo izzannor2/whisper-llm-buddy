@@ -197,7 +197,23 @@ export function ModelRoutingPanel() {
           </div>
         )}
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-md border border-border bg-muted/20">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label className="text-sm">Use first available fallback</Label>
+              <p className="text-xs text-muted-foreground">When the chosen model is missing, use any installed model instead.</p>
+            </div>
+            <Switch checked={toggles.useFirstAvailableFallback} onCheckedChange={v => updateToggle('useFirstAvailableFallback', v)} />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label className="text-sm">Auto switch model based on task</Label>
+              <p className="text-xs text-muted-foreground">Pick the role-appropriate model per request (vision, embeddings, etc).</p>
+            </div>
+            <Switch checked={toggles.autoSwitchByTask} onCheckedChange={v => updateToggle('autoSwitchByTask', v)} />
+          </div>
+        </div>
+
           {MODEL_ROLES.map(role => {
             const value = entryToValue(routing[role.id]);
             const entry = routing[role.id];
