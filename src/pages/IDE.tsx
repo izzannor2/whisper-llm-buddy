@@ -337,7 +337,7 @@ export default function IDE() {
             liveStreamPreview(updatedFiles);
           }
         }
-      });
+      }, { role: settings.mode === 'ai-improvement' ? 'improvement' : 'app-builder' });
 
       const assistantMessage: Message = { id: generateId(), role: 'assistant', content: fullResponse, timestamp: Date.now() };
       setMessages(prev => [...prev, assistantMessage]);

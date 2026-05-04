@@ -412,7 +412,7 @@ export default function Index() {
         effectiveSettings.systemPrompt = planningPrefix + agentPrompt + (agentPrompt ? '\n\n' : '') + (modePrompt || '') + searchContext + memoryContext + toolHints + (settings.systemPrompt ? '\n\n' + settings.systemPrompt : '');
       }
 
-      await sendChatMessage(chatMessages, effectiveSettings, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); });
+      await sendChatMessage(chatMessages, effectiveSettings, (chunk) => { fullResponse += chunk; setStreamingContent(fullResponse); }, { role: 'assistant' });
 
       // Update agent step
       setAgentSteps(prev => prev.map(s => s.id === agentStep.id ? { ...s, status: 'complete', duration: Date.now() - agentStep.timestamp } : s));
