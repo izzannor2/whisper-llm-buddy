@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { StatusPill, StatusState } from '@/components/StatusPill';
 import { StlViewer } from '@/components/threed/StlViewer';
+import { AcceptanceChecklist } from '@/components/threed/AcceptanceChecklist';
 import { SCAD_TEMPLATES, generateScadWithFix, validateScad } from '@/lib/openscad';
 import { downloadBlob, getOpenScadStatus, renderStl } from '@/lib/stl-export';
 
