@@ -17,6 +17,31 @@ export async function getOpenScadStatus(): Promise<OpenScadStatus> {
   }
 }
 
+export async function get3DStatus(): Promise<{ ok: boolean; openscadAvailable?: boolean; openscadVersion?: string | null; lastScadPath?: string | null; lastStlPath?: string | null; lastError?: string | null; error?: string }> {
+  try {
+    const r = await fetch(`${AGENT}/3d/status`, { signal: AbortSignal.timeout(2500) });
+    if (!r.ok) return { ok: false, error: `Agent HTTP ${r.status}` };
+    return await r.json();
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Agent offline' };
+  }
+}
+
+export async function saveScad(scad: string, name: string): Promise<{ ok: boolean; scadPath?: string; error?: string }> {
+  try {
+    const r = await fetch(`${AGENT}/3d/save-scad`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scad, name }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: data.error || `HTTP ${r.status}` };
+    return { ok: true, scadPath: data.scadPath };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Request failed' };
+  }
+}
+
 export async function renderStl(scad: string, name: string): Promise<{ ok: boolean; stl?: ArrayBuffer; error?: string }> {
   try {
     const r = await fetch(`${AGENT}/openscad/render`, {

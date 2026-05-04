@@ -12,7 +12,7 @@ import { StlViewer } from '@/components/threed/StlViewer';
 import { AcceptanceChecklist } from '@/components/threed/AcceptanceChecklist';
 import { VoiceControls } from '@/components/threed/VoiceControls';
 import { SCAD_TEMPLATES, generateScadWithFix, validateScad } from '@/lib/openscad';
-import { downloadBlob, getOpenScadStatus, renderStl } from '@/lib/stl-export';
+import { downloadBlob, getOpenScadStatus, renderStl, saveScad } from '@/lib/stl-export';
 
 export default function ThreeDWorkspace() {
   const { toast } = useToast();
@@ -64,6 +64,13 @@ export default function ThreeDWorkspace() {
   const handleDownloadScad = () => {
     if (!scad) return;
     downloadBlob(scad, `${name || 'model'}.scad`, 'application/x-openscad');
+  };
+
+  const handleSaveScad = async () => {
+    if (!scad) return;
+    const r = await saveScad(scad, name || 'model');
+    if (r.ok) toast({ title: 'Saved', description: r.scadPath || 'projects/3d/' });
+    else toast({ variant: 'destructive', title: 'Save failed', description: r.error });
   };
 
   const handleExportStl = async () => {
@@ -155,6 +162,9 @@ export default function ThreeDWorkspace() {
                 <FileCode className="w-4 h-4 text-muted-foreground" />
                 <span className="text-xs font-medium">model.scad</span>
                 <div className="ml-auto flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={handleSaveScad} disabled={!scad}>
+                    Save
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={handleDownloadScad} disabled={!scad}>
                     <Download className="w-3.5 h-3.5 mr-1.5" />.scad
                   </Button>

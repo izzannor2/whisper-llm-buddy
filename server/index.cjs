@@ -600,6 +600,41 @@ app.post('/3d/export-stl', (req, res, next) => {
   app._router.handle(req, res, next);
 });
 
+// GET /3d/status — quick status for 3D printing mode
+app.get('/3d/status', (req, res) => {
+  const { execFile } = require('child_process');
+  execFile('openscad', ['--version'], { timeout: 4000 }, (err, stdout, stderr) => {
+    res.json({
+      ok: true,
+      openscadAvailable: !err,
+      openscadVersion: err ? null : (stdout || stderr || '').trim(),
+      lastScadPath: threeDState.lastScadPath,
+      lastStlPath: threeDState.lastStlPath,
+      lastError: threeDState.lastError,
+      projectsDir: path.join(process.cwd(), 'projects', '3d'),
+    });
+  });
+});
+
+// POST /3d/save-scad — persist generated OpenSCAD without running export
+app.post('/3d/save-scad', (req, res) => {
+  const { scad, name } = req.body || {};
+  if (typeof scad !== 'string' || !scad.trim()) return res.status(400).json({ error: 'scad required' });
+  const safeName = String(name || 'model').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'model';
+  const outDir = path.join(process.cwd(), 'projects', '3d', safeName);
+  try { fs.mkdirSync(outDir, { recursive: true }); } catch {}
+  const scadPath = path.join(outDir, `${safeName}.scad`);
+  const metaPath = path.join(outDir, 'metadata.json');
+  try {
+    fs.writeFileSync(scadPath, scad, 'utf8');
+    fs.writeFileSync(metaPath, JSON.stringify({ name: safeName, savedAt: new Date().toISOString(), bytes: scad.length }, null, 2));
+    threeDState.lastScadPath = scadPath;
+    res.json({ ok: true, scadPath, dir: outDir });
+  } catch (e) {
+    res.status(500).json({ error: 'write failed: ' + e.message });
+  }
+});
+
 // 3D diagnostics: openscad availability + last export info
 app.get('/3d/diagnostics', (req, res) => {
   const { execFile } = require('child_process');

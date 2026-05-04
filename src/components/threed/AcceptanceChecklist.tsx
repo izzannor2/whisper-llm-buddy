@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CheckCircle2, XCircle, Loader2, Play } from 'lucide-react';
 import { generateScad, validateScad } from '@/lib/openscad';
-import { getOpenScadStatus, renderStl } from '@/lib/stl-export';
+import { getOpenScadStatus, renderStl, get3DStatus } from '@/lib/stl-export';
 
 type Status = 'pending' | 'running' | 'pass' | 'fail';
 interface Check {
@@ -16,6 +16,7 @@ interface Check {
 const INITIAL: Check[] = [
   { id: 'mode-visible', label: '3D Printing mode appears in UI', status: 'pending' },
   { id: 'voice-controls', label: 'Voice controls render in 3D mode', status: 'pending' },
+  { id: 'status-endpoint', label: '/3d/status endpoint responds', status: 'pending' },
   { id: 'scad-gen', label: 'OpenSCAD generation creates valid .scad', status: 'pending' },
   { id: 'stl-export', label: 'STL export returns missing-OpenSCAD message when CLI is absent (no fake STL created)', status: 'pending' },
 ];
@@ -57,7 +58,19 @@ export function AcceptanceChecklist() {
       update('voice-controls', { status: 'fail', detail: String(e) });
     }
 
-    // 3. SCAD generation
+    // 3. /3d/status endpoint
+    update('status-endpoint', { status: 'running' });
+    try {
+      const s = await get3DStatus();
+      update('status-endpoint', {
+        status: s.ok ? 'pass' : 'fail',
+        detail: s.ok ? `openscadAvailable=${s.openscadAvailable}` : (s.error || 'no response'),
+      });
+    } catch (e) {
+      update('status-endpoint', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 4. SCAD generation
     update('scad-gen', { status: 'running' });
     let scad = '';
     try {
