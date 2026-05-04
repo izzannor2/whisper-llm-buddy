@@ -102,6 +102,7 @@ function AppInner() {
           <Route path="/iot" element={<IoTWorkspace />} />
           <Route path="/sandbox" element={<SandboxWorkspace />} />
           <Route path="/improve" element={<ImproveWorkspace />} />
+          <Route path="/3d" element={<ThreeDWorkspace />} />
           <Route path="/settings" element={<IDESettings />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="*" element={<NotFound />} />
