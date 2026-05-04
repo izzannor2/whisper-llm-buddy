@@ -3,7 +3,7 @@
  * AppError class + handleError() for consistent error normalization, logging, and toast display.
  */
 
-import { toast } from 'sonner';
+import { emitError } from './error-bus';
 
 export class AppError extends Error {
   code: string;
