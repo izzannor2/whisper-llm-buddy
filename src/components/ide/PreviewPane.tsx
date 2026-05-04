@@ -303,7 +303,7 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
                   {renderIframe()}
                 </div>
               ) : (
-                <div className="h-full bg-background">
+                <div className="h-full bg-white">
                   {renderIframe()}
                 </div>
               )
