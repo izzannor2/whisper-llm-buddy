@@ -72,7 +72,19 @@ export function AcceptanceChecklist() {
       update('status-endpoint', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
     }
 
-    // 4. SCAD generation
+    // 4. /openscad/status endpoint
+    update('openscad-status', { status: 'running' });
+    try {
+      const s = await getOpenScadStatus();
+      update('openscad-status', {
+        status: typeof s.available === 'boolean' ? 'pass' : 'fail',
+        detail: s.available ? `available (${s.version || 'unknown'})` : (s.error || 'not available'),
+      });
+    } catch (e) {
+      update('openscad-status', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 5. SCAD generation
     update('scad-gen', { status: 'running' });
     let scad = '';
     try {
