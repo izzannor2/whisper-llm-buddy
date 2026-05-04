@@ -12,7 +12,7 @@ import { StlViewer } from '@/components/threed/StlViewer';
 import { AcceptanceChecklist } from '@/components/threed/AcceptanceChecklist';
 import { VoiceControls } from '@/components/threed/VoiceControls';
 import { SCAD_TEMPLATES, generateScadWithFix, validateScad } from '@/lib/openscad';
-import { downloadBlob, getOpenScadStatus, renderStl } from '@/lib/stl-export';
+import { downloadBlob, getOpenScadStatus, renderStl, saveScad } from '@/lib/stl-export';
 
 export default function ThreeDWorkspace() {
   const { toast } = useToast();
