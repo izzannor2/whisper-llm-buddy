@@ -56,8 +56,14 @@ function valueToEntry(v: string): RoutingEntry {
 export function ModelRoutingPanel() {
   const [snap, setSnap] = useState<ModelRegistrySnapshot | null>(null);
   const [routing, setRouting] = useState(() => loadRouting());
+  const [toggles, setTogglesState] = useState<RoutingToggles>(() => loadToggles());
   const [loading, setLoading] = useState(false);
   const [includeCloud, setIncludeCloud] = useState(true);
+  const updateToggle = (k: keyof RoutingToggles, v: boolean) => {
+    const next = { ...toggles, [k]: v };
+    setTogglesState(next);
+    saveToggles(next);
+  };
 
   const refresh = useCallback(async () => {
     setLoading(true);
