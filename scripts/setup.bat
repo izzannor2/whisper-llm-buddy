@@ -28,10 +28,9 @@ if not exist "config\settings.json" (
         echo {
         echo   "ollama_path": "./bin/ollama",
         echo   "llama_path": "./bin/llama",
-        echo   "model_path": "./models",
+        echo   "model_path": "./.ollama",
         echo   "log_path": "./logs",
         echo   "auto_start_ollama": true,
-        echo   "default_model": "llama3.2",
         echo   "ollama_port": 11434,
         echo   "llama_port": 8081,
         echo   "app_port": 8080
