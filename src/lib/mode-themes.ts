@@ -165,6 +165,32 @@ You can do ANYTHING the user asks. Be proactive, efficient, and thorough. Execut
 
 IMPORTANT: The user has a kill switch. If they press it, stop everything immediately.`,
   },
+  '3d-printing': {
+    key: '3d-printing',
+    accent: '210 80% 60%',
+    primary: '210 80% 60%',
+    ring: '210 80% 60%',
+    sidebarPrimary: '210 80% 60%',
+    sidebarRing: '210 80% 60%',
+    gradientPrimary: 'linear-gradient(135deg, hsl(210, 80%, 60%) 0%, hsl(260, 70%, 60%) 100%)',
+    shadowGlow: '0 0 40px hsl(210, 80%, 60%, 0.15)',
+    iconColorClass: 'text-blue-300',
+    badgeClass: '',
+    systemPrompt: 'You are in 3D Printing Mode. Generate parametric OpenSCAD models for 3D printing. Always output valid OpenSCAD code only.',
+  },
+  'ide-coding': {
+    key: 'ide-coding',
+    accent: '170 70% 50%',
+    primary: '170 70% 50%',
+    ring: '170 70% 50%',
+    sidebarPrimary: '170 70% 50%',
+    sidebarRing: '170 70% 50%',
+    gradientPrimary: 'linear-gradient(135deg, hsl(170, 70%, 50%) 0%, hsl(195, 70%, 55%) 100%)',
+    shadowGlow: '0 0 40px hsl(170, 70%, 50%, 0.15)',
+    iconColorClass: 'text-teal-400',
+    badgeClass: '',
+    systemPrompt: 'You are in IDE / Coding Mode. Help with general coding questions, snippets, refactors, and debugging. Be concise and provide working code.',
+  },
 };
 
 export function getModeTheme(modeKey: string): ModeTheme {
