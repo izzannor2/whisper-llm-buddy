@@ -45,17 +45,21 @@ export function validateScad(code: string): ScadValidation {
   if (!/(cube|cylinder|sphere|polyhedron|linear_extrude|rotate_extrude|module\s+\w+)/.test(code)) {
     errors.push('No geometry primitives or modules found.');
   }
-  // Missing semicolons: scan non-empty, non-comment, non-brace/bracket lines
-  const lines = code.split('\n');
+  // Missing semicolons: only flag plausible statement lines
+  const rawLines = code.split('\n');
+  const stripped = rawLines.map(l => l.replace(/\/\/.*$/, '').trim());
   const badLines: number[] = [];
-  lines.forEach((raw, i) => {
-    const line = raw.replace(/\/\/.*$/, '').trim();
+  stripped.forEach((line, i) => {
     if (!line) return;
-    // Lines ending in structural chars that legitimately don't take a semicolon
-    if (/[{}\[\];,(]$/.test(line)) return;
-    // Lines ending with ) are usually a transformation header followed by a block on the next line
-    if (line.endsWith(')')) return;
-    if (/^(module|function|if|else|for|intersection_for|let|use|include|union|difference|intersection|hull|minkowski)\b/.test(line)) return;
+    if (/[;{}\[\],]$/.test(line)) return;
+    if (/^(module|function|if|else|for|intersection_for|let|use|include|union|difference|intersection|hull|minkowski|render|color|translate|rotate|scale|mirror|resize|offset|projection|linear_extrude|rotate_extrude)\b/.test(line)) return;
+    // Line ends with ) — header if the next non-blank line opens a block
+    if (line.endsWith(')')) {
+      let j = i + 1;
+      while (j < stripped.length && !stripped[j]) j++;
+      if ((stripped[j] || '').startsWith('{')) return;
+    }
+    if (!/[=()]/.test(line)) return;
     badLines.push(i + 1);
   });
   if (badLines.length) errors.push(`Possible missing semicolons on line(s): ${badLines.slice(0, 5).join(', ')}${badLines.length > 5 ? '…' : ''}.`);
