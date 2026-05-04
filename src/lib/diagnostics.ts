@@ -121,6 +121,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     updatesApplied,
     modelRegistry: registry,
     threeD,
+    threeDStatus,
     routing: { roles: loadRouting(), toggles: loadToggles() },
     updateHistory: getUpdateHistory(),
     recentLogs: { agent: agentLog, web: webLog, llama: llamaLog, ollama: ollamaLog, server: serverLog },
