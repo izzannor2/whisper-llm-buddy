@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy, RotateCcw, Bug } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Copy, RotateCcw, Bug, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { getBuffer, subscribe, type BusEvent } from '@/lib/error-bus';
 
