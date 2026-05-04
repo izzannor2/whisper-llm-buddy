@@ -1,5 +1,5 @@
 // OpenSCAD generation + lightweight validation
-import { sendChatMessage } from '@/lib/chat-api';
+import { sendChatMessage, loadSettings } from '@/lib/chat-api';
 
 export const SCAD_TEMPLATES: { id: string; label: string; prompt: string }[] = [
   { id: 'gear', label: 'Gear', prompt: 'Create an OpenSCAD parametric spur gear with 20 teeth, module 2, 5mm bore, 6mm thickness.' },
