@@ -32,18 +32,33 @@ export interface ScadValidation {
 
 export function validateScad(code: string): ScadValidation {
   const errors: string[] = [];
-  if (!code.trim()) errors.push('Empty model.');
-  // Brace balance
+  if (!code.trim()) {
+    errors.push('Empty model — no OpenSCAD code generated.');
+    return { ok: false, errors };
+  }
   const open = (code.match(/{/g) || []).length;
   const close = (code.match(/}/g) || []).length;
   if (open !== close) errors.push(`Unbalanced braces (${open} open, ${close} close).`);
   const op = (code.match(/\(/g) || []).length;
   const cp = (code.match(/\)/g) || []).length;
   if (op !== cp) errors.push(`Unbalanced parentheses (${op} open, ${cp} close).`);
-  // Heuristic: must reference at least one solid primitive or module call
   if (!/(cube|cylinder|sphere|polyhedron|linear_extrude|rotate_extrude|module\s+\w+)/.test(code)) {
-    errors.push('No geometry primitives found.');
+    errors.push('No geometry primitives or modules found.');
   }
+  // Missing semicolons: scan non-empty, non-comment, non-brace lines
+  const lines = code.split('\n');
+  const badLines: number[] = [];
+  lines.forEach((raw, i) => {
+    const line = raw.replace(/\/\/.*$/, '').trim();
+    if (!line) return;
+    if (/[{};,]$/.test(line)) return;
+    if (/^(module|function|if|else|for|intersection_for|let|use|include)\b/.test(line)) return;
+    if (line.endsWith(')') && /\b(module|function|if|for|else|union|difference|intersection|hull|minkowski)\b/.test(line)) return;
+    badLines.push(i + 1);
+  });
+  if (badLines.length) errors.push(`Possible missing semicolons on line(s): ${badLines.slice(0, 5).join(', ')}${badLines.length > 5 ? '…' : ''}.`);
+  // Module declared without name
+  if (/\bmodule\s*\(/.test(code)) errors.push('Module declared without a name.');
   return { ok: errors.length === 0, errors };
 }
 
