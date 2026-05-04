@@ -21,6 +21,10 @@ call :check_file src\lib\error-bus.ts
 call :check_file src\lib\diagnostics.ts
 call :check_file src\components\settings\UpdatesPanel.tsx
 call :check_file src\components\settings\DiagnosticsPanel.tsx
+call :check_file src\components\ide\PreviewHealthCard.tsx
+call :check_file src\lib\prompt-presets.ts
+call :check_file scripts\route-smoke-test.mjs
+call :check_file scripts\route-smoke-test.bat
 
 call :check_wraps start.bat "RUN-ALL.bat"
 call :check_wraps START-PORTABLE-AI.bat "RUN-ALL.bat"
