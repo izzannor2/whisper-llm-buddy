@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Download, ExternalLink, Trash2, Plus, HardDrive, RefreshCw, Search, Loader2, CheckCircle } from 'lucide-react';
+import { Download, ExternalLink, Trash2, Plus, HardDrive, RefreshCw, Search, Loader2, CheckCircle, FolderOpen, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { LocalModelPicker } from '@/components/LocalModelPicker';
+import { getModelRegistry, type ModelRegistrySnapshot, type DiscoveredModel } from '@/lib/model-registry';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -139,7 +141,34 @@ export function ModelManager({ localUrl, onModelSelect }: ModelManagerProps) {
     }
   }, []);
 
-  // Save models to localStorage
+  // ===== Registry-based detected models (live, agent proxy, manifest scan, gguf scan) =====
+  const [registry, setRegistry] = useState<ModelRegistrySnapshot | null>(null);
+  const [registryLoading, setRegistryLoading] = useState(false);
+
+  const loadRegistry = useCallback(async (force = false) => {
+    setRegistryLoading(true);
+    try {
+      const snap = await getModelRegistry(force);
+      setRegistry(snap);
+    } finally {
+      setRegistryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadRegistry(); }, [loadRegistry]);
+
+  const sourceBadge = (s: DiscoveredModel['source']) => {
+    const map: Record<DiscoveredModel['source'], { label: string; cls: string }> = {
+      'live':           { label: 'live ollama',     cls: 'border-green-500/40 text-green-400' },
+      'agent-proxy':    { label: 'agent proxy',     cls: 'border-blue-500/40 text-blue-400' },
+      'manifest-scan':  { label: 'manifest scan',   cls: 'border-amber-500/40 text-amber-400' },
+      'gguf-scan':      { label: 'gguf scan',       cls: 'border-purple-500/40 text-purple-400' },
+      'cloud':          { label: 'cloud',           cls: 'border-muted-foreground/40 text-muted-foreground' },
+    };
+    const v = map[s];
+    return <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', v.cls)}>{v.label}</Badge>;
+  };
+
   const saveModels = (models: LocalModel[]) => {
     setSavedModels(models);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(models));
