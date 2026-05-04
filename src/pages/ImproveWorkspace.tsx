@@ -442,7 +442,7 @@ export default function ImproveWorkspace() {
       await sendChatMessage(chatMsgs, { ...settings, systemPrompt: '' }, (chunk) => {
         fullResponse += chunk;
         setStreamingContent(prev => prev + chunk);
-      });
+      }, { role: 'improvement' });
       const assistantMsg: ChatMsg = { id: generateId(), role: 'assistant', content: fullResponse };
       const allMsgsAfter = [...allMsgsBefore, assistantMsg];
       setMessages(allMsgsAfter);
