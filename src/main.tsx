@@ -69,9 +69,23 @@ import './plugins/calculator';
   localStorage.setItem('localdev-migrated', 'true');
 })();
 
-// Register service worker for offline support
+// Register service worker only for production builds.
+// Vite preview/dev serves React through /node_modules/.vite chunks; caching those
+// can mix old React and ReactDOM chunks and trigger invalid hook calls.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    if (import.meta.env.DEV) {
+      navigator.serviceWorker.getRegistrations()
+        .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+        .catch(() => {});
+      if ('caches' in window) {
+        caches.keys()
+          .then((keys) => Promise.all(keys.filter((key) => key.startsWith('arachat-') || key.startsWith('localdev-')).map((key) => caches.delete(key))))
+          .catch(() => {});
+      }
+      return;
+    }
+
     navigator.serviceWorker
       .register('/sw.js')
       .then((registration) => {
