@@ -533,20 +533,41 @@ app.post('/openscad/render', (req, res) => {
   try { fs.mkdirSync(outDir, { recursive: true }); } catch {}
   const scadPath = path.join(outDir, `${safeName}.scad`);
   const stlPath = path.join(outDir, `${safeName}.stl`);
-  try { fs.writeFileSync(scadPath, scad, 'utf8'); }
-  catch (e) { return res.status(500).json({ error: 'write failed: ' + e.message }); }
+  const metaPath = path.join(outDir, 'metadata.json');
+  try {
+    fs.writeFileSync(scadPath, scad, 'utf8');
+    fs.writeFileSync(metaPath, JSON.stringify({ name: safeName, createdAt: new Date().toISOString() }, null, 2));
+  } catch (e) { return res.status(500).json({ error: 'write failed: ' + e.message }); }
+  threeDState.lastScadPath = scadPath;
   const { execFile } = require('child_process');
   execFile('openscad', ['-o', stlPath, scadPath], { timeout: 60000 }, (err, _stdout, stderr) => {
     if (err) {
-      if (err.code === 'ENOENT') return res.status(424).json({ error: 'OpenSCAD CLI not installed', missing: true });
+      threeDState.lastError = err.code === 'ENOENT' ? 'OpenSCAD CLI not installed' : (stderr || err.message);
+      threeDState.lastStlPath = null;
+      if (err.code === 'ENOENT') {
+        return res.status(424).json({
+          error: 'OpenSCAD CLI not installed. Install it to enable STL export.',
+          missing: true,
+          install: {
+            windows: 'winget install OpenSCAD.OpenSCAD',
+            macos: 'brew install --cask openscad',
+            linux: 'sudo apt install openscad',
+          },
+        });
+      }
       return res.status(500).json({ error: stderr || err.message });
     }
     try {
       const buf = fs.readFileSync(stlPath);
+      threeDState.lastStlPath = stlPath;
+      threeDState.lastError = null;
       res.setHeader('Content-Type', 'application/sla');
       res.setHeader('X-Stl-Path', stlPath);
       res.send(buf);
-    } catch (e) { res.status(500).json({ error: 'read failed: ' + e.message }); }
+    } catch (e) {
+      threeDState.lastError = 'read failed: ' + e.message;
+      res.status(500).json({ error: 'read failed: ' + e.message });
+    }
   });
 });
 app.get('/agent/ollama-info', (req, res) => {
