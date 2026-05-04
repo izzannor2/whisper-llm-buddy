@@ -136,3 +136,25 @@ export async function resolveModel(role: ModelRole): Promise<ResolvedModel> {
   const snap = await getModelRegistry();
   return resolveModelSync(role, snap);
 }
+
+/* ----- Behaviour toggles ----- */
+const TOGGLE_KEY = 'model-routing-toggles-v1';
+export interface RoutingToggles {
+  useFirstAvailableFallback: boolean;
+  autoSwitchByTask: boolean;
+}
+const DEFAULT_TOGGLES: RoutingToggles = {
+  useFirstAvailableFallback: true,
+  autoSwitchByTask: false,
+};
+export function loadToggles(): RoutingToggles {
+  try {
+    const raw = localStorage.getItem(TOGGLE_KEY);
+    if (!raw) return { ...DEFAULT_TOGGLES };
+    return { ...DEFAULT_TOGGLES, ...(JSON.parse(raw) as Partial<RoutingToggles>) };
+  } catch { return { ...DEFAULT_TOGGLES }; }
+}
+export function saveToggles(t: RoutingToggles): void {
+  localStorage.setItem(TOGGLE_KEY, JSON.stringify(t));
+  try { window.dispatchEvent(new CustomEvent('routing-toggles-changed', { detail: t })); } catch {}
+}
