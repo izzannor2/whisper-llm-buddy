@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { StatusPill, StatusState } from '@/components/StatusPill';
 import { StlViewer } from '@/components/threed/StlViewer';
 import { AcceptanceChecklist } from '@/components/threed/AcceptanceChecklist';
+import { VoiceControls } from '@/components/threed/VoiceControls';
 import { SCAD_TEMPLATES, generateScadWithFix, validateScad } from '@/lib/openscad';
 import { downloadBlob, getOpenScadStatus, renderStl } from '@/lib/stl-export';
 
@@ -104,7 +105,13 @@ export default function ThreeDWorkspace() {
         </Button>
         <Box className="w-5 h-5 text-accent" />
         <h1 className="text-sm font-semibold">3D Printing</h1>
-        <div className="ml-auto"><StatusPill state={status} message={statusMsg} /></div>
+        <div className="ml-auto flex items-center gap-3">
+          <VoiceControls
+            onTranscript={(t) => setPrompt((p) => (p ? p + ' ' + t : t))}
+            speakText={statusMsg || (scad ? 'OpenSCAD model ready.' : '')}
+          />
+          <StatusPill state={status} message={statusMsg} />
+        </div>
       </header>
 
       <ResizablePanelGroup direction="horizontal" className="flex-1">

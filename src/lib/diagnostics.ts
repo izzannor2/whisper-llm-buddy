@@ -10,6 +10,8 @@ import { getModelRegistry } from './model-registry';
 import { loadRouting, loadToggles } from './model-routing';
 import { getCurrentVersion, getUpdateHistory } from './update-system';
 import { getBuffer } from './error-bus';
+import { probeVoiceCapabilities } from '../components/threed/VoiceControls';
+import { loadSettings as loadIDESettings } from './ide-store';
 
 export interface BundleEntry<T = unknown> {
   status: 'ok' | 'missing' | 'error' | 'offline';
