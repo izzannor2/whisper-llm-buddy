@@ -82,6 +82,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     get('/agent/ollama-info'),
     get('/updates/applied'),
     get('/3d/diagnostics'),
+    get('/3d/status'),
     get('/logs?name=agent&lines=200'),
     get('/logs?name=web&lines=200'),
     get('/logs?name=llama&lines=200'),
