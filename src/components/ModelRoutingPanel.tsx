@@ -16,9 +16,14 @@ import {
   loadRouting,
   saveRouting,
   setRoleRouting,
+  loadToggles,
+  saveToggles,
   type ModelRole,
   type RoutingEntry,
+  type RoutingToggles,
 } from '@/lib/model-routing';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { CLOUD_MODELS, OPENAI_MODELS, ANTHROPIC_MODELS, GOOGLE_MODELS } from '@/lib/chat-api';
 
 const AUTO_VALUE = '__auto__';
