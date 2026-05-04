@@ -66,6 +66,13 @@ export default function ThreeDWorkspace() {
     downloadBlob(scad, `${name || 'model'}.scad`, 'application/x-openscad');
   };
 
+  const handleSaveScad = async () => {
+    if (!scad) return;
+    const r = await saveScad(scad, name || 'model');
+    if (r.ok) toast({ title: 'Saved', description: r.scadPath || 'projects/3d/' });
+    else toast({ variant: 'destructive', title: 'Save failed', description: r.error });
+  };
+
   const handleExportStl = async () => {
     if (!scad) return;
     const ok = openScadAvailable ?? (await checkOpenScad());
