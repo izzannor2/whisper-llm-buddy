@@ -70,6 +70,9 @@ export default function IDE() {
   const [isPreviewGenerating, setIsPreviewGenerating] = useState(false);
   const [fileDialog, setFileDialog] = useState<{ open: boolean; parentPath: string; isDirectory: boolean }>({ open: false, parentPath: '/', isDirectory: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; path: string }>({ open: false, path: '' });
+  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [filesCollapsed, setFilesCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   // Listen for debug messages from preview iframe
   useEffect(() => {
@@ -510,18 +513,59 @@ export default function IDE() {
       </header>
 
       <ResizablePanelGroup direction="horizontal" className="flex-1">
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
-          <IDEChat messages={messages} onSendMessage={handleSendMessage} isLoading={isLoading}
-            streamingContent={streamingContent} mode={settings.mode}
-            onOpenSettings={() => navigate('/settings')} onToggleCodeLibrary={() => setCodeLibraryOpen(!codeLibraryOpen)} />
-        </ResizablePanel>
-        <ResizableHandle withHandle />
+        {chatCollapsed ? (
+          <div className="w-10 border-r border-border bg-card flex flex-col items-center py-2 gap-2 shrink-0">
+            <Button variant="ghost" size="icon" className="h-8 w-8" title="Expand chat" onClick={() => setChatCollapsed(false)}>
+              <Bot className="h-4 w-4" />
+            </Button>
+            <span className="text-[10px] text-muted-foreground [writing-mode:vertical-rl] rotate-180 mt-2">Chat</span>
+          </div>
+        ) : (
+          <>
+            <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+              <div className="h-full flex flex-col">
+                <div className="flex items-center justify-between px-2 py-1 border-b border-border bg-card">
+                  <span className="text-xs font-medium text-muted-foreground">Chat</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" title="Minimize chat" onClick={() => setChatCollapsed(true)}>
+                    <span className="text-xs">−</span>
+                  </Button>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <IDEChat messages={messages} onSendMessage={handleSendMessage} isLoading={isLoading}
+                    streamingContent={streamingContent} mode={settings.mode}
+                    onOpenSettings={() => navigate('/settings')} onToggleCodeLibrary={() => setCodeLibraryOpen(!codeLibraryOpen)} />
+                </div>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+          </>
+        )}
         <ResizablePanel defaultSize={45} minSize={30}>
           <ResizablePanelGroup direction="horizontal">
-            <ResizablePanel defaultSize={25} minSize={15} maxSize={35}>
-              <FileTree files={project?.files || []} selectedFile={selectedFile?.path} onSelectFile={handleSelectFile} onCreateFile={handleCreateFile} onDeleteFile={handleDeleteFile} onRenameFile={handleRenameFile} />
-            </ResizablePanel>
-            <ResizableHandle />
+            {filesCollapsed ? (
+              <div className="w-8 border-r border-border bg-card flex flex-col items-center py-2 shrink-0">
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Expand files" onClick={() => setFilesCollapsed(false)}>
+                  <FileText className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+                  <div className="h-full flex flex-col">
+                    <div className="flex items-center justify-between px-2 py-1 border-b border-border bg-card">
+                      <span className="text-xs font-medium text-muted-foreground">Files</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" title="Minimize files" onClick={() => setFilesCollapsed(true)}>
+                        <span className="text-xs">−</span>
+                      </Button>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                      <FileTree files={project?.files || []} selectedFile={selectedFile?.path} onSelectFile={handleSelectFile} onCreateFile={handleCreateFile} onDeleteFile={handleDeleteFile} onRenameFile={handleRenameFile} />
+                    </div>
+                  </div>
+                </ResizablePanel>
+                <ResizableHandle />
+              </>
+            )}
             <ResizablePanel defaultSize={75}>
               <CodeEditor file={selectedFile} openFiles={openFiles} onFileChange={handleFileChange}
                 onCloseFile={handleCloseFile} onSelectFile={handleSelectFile} fontSize={settings.fontSize}
@@ -530,8 +574,22 @@ export default function IDE() {
           </ResizablePanelGroup>
         </ResizablePanel>
         <ResizableHandle withHandle />
+        {rightCollapsed ? (
+          <div className="w-10 border-l border-border bg-card flex flex-col items-center py-2 gap-2 shrink-0">
+            <Button variant="ghost" size="icon" className="h-8 w-8" title="Expand preview" onClick={() => setRightCollapsed(false)}>
+              <Play className="h-4 w-4" />
+            </Button>
+            <span className="text-[10px] text-muted-foreground [writing-mode:vertical-rl] rotate-180 mt-2">Preview</span>
+          </div>
+        ) : (
         <ResizablePanel defaultSize={30} minSize={20}>
           <div className="h-full flex flex-col">
+            <div className="flex items-center justify-between px-2 py-1 border-b border-border bg-card">
+              <span className="text-xs font-medium text-muted-foreground">Preview & Tools</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6" title="Minimize preview" onClick={() => setRightCollapsed(true)}>
+                <span className="text-xs">−</span>
+              </Button>
+            </div>
             <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as typeof rightPanelTab)} className="flex-1 flex flex-col">
               <TabsList className="w-full justify-start rounded-none border-b border-border bg-card px-2">
                 <TabsTrigger value="preview" className="gap-1"><Play className="h-3 w-3" />Preview</TabsTrigger>
@@ -641,6 +699,7 @@ export default function IDE() {
             </Tabs>
           </div>
         </ResizablePanel>
+        )}
       </ResizablePanelGroup>
 
       <IDEStatusFooter agentConnected={agentStatus.connected} />
