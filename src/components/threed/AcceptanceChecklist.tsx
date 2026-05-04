@@ -98,7 +98,19 @@ export function AcceptanceChecklist() {
       update('scad-gen', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
     }
 
-    // 3. STL export honesty: if CLI absent, must return clear error and NO buffer
+    // 6. Save SCAD endpoint
+    update('save-scad', { status: 'running' });
+    try {
+      const r = await saveScad(scad || 'cube(10);', 'acceptance_test');
+      update('save-scad', {
+        status: r.ok ? 'pass' : 'fail',
+        detail: r.ok ? (r.scadPath || 'saved') : (r.error || 'save failed'),
+      });
+    } catch (e) {
+      update('save-scad', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 7. STL export honesty: if CLI absent, must return clear error and NO buffer
     update('stl-export', { status: 'running' });
     try {
       const s = await getOpenScadStatus();
