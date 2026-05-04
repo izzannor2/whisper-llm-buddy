@@ -323,7 +323,7 @@ export default function IDESettingsPage() {
 
             {/* MODELS — single source of truth */}
             <TabsContent value="models">
-              <ModelManager />
+              <ModelManager localUrl={settings.ollamaUrl || 'http://127.0.0.1:11434'} />
             </TabsContent>
 
             {/* ROUTING */}
