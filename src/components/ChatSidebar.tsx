@@ -53,22 +53,24 @@ interface ChatSidebarProps {
 }
 
 const MODES_LIST: { key: string; id: IDEMode; name: string; icon: any; description: string }[] = [
-  { key: 'chat', id: 'app-builder', name: 'Chat', icon: MessageSquare, description: 'General conversation' },
   { key: 'app-builder', id: 'app-builder', name: 'App Builder', icon: Layers, description: 'Full-stack web apps with preview' },
-  { key: 'embedded-iot', id: 'embedded-iot', name: 'IoT / Embedded', icon: Cpu, description: 'ESP32, Arduino, Pi' },
-  { key: 'system-helper', id: 'system-helper', name: 'System Helper', icon: Terminal, description: 'Computer tasks' },
+  { key: 'ide-coding', id: 'ide-coding', name: 'IDE / Coding', icon: MessageSquare, description: 'General coding chat' },
   { key: 'ai-improvement', id: 'ai-improvement', name: 'AI Improvement', icon: Sparkles, description: 'Self-modification' },
-  { key: 'learning', id: 'learning', name: 'Learning Mode', icon: GraduationCap, description: 'Learn your style' },
+  { key: 'embedded-iot', id: 'embedded-iot', name: 'IoT / Embedded', icon: Cpu, description: 'ESP32, Arduino, Pi' },
+  { key: '3d-printing', id: '3d-printing', name: '3D Printing', icon: Box, description: 'OpenSCAD models & STL' },
+  { key: 'system-helper', id: 'system-helper', name: 'System Helper', icon: Terminal, description: 'Computer tasks' },
   { key: 'sandbox', id: 'sandbox', name: 'Sandbox', icon: FlaskConical, description: 'Safe experiments' },
-  { key: 'jailbreak', id: 'jailbreak', name: 'Advanced Prompt Override', icon: AlertTriangle, description: 'Custom system prompt (advanced)' },
   { key: 'plugin', id: 'plugin', name: 'Plugin Mode', icon: Plug, description: 'Custom plugins & tools' },
+  { key: 'jailbreak', id: 'jailbreak', name: 'Prompt Override', icon: AlertTriangle, description: 'Custom system prompt' },
+  { key: 'learning', id: 'learning', name: 'Learning Mode', icon: GraduationCap, description: 'Learn your style' },
   { key: 'all-in-one', id: 'app-builder', name: 'All-in-One AI', icon: Crown, description: 'Unlimited capabilities' },
 ];
 
 const MODE_ICON_MAP: Record<string, { icon: any; color: string }> = {
-  chat: { icon: MessageSquare, color: 'text-teal-400' },
   'app-builder': { icon: Layers, color: 'text-purple-400' },
+  'ide-coding': { icon: MessageSquare, color: 'text-teal-400' },
   'embedded-iot': { icon: Cpu, color: 'text-orange-400' },
+  '3d-printing': { icon: Box, color: 'text-blue-300' },
   'system-helper': { icon: Terminal, color: 'text-amber-400' },
   'ai-improvement': { icon: Sparkles, color: 'text-pink-400' },
   learning: { icon: GraduationCap, color: 'text-green-400' },
