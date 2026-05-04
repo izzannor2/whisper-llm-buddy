@@ -22,6 +22,8 @@ call :check_url /debug/snapshot        http://127.0.0.1:3847/debug/snapshot
 call :check_url /dev-server/status     http://127.0.0.1:3847/dev-server/status
 call :check_url /updates/applied       http://127.0.0.1:3847/updates/applied
 call :check_url /agent/ollama-info     http://127.0.0.1:3847/agent/ollama-info
+call :check_url /scan/gguf             http://127.0.0.1:3847/scan/gguf
+call :check_url /scan/ollama           http://127.0.0.1:3847/scan/ollama
 
 call :check_models_ok ollama  http://127.0.0.1:11434/api/tags
 call :check_models_ok gguf    http://127.0.0.1:3847/scan/gguf
