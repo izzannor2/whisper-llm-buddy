@@ -5,7 +5,7 @@ import {
   Cpu, WifiOff, Wifi, Lock, Unlock, Power, ChevronDown,
   Layers, Terminal, Sparkles, GraduationCap, FlaskConical, Zap,
   ChevronRight, AlertTriangle, Plug, Crown, FolderHeart,
-  FileSearch, HardDrive, MonitorSmartphone
+  FileSearch, HardDrive, MonitorSmartphone, Box,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
