@@ -56,6 +56,7 @@ export default function IDE() {
   const [streamingContent, setStreamingContent] = useState('');
   const [isServerRunning, setIsServerRunning] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | undefined>();
+  const [previewMeta, setPreviewMeta] = useState<{ port?: number | null; sessionDir?: string | null; lastError?: string | null }>({});
   const [logs, setLogs] = useState<string[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [systemCommands, setSystemCommands] = useState<SystemCommand[]>([]);
@@ -421,8 +422,36 @@ export default function IDE() {
 
   const handleStopServer = async () => {
     await stopDevServer(); setIsServerRunning(false); setPreviewUrl(undefined);
+    setPreviewMeta({});
     setLogs(prev => [...prev, 'Dev server stopped']); toast.success('Dev server stopped');
   };
+
+  const handleRestartServer = async () => {
+    await handleStopServer();
+    await new Promise(r => setTimeout(r, 300));
+    await handleStartServer();
+  };
+
+  // Poll /dev-server/status while server is running to surface real metadata
+  useEffect(() => {
+    if (!isServerRunning) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const r = await fetch('http://127.0.0.1:3847/dev-server/status', { signal: AbortSignal.timeout(2000) });
+        if (!r.ok || cancelled) return;
+        const j = await r.json();
+        setPreviewMeta({ port: j.port ?? null, sessionDir: j.sessionDir ?? null, lastError: j.lastError ?? null });
+        if (j.lastError) {
+          setErrors(prev => prev.includes(j.lastError) ? prev : [...prev, j.lastError]);
+        }
+      } catch { /* ignore */ }
+    };
+    tick();
+    const id = setInterval(tick, 3000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [isServerRunning]);
+
 
   const generatePreview = useCallback((files?: ProjectFile[]) => {
     const filesToUse = files || project?.files;
@@ -526,6 +555,10 @@ export default function IDE() {
                 <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
                   isServerRunning={isServerRunning} isGenerating={isPreviewGenerating} logs={logs} errors={errors}
                   agentConnected={agentStatus.connected}
+                  previewPort={previewMeta.port}
+                  previewSessionDir={previewMeta.sessionDir}
+                  previewLastError={previewMeta.lastError}
+                  onRestartServer={handleRestartServer}
                   onRefresh={() => generatePreview()} onStartServer={handleStartServer} onStopServer={handleStopServer}
                   onGeneratePreview={() => generatePreview()}
                   onCopyHtml={async () => {
