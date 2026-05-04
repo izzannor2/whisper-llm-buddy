@@ -2,7 +2,9 @@
 
 export type IDEMode = 
   | 'app-builder'
+  | 'ide-coding'
   | 'embedded-iot'
+  | '3d-printing'
   | 'system-helper'
   | 'ai-improvement'
   | 'learning'
