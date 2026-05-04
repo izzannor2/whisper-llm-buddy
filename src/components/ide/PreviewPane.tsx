@@ -125,7 +125,7 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   const renderIframe = () => {
     const commonProps = {
       ref: iframeRef,
-      className: 'w-full h-full border-0',
+      className: 'w-full h-full border-0 bg-white',
       title: 'Preview',
       sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals',
     };
