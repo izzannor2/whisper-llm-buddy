@@ -10,6 +10,8 @@ import { getModelRegistry } from './model-registry';
 import { loadRouting, loadToggles } from './model-routing';
 import { getCurrentVersion, getUpdateHistory } from './update-system';
 import { getBuffer } from './error-bus';
+import { probeVoiceCapabilities } from '../components/threed/VoiceControls';
+import { getIDESettings } from './ide-store';
 
 export interface BundleEntry<T = unknown> {
   status: 'ok' | 'missing' | 'error' | 'offline';
@@ -44,6 +46,8 @@ export interface DiagnosticBundle {
   generatedAt: string;
   appVersion: string;
   userAgent: string;
+  currentMode: string;
+  voice: { speechRecognition: boolean; tts: boolean; micPermission: string; threeDActive: boolean };
   status: BundleEntry;
   selftest: BundleEntry;
   debugSnapshot: BundleEntry;
@@ -91,10 +95,21 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     registry = { status: 'error', error: e?.message || String(e) };
   }
 
+  const voiceCaps = await probeVoiceCapabilities().catch(() => ({ speechRecognition: false, tts: false, micPermission: 'unknown' as const }));
+  const ideMode = (() => { try { return getIDESettings().mode || 'unknown'; } catch { return 'unknown'; } })();
+  const onThreeD = typeof window !== 'undefined' && window.location.pathname.startsWith('/3d');
+
   return {
     generatedAt: new Date().toISOString(),
     appVersion: getCurrentVersion(),
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a',
+    currentMode: onThreeD ? '3d-printing' : ideMode,
+    voice: {
+      speechRecognition: voiceCaps.speechRecognition,
+      tts: voiceCaps.tts,
+      micPermission: String(voiceCaps.micPermission),
+      threeDActive: onThreeD,
+    },
     status,
     selftest,
     debugSnapshot,
