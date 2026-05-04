@@ -590,7 +590,6 @@ export default function IDE() {
                 <span className="text-xs">−</span>
               </Button>
             </div>
-          <div className="h-full flex flex-col">
             <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as typeof rightPanelTab)} className="flex-1 flex flex-col">
               <TabsList className="w-full justify-start rounded-none border-b border-border bg-card px-2">
                 <TabsTrigger value="preview" className="gap-1"><Play className="h-3 w-3" />Preview</TabsTrigger>
