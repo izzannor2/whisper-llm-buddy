@@ -611,7 +611,7 @@ export default function IDE() {
                 <TabsTrigger value="system" className="gap-1"><Cpu className="h-3 w-3" />System</TabsTrigger>
                 <TabsTrigger value="build" className="gap-1"><RocketIcon className="h-3 w-3" />Build</TabsTrigger>
               </TabsList>
-              <TabsContent value="preview" className="flex-1 m-0 flex flex-col">
+              <TabsContent value="preview" className="flex-1 mt-0 flex flex-col">
                 <PreviewPane previewUrl={previewUrl} previewHtml={previewHtml} previewBlobUrl={previewBlobUrl}
                   isServerRunning={isServerRunning} isGenerating={isPreviewGenerating} logs={logs} errors={errors}
                   agentConnected={agentStatus.connected}
@@ -645,7 +645,7 @@ export default function IDE() {
                     }
                   }} />
               </TabsContent>
-              <TabsContent value="health" className="flex-1 m-0 overflow-auto">
+              <TabsContent value="health" className="flex-1 mt-0 overflow-auto">
                 <div className="p-2"><PreviewHealthCard
                   isServerRunning={isServerRunning}
                   hasPreview={!!(previewUrl || previewHtml || previewBlobUrl)}
@@ -657,13 +657,13 @@ export default function IDE() {
                   onRestart={handleRestartServer}
                 /></div>
               </TabsContent>
-              <TabsContent value="terminal" className="flex-1 m-0"><Terminal className="h-full" /></TabsContent>
-              <TabsContent value="commands" className="flex-1 m-0">
+              <TabsContent value="terminal" className="flex-1 mt-0"><Terminal className="h-full" /></TabsContent>
+              <TabsContent value="commands" className="flex-1 mt-0">
                 <SystemCommandPanel commands={systemCommands} onApprove={handleApproveCommand}
                   onReject={handleRejectCommand} onExecute={handleExecuteCommand} onClear={handleClearCommands} />
               </TabsContent>
-              <TabsContent value="plugins" className="flex-1 m-0"><PluginManager plugins={plugins} onPluginsChange={setPlugins} /></TabsContent>
-              <TabsContent value="debug" className="flex-1 m-0">
+              <TabsContent value="plugins" className="flex-1 mt-0"><PluginManager plugins={plugins} onPluginsChange={setPlugins} /></TabsContent>
+              <TabsContent value="debug" className="flex-1 mt-0">
                 <div className="h-full flex flex-col">
                   <div className="flex items-center justify-between px-3 py-2 border-b border-border">
                     <span className="text-xs font-medium">Preview Debug Console</span>
@@ -684,10 +684,10 @@ export default function IDE() {
                   </div>
                 </div>
               </TabsContent>
-              <TabsContent value="system" className="flex-1 m-0">
+              <TabsContent value="system" className="flex-1 mt-0">
                 <HardwareMetricsPanel agentConnected={agentStatus.connected} />
               </TabsContent>
-              <TabsContent value="build" className="flex-1 m-0">
+              <TabsContent value="build" className="flex-1 mt-0">
                 <BuildPipelinePanel
                   files={project?.files || []}
                   onFilesUpdate={(files) => {
