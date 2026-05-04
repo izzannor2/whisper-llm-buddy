@@ -119,3 +119,55 @@ export function downloadBundle(b: DiagnosticBundle) {
 export async function copyBundle(b: DiagnosticBundle) {
   await navigator.clipboard.writeText(JSON.stringify(b, null, 2));
 }
+
+/**
+ * Plain-text "Full Support Report" — paste-friendly for ChatGPT/issues.
+ * Includes diagnostic bundle, recent error bus entries, launcher
+ * instructions, app version, browser URL, model routing, update history.
+ */
+export function buildSupportReport(b: DiagnosticBundle): string {
+  const lines: string[] = [];
+  const url = typeof window !== 'undefined' ? window.location.href : 'n/a';
+  const launcher = [
+    'Launcher: RUN-ALL.bat (single source of truth).',
+    'start.bat and START-PORTABLE-AI.bat must call RUN-ALL.bat.',
+    'Backend agent must listen on http://127.0.0.1:3847.',
+  ].join('\n');
+
+  lines.push('=== FULL SUPPORT REPORT ===');
+  lines.push(`Generated: ${b.generatedAt}`);
+  lines.push(`App version: ${b.appVersion}`);
+  lines.push(`Browser URL: ${url}`);
+  lines.push(`User agent: ${b.userAgent}`);
+  lines.push('');
+  lines.push('--- Launcher instructions ---');
+  lines.push(launcher);
+  lines.push('');
+  lines.push('--- Endpoint health ---');
+  for (const [k, v] of [
+    ['/status', b.status], ['/selftest', b.selftest], ['/debug/snapshot', b.debugSnapshot],
+    ['/dev-server/status', b.devServerStatus], ['/agent/ollama-info', b.ollamaInfo],
+    ['/updates/applied', b.updatesApplied],
+  ] as const) {
+    lines.push(`${k}: ${(v as any).status}${(v as any).ms != null ? ` (${(v as any).ms}ms)` : ''}${(v as any).error ? ` — ${(v as any).error}` : ''}`);
+  }
+  lines.push('');
+  lines.push('--- Model routing ---');
+  lines.push(JSON.stringify(b.routing, null, 2));
+  lines.push('');
+  lines.push('--- Update history ---');
+  if (!b.updateHistory.length) lines.push('(empty)');
+  else for (const h of b.updateHistory) lines.push(`${h.version} · ${new Date(h.appliedAt).toISOString()} · ${h.patchCount} patches · ${h.source || 'online'} · ${h.description}`);
+  lines.push('');
+  lines.push('--- Recent errors (error bus) ---');
+  if (!b.recentErrors.length) lines.push('(empty)');
+  else for (const e of b.recentErrors.slice(-50)) lines.push(`[${new Date(e.timestamp).toISOString()}] ${e.level.toUpperCase()} ${e.source}: ${e.message}`);
+  lines.push('');
+  lines.push('--- Full diagnostic bundle (JSON) ---');
+  lines.push(JSON.stringify(b, null, 2));
+  return lines.join('\n');
+}
+
+export async function copySupportReport(b: DiagnosticBundle) {
+  await navigator.clipboard.writeText(buildSupportReport(b));
+}

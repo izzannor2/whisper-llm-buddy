@@ -3,9 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Copy, Download, RefreshCw, Server, Cpu, HardDrive, Activity, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Copy, Download, RefreshCw, Server, Cpu, HardDrive, Activity, AlertTriangle, CheckCircle2, XCircle, ClipboardPaste } from 'lucide-react';
 import { toast } from 'sonner';
-import { buildBundle, copyBundle, downloadBundle, type DiagnosticBundle } from '@/lib/diagnostics';
+import { buildBundle, copyBundle, copySupportReport, downloadBundle, type DiagnosticBundle } from '@/lib/diagnostics';
 import { subscribe, getBuffer, type BusEvent, emitError } from '@/lib/error-bus';
 
 function StatusDot({ s }: { s: 'ok' | 'missing' | 'error' | 'offline' }) {
@@ -66,6 +66,9 @@ export function DiagnosticsPanel() {
               </Button>
               <Button size="sm" disabled={!bundle} onClick={() => bundle && downloadBundle(bundle)}>
                 <Download className="h-4 w-4 mr-2" /> Save
+              </Button>
+              <Button size="sm" variant="secondary" disabled={!bundle} onClick={async () => { if (!bundle) return; await copySupportReport(bundle); toast.success('Full support report copied — paste into ChatGPT'); }}>
+                <ClipboardPaste className="h-4 w-4 mr-2" /> Copy Full Support Report
               </Button>
             </div>
           </div>
