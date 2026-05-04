@@ -62,7 +62,7 @@ export default function IDE() {
   const [errors, setErrors] = useState<string[]>([]);
   const [systemCommands, setSystemCommands] = useState<SystemCommand[]>([]);
   const [plugins, setPlugins] = useState<Plugin[]>([]);
-  const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'terminal' | 'commands' | 'plugins' | 'debug' | 'system' | 'build'>('preview');
+  const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'health' | 'terminal' | 'commands' | 'plugins' | 'debug' | 'system' | 'build'>('preview');
   const [debugLogs, setDebugLogs] = useState<Array<{ type: 'error' | 'info'; message: string; timestamp: number }>>([]);
   const [codeLibraryOpen, setCodeLibraryOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | undefined>();
