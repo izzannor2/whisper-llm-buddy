@@ -207,6 +207,7 @@ export default function Index() {
       'embedded-iot': '/iot',
       'sandbox': '/sandbox',
       'ai-improvement': '/improve',
+      '3d-printing': '/3d',
     };
     
     if (ROUTE_MAP[key]) { navigate(ROUTE_MAP[key]); return; }
