@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Download, ExternalLink, Trash2, Plus, HardDrive, RefreshCw, Search, Loader2, CheckCircle } from 'lucide-react';
+import { Download, ExternalLink, Trash2, Plus, HardDrive, RefreshCw, Search, Loader2, CheckCircle, FolderOpen, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { LocalModelPicker } from '@/components/LocalModelPicker';
+import { getModelRegistry, type ModelRegistrySnapshot, type DiscoveredModel } from '@/lib/model-registry';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -139,7 +141,34 @@ export function ModelManager({ localUrl, onModelSelect }: ModelManagerProps) {
     }
   }, []);
 
-  // Save models to localStorage
+  // ===== Registry-based detected models (live, agent proxy, manifest scan, gguf scan) =====
+  const [registry, setRegistry] = useState<ModelRegistrySnapshot | null>(null);
+  const [registryLoading, setRegistryLoading] = useState(false);
+
+  const loadRegistry = useCallback(async (force = false) => {
+    setRegistryLoading(true);
+    try {
+      const snap = await getModelRegistry(force);
+      setRegistry(snap);
+    } finally {
+      setRegistryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadRegistry(); }, [loadRegistry]);
+
+  const sourceBadge = (s: DiscoveredModel['source']) => {
+    const map: Record<DiscoveredModel['source'], { label: string; cls: string }> = {
+      'live':           { label: 'live ollama',     cls: 'border-green-500/40 text-green-400' },
+      'agent-proxy':    { label: 'agent proxy',     cls: 'border-blue-500/40 text-blue-400' },
+      'manifest-scan':  { label: 'manifest scan',   cls: 'border-amber-500/40 text-amber-400' },
+      'gguf-scan':      { label: 'gguf scan',       cls: 'border-purple-500/40 text-purple-400' },
+      'cloud':          { label: 'cloud',           cls: 'border-muted-foreground/40 text-muted-foreground' },
+    };
+    const v = map[s];
+    return <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', v.cls)}>{v.label}</Badge>;
+  };
+
   const saveModels = (models: LocalModel[]) => {
     setSavedModels(models);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(models));
@@ -345,7 +374,59 @@ export function ModelManager({ localUrl, onModelSelect }: ModelManagerProps) {
         )}
       </div>
 
-      {/* Search Hugging Face */}
+      {/* Detected models from registry (real, no fake data) */}
+      <div className="p-3 rounded-lg bg-muted/30 border border-border">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <HardDrive className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Detected Models</span>
+            {registry && (
+              <span className="text-[10px] text-muted-foreground">
+                ollama: {registry.ollamaSource} · gguf: {registry.ggufSource}
+              </span>
+            )}
+          </div>
+          <Button variant="outline" size="sm" onClick={() => loadRegistry(true)} disabled={registryLoading}>
+            <RefreshCw className={cn('w-3 h-3 mr-1', registryLoading && 'animate-spin')} />
+            Rescan
+          </Button>
+        </div>
+        {!registry || (registry.ollama.length === 0 && registry.gguf.length === 0) ? (
+          <div className="text-xs text-muted-foreground py-3 text-center">
+            No models detected. Pull one with <code className="bg-muted px-1 rounded">ollama pull &lt;model&gt;</code> or drop a <code className="bg-muted px-1 rounded">.gguf</code> into <code className="bg-muted px-1 rounded">models/gguf/</code>.
+          </div>
+        ) : (
+          <ScrollArea className="max-h-40">
+            <ul className="space-y-1">
+              {[...registry.ollama, ...registry.gguf].map(m => (
+                <li key={m.id} className="flex items-center gap-2 text-xs">
+                  <span className="font-mono truncate flex-1">{m.name}</span>
+                  {sourceBadge(m.source)}
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
+        )}
+        <div className="mt-3 pt-2 border-t border-border/50 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-muted-foreground">Ollama folder:</span>
+            <code className="bg-muted px-1 rounded">.ollama</code>
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => { navigator.clipboard.writeText('.ollama'); toast.success('Path copied'); }}>
+              <Copy className="w-3 h-3" />
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-muted-foreground">GGUF folder:</span>
+            <code className="bg-muted px-1 rounded">models/gguf</code>
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => { navigator.clipboard.writeText('models/gguf'); toast.success('Path copied'); }}>
+              <Copy className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-2">
         <Label className="text-sm font-medium">Search Hugging Face for GGUF Models</Label>
         <div className="flex gap-2">

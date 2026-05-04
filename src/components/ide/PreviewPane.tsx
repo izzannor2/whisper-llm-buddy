@@ -27,9 +27,14 @@ interface PreviewPaneProps {
   logs: string[];
   errors: string[];
   agentConnected?: boolean;
+  /** Optional preview server metadata reported by /dev-server/status */
+  previewSessionDir?: string | null;
+  previewPort?: number | null;
+  previewLastError?: string | null;
   onRefresh: () => void;
   onStartServer: () => void;
   onStopServer: () => void;
+  onRestartServer?: () => void;
   onOpenExternal?: () => void;
   onGeneratePreview?: () => void;
   onCopyHtml?: () => void;
@@ -45,9 +50,13 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
   logs,
   errors,
   agentConnected,
+  previewSessionDir,
+  previewPort,
+  previewLastError,
   onRefresh,
   onStartServer,
   onStopServer,
+  onRestartServer,
   onOpenExternal,
   onGeneratePreview,
   onCopyHtml,
@@ -366,8 +375,8 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
       </div>
 
       {/* Status bar */}
-      <div className="flex items-center justify-between px-3 py-1 border-t border-border text-xs text-muted-foreground bg-card">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-3 py-1 border-t border-border text-xs text-muted-foreground bg-card gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className={cn('w-2 h-2 rounded-full', isServerRunning ? 'bg-green-500' : hasPreview ? 'bg-amber-500' : agentConnected === false ? 'bg-destructive' : 'bg-muted')} />
           <span>
             {isServerRunning
@@ -378,19 +387,73 @@ export const PreviewPane = forwardRef<HTMLDivElement, PreviewPaneProps>(({
                   ? 'Agent unavailable — start the local agent on port 3847'
                   : 'No preview yet'}
           </span>
-          {errors.length > 0 && (
-            <span className="text-destructive">· last error: {errors[errors.length - 1].slice(0, 80)}</span>
+          {(previewLastError || (errors.length > 0 && !isServerRunning)) && (
+            <span className="text-destructive break-all" title={previewLastError || errors[errors.length - 1]}>
+              · backend error: {(previewLastError || errors[errors.length - 1] || '').slice(0, 120)}
+            </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 flex-wrap">
+          {previewPort != null && previewPort > 0 && <span className="font-mono">port {previewPort}</span>}
+          {isServerRunning && previewUrl && !previewPort && (
+            <span className="font-mono">port {(() => { try { return new URL(previewUrl).port || '—'; } catch { return '—'; } })()}</span>
+          )}
+          {previewSessionDir && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="font-mono text-[11px] hover:text-foreground truncate max-w-[180px]"
+                  onClick={() => { navigator.clipboard.writeText(previewSessionDir); }}
+                  title="Click to copy session folder"
+                >
+                  {previewSessionDir}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p>Session folder — click to copy</p></TooltipContent>
+            </Tooltip>
+          )}
+          {previewUrl && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="font-mono hover:text-foreground"
+                  onClick={() => { navigator.clipboard.writeText(previewUrl); }}
+                >
+                  {previewUrl}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p>Click to copy preview URL</p></TooltipContent>
+            </Tooltip>
+          )}
+          {(logs.length > 0 || errors.length > 0) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => {
+                const text = [
+                  ...logs.map(l => `[info] ${l}`),
+                  ...errors.map(e => `[error] ${e}`),
+                ].join('\n');
+                navigator.clipboard.writeText(text);
+              }}
+              title="Copy preview logs"
+            >
+              Copy logs
+            </Button>
+          )}
+          {isServerRunning && onRestartServer && (
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={onRestartServer} title="Restart preview server">
+              Restart
+            </Button>
+          )}
+          {isServerRunning && (
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={onStopServer} title="Stop preview server">
+              Stop
+            </Button>
+          )}
           {lastUpdated && timeSinceUpdate && <span>Updated {timeSinceUpdate}</span>}
           {isResponsive && <span className="font-mono">{device.label}</span>}
-          {isServerRunning && previewUrl && (
-            <>
-              <span className="font-mono">{previewUrl}</span>
-              <span className="font-mono">port {(() => { try { return new URL(previewUrl).port || '—'; } catch { return '—'; } })()}</span>
-            </>
-          )}
         </div>
       </div>
     </div>
