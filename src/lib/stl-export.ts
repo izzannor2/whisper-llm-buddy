@@ -42,22 +42,34 @@ export async function saveScad(scad: string, name: string): Promise<{ ok: boolea
   }
 }
 
-export async function renderStl(scad: string, name: string): Promise<{ ok: boolean; stl?: ArrayBuffer; error?: string }> {
+export async function renderStl(scad: string, name: string): Promise<{ ok: boolean; stl?: ArrayBuffer; error?: string; missing?: boolean }> {
+  let r: Response;
   try {
-    const r = await fetch(`${AGENT}/openscad/render`, {
+    r = await fetch(`${AGENT}/openscad/render`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ scad, name }),
     });
-    if (!r.ok) {
-      const text = await r.text();
-      return { ok: false, error: text };
-    }
-    const stl = await r.arrayBuffer();
-    return { ok: true, stl };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Request failed' };
+  } catch {
+    return { ok: false, error: 'Local agent is offline or missing 3D endpoints (port 3847).' };
   }
+  const ctype = r.headers.get('content-type') || '';
+  if (!r.ok) {
+    if (ctype.includes('application/json')) {
+      const data = await r.json().catch(() => ({}));
+      return { ok: false, missing: !!data.missing, error: data.error || `HTTP ${r.status}` };
+    }
+    const text = await r.text().catch(() => '');
+    return { ok: false, error: text || `HTTP ${r.status}` };
+  }
+  // Guard: success must be binary STL, never JSON
+  if (ctype.includes('application/json')) {
+    const data = await r.json().catch(() => ({}));
+    return { ok: false, error: data.error || 'Unexpected JSON response from render' };
+  }
+  const stl = await r.arrayBuffer();
+  if (!stl || stl.byteLength === 0) return { ok: false, error: 'Empty STL response' };
+  return { ok: true, stl };
 }
 
 export function downloadBlob(data: BlobPart, filename: string, mime: string) {
