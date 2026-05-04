@@ -88,6 +88,8 @@ export function DiagnosticsPanel() {
                 ['/dev-server/status', bundle.devServerStatus],
                 ['/agent/ollama-info', bundle.ollamaInfo],
                 ['/updates/applied', bundle.updatesApplied],
+                ['/3d/status', bundle.threeDStatus],
+                ['/3d/diagnostics', bundle.threeD],
                 ['model registry', bundle.modelRegistry],
                 ['logs:agent', bundle.recentLogs.agent],
                 ['logs:web', bundle.recentLogs.web],

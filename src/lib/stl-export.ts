@@ -7,13 +7,15 @@ export interface OpenScadStatus {
   error?: string;
 }
 
+const OFFLINE_MSG = 'Local agent is offline. Start RUN-ALL.bat.';
+
 export async function getOpenScadStatus(): Promise<OpenScadStatus> {
   try {
     const r = await fetch(`${AGENT}/openscad/status`, { signal: AbortSignal.timeout(2000) });
     if (!r.ok) return { available: false, error: `Agent HTTP ${r.status}` };
     return await r.json();
-  } catch (e) {
-    return { available: false, error: e instanceof Error ? e.message : 'Agent offline' };
+  } catch {
+    return { available: false, error: OFFLINE_MSG };
   }
 }
 
@@ -22,8 +24,8 @@ export async function get3DStatus(): Promise<{ ok: boolean; openscadAvailable?: 
     const r = await fetch(`${AGENT}/3d/status`, { signal: AbortSignal.timeout(2500) });
     if (!r.ok) return { ok: false, error: `Agent HTTP ${r.status}` };
     return await r.json();
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Agent offline' };
+  } catch {
+    return { ok: false, error: OFFLINE_MSG };
   }
 }
 
@@ -37,8 +39,8 @@ export async function saveScad(scad: string, name: string): Promise<{ ok: boolea
     const data = await r.json().catch(() => ({}));
     if (!r.ok) return { ok: false, error: data.error || `HTTP ${r.status}` };
     return { ok: true, scadPath: data.scadPath };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Request failed' };
+  } catch {
+    return { ok: false, error: OFFLINE_MSG };
   }
 }
 
@@ -51,13 +53,16 @@ export async function renderStl(scad: string, name: string): Promise<{ ok: boole
       body: JSON.stringify({ scad, name }),
     });
   } catch {
-    return { ok: false, error: 'Local agent is offline or missing 3D endpoints (port 3847).' };
+    return { ok: false, error: 'Local agent is offline. Start RUN-ALL.bat.' };
   }
   const ctype = r.headers.get('content-type') || '';
   if (!r.ok) {
     if (ctype.includes('application/json')) {
       const data = await r.json().catch(() => ({}));
-      return { ok: false, missing: !!data.missing, error: data.error || `HTTP ${r.status}` };
+      const msg = data.missing
+        ? 'OpenSCAD CLI not installed. Install OpenSCAD to export STL.'
+        : (data.error || `HTTP ${r.status}`);
+      return { ok: false, missing: !!data.missing, error: msg };
     }
     const text = await r.text().catch(() => '');
     return { ok: false, error: text || `HTTP ${r.status}` };
