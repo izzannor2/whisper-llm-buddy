@@ -42,6 +42,12 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
 
+  // Never cache Vite's optimized dependency chunks. They are hash-linked across
+  // React and ReactDOM; serving stale chunks can create duplicate React runtimes.
+  if (url.pathname.startsWith('/node_modules/.vite/') || url.pathname.startsWith('/@vite/')) {
+    return;
+  }
+
   // Skip external requests (except fonts)
   if (!url.origin.includes(self.location.origin) && !url.href.includes('fonts.googleapis.com') && !url.href.includes('fonts.gstatic.com')) {
     return;
