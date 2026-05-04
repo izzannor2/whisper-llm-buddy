@@ -132,6 +132,19 @@ for /l %%i in (1,1,30) do (
     if not errorlevel 1 goto :web_ready
 )
 :web_ready
+
+:: --- 9. Verify health endpoints ---
+echo  [..]  Verifying services...
+set "AGENT_OK=0"
+set "SNAP_OK=0"
+set "DEV_OK=0"
+curl -s --max-time 2 http://127.0.0.1:3847/status >nul 2>&1 && set "AGENT_OK=1"
+curl -s --max-time 2 http://127.0.0.1:3847/debug/snapshot >nul 2>&1 && set "SNAP_OK=1"
+curl -s --max-time 2 http://127.0.0.1:8080/dev-server/status >nul 2>&1 && set "DEV_OK=1"
+if "!AGENT_OK!"=="1" (echo  [OK]   /status) else (echo  [WARN] /status not responding)
+if "!SNAP_OK!"=="1"  (echo  [OK]   /debug/snapshot) else (echo  [WARN] /debug/snapshot not responding)
+if "!DEV_OK!"=="1"   (echo  [OK]   /dev-server/status) else (echo  [INFO] /dev-server/status not responding ^(may be normal^))
+
 start "" "http://localhost:8080"
 
 echo.
