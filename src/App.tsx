@@ -19,6 +19,7 @@ const IoTWorkspace = lazy(() => import("./pages/IoTWorkspace"));
 const SandboxWorkspace = lazy(() => import("./pages/SandboxWorkspace"));
 const ImproveWorkspace = lazy(() => import("./pages/ImproveWorkspace"));
 const Auth = lazy(() => import("./pages/Auth"));
+const ThreeDWorkspace = lazy(() => import("./pages/ThreeDWorkspace"));
 
 const queryClient = new QueryClient();
 
