@@ -125,8 +125,8 @@ export function CodeBlock({ code, language, className, onAddToInput }: CodeBlock
       } else if (isShell) {
         const agentStatus = getAgentStatus();
         if (!agentStatus.connected) {
-          output = '[Simulated] Agent not connected.\nDownload and run the LocalDev Agent for real execution.\n\n> ' + code.split('\n')[0];
-          exitCode = 0;
+          output = 'Agent not connected on port 3847.\nStart the LocalDev Agent (RUN-ALL.bat) to execute shell commands.';
+          exitCode = 1;
         } else {
           const result = await executeCommand(code);
           if (result.success) {

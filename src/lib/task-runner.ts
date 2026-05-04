@@ -43,13 +43,11 @@ function notify() {
 // ===== Built-in task handlers =====
 
 taskHandlers.set('code_generation', async (task, onProgress) => {
-  onProgress(10);
-  // Simulate code generation (actual implementation connects to agent)
-  await new Promise(r => setTimeout(r, 500));
-  onProgress(50);
-  await new Promise(r => setTimeout(r, 500));
+  // Placeholder handler — real generation is performed by the chat pipeline
+  // and pushed back into the task store. We just mark the slot as done so
+  // the queue advances.
   onProgress(100);
-  return { generated: true, description: task.payload.description };
+  return { generated: false, description: task.payload.description, note: 'No-op handler — wire to chat pipeline' };
 });
 
 taskHandlers.set('file_processing', async (task, onProgress) => {

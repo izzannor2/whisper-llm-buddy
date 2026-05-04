@@ -128,6 +128,13 @@ export async function copyBundle(b: DiagnosticBundle) {
 export function buildSupportReport(b: DiagnosticBundle): string {
   const lines: string[] = [];
   const url = typeof window !== 'undefined' ? window.location.href : 'n/a';
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a';
+  const lsVersion = (() => {
+    try { return typeof localStorage !== 'undefined' ? (localStorage.getItem('localdev-app-version') || '(unset)') : 'n/a'; }
+    catch { return 'n/a'; }
+  })();
+  const lastPreviewError = [...b.recentErrors].reverse().find(e => e.source === 'preview');
+  const lastUpdateError = [...b.recentErrors].reverse().find(e => e.source === 'update');
   const launcher = [
     'Launcher: RUN-ALL.bat (single source of truth).',
     'start.bat and START-PORTABLE-AI.bat must call RUN-ALL.bat.',
@@ -135,10 +142,13 @@ export function buildSupportReport(b: DiagnosticBundle): string {
   ].join('\n');
 
   lines.push('=== FULL SUPPORT REPORT ===');
+  lines.push('Paste this into ChatGPT (or attach to a GitHub issue) for help debugging.');
+  lines.push('');
   lines.push(`Generated: ${b.generatedAt}`);
-  lines.push(`App version: ${b.appVersion}`);
+  lines.push(`App version (bundle): ${b.appVersion}`);
+  lines.push(`App version (localStorage): ${lsVersion}`);
   lines.push(`Browser URL: ${url}`);
-  lines.push(`User agent: ${b.userAgent}`);
+  lines.push(`User agent: ${ua}`);
   lines.push('');
   lines.push('--- Launcher instructions ---');
   lines.push(launcher);
@@ -152,16 +162,25 @@ export function buildSupportReport(b: DiagnosticBundle): string {
     lines.push(`${k}: ${(v as any).status}${(v as any).ms != null ? ` (${(v as any).ms}ms)` : ''}${(v as any).error ? ` — ${(v as any).error}` : ''}`);
   }
   lines.push('');
-  lines.push('--- Model routing ---');
+  lines.push('--- Selected model routing ---');
   lines.push(JSON.stringify(b.routing, null, 2));
+  lines.push('');
+  lines.push('--- Last preview error ---');
+  lines.push(lastPreviewError ? `[${new Date(lastPreviewError.timestamp).toISOString()}] ${lastPreviewError.message}` : '(none)');
+  lines.push('');
+  lines.push('--- Last update error ---');
+  lines.push(lastUpdateError ? `[${new Date(lastUpdateError.timestamp).toISOString()}] ${lastUpdateError.message}` : '(none)');
   lines.push('');
   lines.push('--- Update history ---');
   if (!b.updateHistory.length) lines.push('(empty)');
   else for (const h of b.updateHistory) lines.push(`${h.version} · ${new Date(h.appliedAt).toISOString()} · ${h.patchCount} patches · ${h.source || 'online'} · ${h.description}`);
   lines.push('');
-  lines.push('--- Recent errors (error bus) ---');
+  lines.push('--- Top 20 recent errors (error bus) ---');
   if (!b.recentErrors.length) lines.push('(empty)');
-  else for (const e of b.recentErrors.slice(-50)) lines.push(`[${new Date(e.timestamp).toISOString()}] ${e.level.toUpperCase()} ${e.source}: ${e.message}`);
+  else for (const e of b.recentErrors.slice(-20).reverse()) lines.push(`[${new Date(e.timestamp).toISOString()}] ${e.level.toUpperCase()} ${e.source}: ${e.message}`);
+  lines.push('');
+  lines.push('--- Instructions ---');
+  lines.push('Paste this into ChatGPT and ask: "What is broken and how do I fix it?"');
   lines.push('');
   lines.push('--- Full diagnostic bundle (JSON) ---');
   lines.push(JSON.stringify(b, null, 2));

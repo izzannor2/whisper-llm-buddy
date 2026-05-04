@@ -3,15 +3,24 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0\.."
 title Acceptance Tests
 set "FAIL=0"
+set "DO_BUILD=0"
+if /I "%~1"=="--build" set "DO_BUILD=1"
 
 echo ============================================================
-echo  ACCEPTANCE TESTS
+echo  ACCEPTANCE TESTS  (use --build to also run npm run build)
 echo ============================================================
 
 call :check_file RUN-ALL.bat
 call :check_file start.bat
 call :check_file START-PORTABLE-AI.bat
 call :check_file server\index.cjs
+call :check_file vite.config.ts
+call :check_file src\lib\model-registry.ts
+call :check_file src\lib\model-routing.ts
+call :check_file src\lib\error-bus.ts
+call :check_file src\lib\diagnostics.ts
+call :check_file src\components\settings\UpdatesPanel.tsx
+call :check_file src\components\settings\DiagnosticsPanel.tsx
 
 call :check_wraps start.bat "RUN-ALL.bat"
 call :check_wraps START-PORTABLE-AI.bat "RUN-ALL.bat"
@@ -27,6 +36,18 @@ call :check_url /scan/ollama           http://127.0.0.1:3847/scan/ollama
 
 call :check_models_ok ollama  http://127.0.0.1:11434/api/tags
 call :check_models_ok gguf    http://127.0.0.1:3847/scan/gguf
+
+if "!DO_BUILD!"=="1" (
+    echo.
+    echo  [ ] running: npm run build  ^(may take a minute^)
+    call npm run build >"%TEMP%\acc-build.log" 2>&1
+    if errorlevel 1 (
+        echo  [FAIL] npm run build failed - see "%TEMP%\acc-build.log"
+        set /a FAIL+=1
+    ) else (
+        echo  [PASS] npm run build
+    )
+)
 
 echo ============================================================
 if "!FAIL!"=="0" (
