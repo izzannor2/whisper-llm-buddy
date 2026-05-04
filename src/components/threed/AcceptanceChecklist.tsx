@@ -15,6 +15,7 @@ interface Check {
 
 const INITIAL: Check[] = [
   { id: 'mode-visible', label: '3D Printing mode appears in UI', status: 'pending' },
+  { id: 'voice-controls', label: 'Voice controls render in 3D mode', status: 'pending' },
   { id: 'scad-gen', label: 'OpenSCAD generation creates valid .scad', status: 'pending' },
   { id: 'stl-export', label: 'STL export returns missing-OpenSCAD message when CLI is absent (no fake STL created)', status: 'pending' },
 ];
@@ -44,7 +45,19 @@ export function AcceptanceChecklist() {
       update('mode-visible', { status: 'fail', detail: String(e) });
     }
 
-    // 2. SCAD generation
+    // 2. Voice controls present
+    update('voice-controls', { status: 'running' });
+    try {
+      const el = document.querySelector('[data-voice-controls="3d"]');
+      update('voice-controls', {
+        status: el ? 'pass' : 'fail',
+        detail: el ? 'Mic + TTS controls mounted in 3D header' : 'Voice controls not found in DOM',
+      });
+    } catch (e) {
+      update('voice-controls', { status: 'fail', detail: String(e) });
+    }
+
+    // 3. SCAD generation
     update('scad-gen', { status: 'running' });
     let scad = '';
     try {
