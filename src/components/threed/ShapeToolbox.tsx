@@ -1,8 +1,9 @@
+import type { ComponentType } from 'react';
 import { Button } from '@/components/ui/button';
 import { Box, Circle, Cone, Cylinder, Type, Hexagon, Drill, Square, Wrench, CircleDot, Settings2 } from 'lucide-react';
 import { SHAPE_DEFS, type ShapeKind } from '@/lib/threed-scene';
 
-const ICONS: Record<ShapeKind, React.ComponentType<{ className?: string }>> = {
+const ICONS: Record<ShapeKind, ComponentType<{ className?: string }>> = {
   cube: Box,
   rounded_box: Square,
   cylinder: Cylinder,
