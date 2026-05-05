@@ -25,6 +25,8 @@ call :check_file src\components\ide\PreviewHealthCard.tsx
 call :check_file src\lib\prompt-presets.ts
 call :check_file scripts\route-smoke-test.mjs
 call :check_file scripts\route-smoke-test.bat
+call :check_file src\pages\ThreeDWorkspace.tsx
+call :check_file src\components\threed\AcceptanceChecklist.tsx
 
 call :check_wraps start.bat "RUN-ALL.bat"
 call :check_wraps START-PORTABLE-AI.bat "RUN-ALL.bat"
@@ -37,6 +39,12 @@ call :check_url /updates/applied       http://127.0.0.1:3847/updates/applied
 call :check_url /agent/ollama-info     http://127.0.0.1:3847/agent/ollama-info
 call :check_url /scan/gguf             http://127.0.0.1:3847/scan/gguf
 call :check_url /scan/ollama           http://127.0.0.1:3847/scan/ollama
+call :check_url /3d/status             http://127.0.0.1:3847/3d/status
+call :check_url /3d/diagnostics        http://127.0.0.1:3847/3d/diagnostics
+call :check_url /openscad/status       http://127.0.0.1:3847/openscad/status
+
+call :check_save_scad
+call :check_render_stl
 
 call :check_models_ok ollama  http://127.0.0.1:11434/api/tags
 call :check_models_ok gguf    http://127.0.0.1:3847/scan/gguf
@@ -83,4 +91,40 @@ curl -s --max-time 3 "%~2" > "%TEMP%\acc.tmp" 2>nul
 if errorlevel 1 ( echo  [WARN] %~1 endpoint unreachable ^(empty state acceptable^) & exit /b 0 )
 echo  [PASS] %~1 endpoint responded ^(0 models is acceptable^)
 del "%TEMP%\acc.tmp" >nul 2>&1
+exit /b 0
+
+:check_save_scad
+set "BODY={\"scad\":\"cube(10);\",\"name\":\"acceptance_test\"}"
+curl -s -o nul -w "%%{http_code}" --max-time 5 -H "content-type: application/json" -d "!BODY!" "http://127.0.0.1:3847/3d/save-scad" > "%TEMP%\acc.tmp" 2>nul
+set /p CODE=<"%TEMP%\acc.tmp"
+del "%TEMP%\acc.tmp" >nul 2>&1
+if "!CODE!"=="200" (
+    if exist "projects\3d\acceptance_test\model.scad" (
+        echo  [PASS] /3d/save-scad -> 200 ^(model.scad written^)
+    ) else (
+        echo  [FAIL] /3d/save-scad -> 200 but model.scad missing & set /a FAIL+=1
+    )
+) else (
+    echo  [FAIL] /3d/save-scad -> !CODE! & set /a FAIL+=1
+)
+exit /b 0
+
+:check_render_stl
+:: 200 = OpenSCAD installed and rendered. 422 = CLI absent (expected, must NOT create fake STL).
+if exist "projects\3d\acceptance_test\model.stl" del "projects\3d\acceptance_test\model.stl" >nul 2>&1
+set "BODY={\"scad\":\"cube(10);\",\"name\":\"acceptance_test\"}"
+curl -s -o nul -w "%%{http_code}" --max-time 30 -H "content-type: application/json" -d "!BODY!" "http://127.0.0.1:3847/openscad/render" > "%TEMP%\acc.tmp" 2>nul
+set /p CODE=<"%TEMP%\acc.tmp"
+del "%TEMP%\acc.tmp" >nul 2>&1
+if "!CODE!"=="200" (
+    echo  [PASS] /openscad/render -> 200 ^(OpenSCAD CLI present^)
+) else if "!CODE!"=="422" (
+    if exist "projects\3d\acceptance_test\model.stl" (
+        echo  [FAIL] /openscad/render -> 422 but fake STL was created & set /a FAIL+=1
+    ) else (
+        echo  [PASS] /openscad/render -> 422 ^(CLI missing, no fake STL - expected^)
+    )
+) else (
+    echo  [FAIL] /openscad/render -> !CODE! & set /a FAIL+=1
+)
 exit /b 0
