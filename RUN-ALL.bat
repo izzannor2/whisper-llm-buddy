@@ -243,5 +243,18 @@ echo    Logs:   %PROJECT_ROOT%\logs\
 echo  ============================================================
 echo.
 echo  Closing this window does NOT stop services. Use STOP-PORTABLE-AI.bat to stop.
+echo  Full transcript saved to: %PROJECT_ROOT%\logs\run-all.log
 pause >nul
 endlocal
+exit /b 0
+
+:crash_dump
+echo.
+echo  ============================================================
+echo    [CRASH] RUN-ALL.bat hit unexpected error path
+echo  ============================================================
+echo    Last errorlevel : %ERRORLEVEL%
+echo    See logs\run-all.log for full transcript.
+echo  ============================================================
+pause
+exit /b 1
