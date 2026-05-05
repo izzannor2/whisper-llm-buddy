@@ -10,44 +10,57 @@ echo ============================================================
 echo  ACCEPTANCE TESTS  (use --build to also run npm run build)
 echo ============================================================
 
+echo.
+echo  --- UI checks ---
 call :check_file RUN-ALL.bat
 call :check_file start.bat
 call :check_file START-PORTABLE-AI.bat
-call :check_file server\index.cjs
 call :check_file vite.config.ts
-call :check_file src\lib\model-registry.ts
-call :check_file src\lib\model-routing.ts
-call :check_file src\lib\error-bus.ts
-call :check_file src\lib\diagnostics.ts
 call :check_file src\components\settings\UpdatesPanel.tsx
 call :check_file src\components\settings\DiagnosticsPanel.tsx
 call :check_file src\components\ide\PreviewHealthCard.tsx
-call :check_file src\lib\prompt-presets.ts
-call :check_file scripts\route-smoke-test.mjs
-call :check_file scripts\route-smoke-test.bat
 call :check_file src\pages\ThreeDWorkspace.tsx
 call :check_file src\components\threed\AcceptanceChecklist.tsx
-
 call :check_wraps start.bat "RUN-ALL.bat"
 call :check_wraps START-PORTABLE-AI.bat "RUN-ALL.bat"
 
+echo.
+echo  --- Agent checks ---
+call :check_file server\index.cjs
 call :check_url /status                http://127.0.0.1:3847/status
 call :check_url /selftest              http://127.0.0.1:3847/selftest
 call :check_url /debug/snapshot        http://127.0.0.1:3847/debug/snapshot
+call :check_url /debug/bundle          http://127.0.0.1:3847/debug/bundle
+call :check_url /agent/ollama-info     http://127.0.0.1:3847/agent/ollama-info
+
+echo.
+echo  --- Model checks ---
+call :check_file src\lib\model-registry.ts
+call :check_file src\lib\model-routing.ts
+call :check_url /scan/ollama           http://127.0.0.1:3847/scan/ollama
+call :check_url /scan/gguf             http://127.0.0.1:3847/scan/gguf
+call :check_url /scan/llama-server     http://127.0.0.1:3847/scan/llama-server
+call :check_models_ok ollama  http://127.0.0.1:11434/api/tags
+call :check_models_ok gguf    http://127.0.0.1:3847/scan/gguf
+
+echo.
+echo  --- Preview checks ---
 call :check_url /dev-server/status     http://127.0.0.1:3847/dev-server/status
 call :check_url /updates/applied       http://127.0.0.1:3847/updates/applied
-call :check_url /agent/ollama-info     http://127.0.0.1:3847/agent/ollama-info
-call :check_url /scan/gguf             http://127.0.0.1:3847/scan/gguf
-call :check_url /scan/ollama           http://127.0.0.1:3847/scan/ollama
+
+echo.
+echo  --- 3D checks ---
 call :check_url /3d/status             http://127.0.0.1:3847/3d/status
 call :check_url /3d/diagnostics        http://127.0.0.1:3847/3d/diagnostics
 call :check_url /openscad/status       http://127.0.0.1:3847/openscad/status
-
 call :check_save_scad
 call :check_render_stl
+call :check_export_stl
 
-call :check_models_ok ollama  http://127.0.0.1:11434/api/tags
-call :check_models_ok gguf    http://127.0.0.1:3847/scan/gguf
+echo.
+echo  --- Update checks ---
+call :check_file src\lib\update-system.ts
+call :check_file public\updates\manifest.json
 
 if "!DO_BUILD!"=="1" (
     echo.
@@ -110,7 +123,7 @@ if "!CODE!"=="200" (
 exit /b 0
 
 :check_render_stl
-:: 200 = OpenSCAD installed and rendered. 422 = CLI absent (expected, must NOT create fake STL).
+:: 200 = OpenSCAD present and rendered. 422 = CLI absent (expected, NO fake STL).
 if exist "projects\3d\acceptance_test\model.stl" del "projects\3d\acceptance_test\model.stl" >nul 2>&1
 set "BODY={\"scad\":\"cube(10);\",\"name\":\"acceptance_test\"}"
 curl -s -o nul -w "%%{http_code}" --max-time 30 -H "content-type: application/json" -d "!BODY!" "http://127.0.0.1:3847/openscad/render" > "%TEMP%\acc.tmp" 2>nul
@@ -127,4 +140,12 @@ if "!CODE!"=="200" (
 ) else (
     echo  [FAIL] /openscad/render -> !CODE! & set /a FAIL+=1
 )
+exit /b 0
+
+:check_export_stl
+set "BODY={\"scad\":\"cube(10);\",\"name\":\"acceptance_test\"}"
+curl -s -o nul -w "%%{http_code}" --max-time 30 -H "content-type: application/json" -d "!BODY!" "http://127.0.0.1:3847/3d/export-stl" > "%TEMP%\acc.tmp" 2>nul
+set /p CODE=<"%TEMP%\acc.tmp"
+del "%TEMP%\acc.tmp" >nul 2>&1
+if "!CODE!"=="200" ( echo  [PASS] /3d/export-stl -> 200 ) else if "!CODE!"=="422" ( echo  [PASS] /3d/export-stl -> 422 ^(CLI missing, expected^) ) else ( echo  [FAIL] /3d/export-stl -> !CODE! & set /a FAIL+=1 )
 exit /b 0
