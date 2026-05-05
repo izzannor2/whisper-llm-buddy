@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -173,12 +173,12 @@ export function AcceptanceChecklist() {
     setRunning(false);
   };
 
-  const Icon = ({ s }: { s: Status }) => {
-    if (s === 'running') return <Loader2 className="w-4 h-4 animate-spin text-accent" />;
-    if (s === 'pass') return <CheckCircle2 className="w-4 h-4 text-green-500" />;
-    if (s === 'fail') return <XCircle className="w-4 h-4 text-destructive" />;
-    return <div className="w-4 h-4 rounded-full border border-muted-foreground/40" />;
-  };
+  const Icon = forwardRef<HTMLDivElement, { s: Status }>(function Icon({ s }, ref) {
+    if (s === 'running') return <span ref={ref}><Loader2 className="w-4 h-4 animate-spin text-accent" /></span>;
+    if (s === 'pass') return <span ref={ref}><CheckCircle2 className="w-4 h-4 text-green-500" /></span>;
+    if (s === 'fail') return <span ref={ref}><XCircle className="w-4 h-4 text-destructive" /></span>;
+    return <div ref={ref} className="w-4 h-4 rounded-full border border-muted-foreground/40" />;
+  });
 
   const [open, setOpen] = useState(false);
   const passed = checks.filter(c => c.status === 'pass').length;
