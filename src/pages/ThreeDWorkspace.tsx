@@ -365,7 +365,41 @@ export default function ThreeDWorkspace() {
               <Button size="sm" variant="outline" className="h-7 flex-1 text-[10px]" onClick={() => setOpForSelected('difference')} disabled={!selectedNode}>Cut</Button>
               <Button size="sm" variant="outline" className="h-7 flex-1 text-[10px]" onClick={() => setOpForSelected('intersection')} disabled={!selectedNode}>∩</Button>
             </div>
-            <SceneTree
+            {/* Snap / connect tools */}
+            <div className="border border-border rounded-md bg-muted/20 p-2 space-y-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Snap / Connect</div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground">Reference part:</span>
+                <select
+                  value={snapBuddy ?? ''}
+                  onChange={(e) => setSnapBuddy(e.target.value || null)}
+                  className="flex-1 h-6 text-[10px] rounded border border-input bg-background"
+                >
+                  <option value="">— choose —</option>
+                  {scene.nodes.filter((n) => n.id !== selectedId).map((n) => (
+                    <option key={n.id} value={n.id}>{n.name} [{n.kind}]</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-3 gap-1 text-[10px]">
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('center')}>Center</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('alignX')}>Align X</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('alignY')}>Align Y</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('alignZ')}>Align Z</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face+x')}>Face +X</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face-x')}>Face −X</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face+y')}>Face +Y</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face-y')}>Face −Y</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face+z')}>Face +Z</Button>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" disabled={!selectedId} onClick={() => selectedId && setOpFor(selectedId, 'union')}>Merge (union)</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" disabled={!selectedId} onClick={() => selectedId && setOpFor(selectedId, 'difference')}>Cut (subtract)</Button>
+              </div>
+              <p className="text-[9px] text-muted-foreground leading-snug">
+                Approximate: face/center snaps use primitive params, not exact OpenSCAD geometry.
+              </p>
+            </div>
               nodes={scene.nodes}
               selectedId={selectedId}
               onSelect={setSelectedId}
