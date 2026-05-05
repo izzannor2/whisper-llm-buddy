@@ -19,6 +19,8 @@ export function ShapeProperties({ node, onChange }: Props) {
   };
   const setPos = (axis: 'x' | 'y' | 'z', v: string) => onChange({ pos: { ...node.pos, [axis]: parseFloat(v) || 0 } });
   const setRot = (axis: 'x' | 'y' | 'z', v: string) => onChange({ rot: { ...node.rot, [axis]: parseFloat(v) || 0 } });
+  const setScale = (axis: 'x' | 'y' | 'z', v: string) => onChange({ scale: { ...(node.scale ?? { x: 1, y: 1, z: 1 }), [axis]: parseFloat(v) || 1 } });
+  const sc = node.scale ?? { x: 1, y: 1, z: 1 };
 
   return (
     <div className="border border-border rounded-md bg-muted/20 p-2 space-y-2">
