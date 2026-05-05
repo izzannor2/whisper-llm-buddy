@@ -225,15 +225,39 @@ export default function ThreeDWorkspace() {
 
         <ResizablePanel defaultSize={60} minSize={30}>
           <div className="h-full flex flex-col">
+            <div className="px-3 py-1.5 border-b border-border text-[11px] font-mono flex items-center gap-3 bg-muted/30">
+              <span>preview: <span className={
+                previewState === 'parsed' ? 'text-green-500' :
+                previewState === 'error' ? 'text-destructive' :
+                previewState === 'loading' ? 'text-amber-400' : 'text-muted-foreground'
+              }>{previewState}</span></span>
+              {lastRender?.bytes != null && <span>stl: {(lastRender.bytes / 1024).toFixed(1)} KB</span>}
+              {viewerInfo && <span>verts: {viewerInfo.vertices.toLocaleString()}</span>}
+              {lastRender?.contentType && <span className="truncate">type: {lastRender.contentType}</span>}
+            </div>
             <div className="flex-1 min-h-0">
               {stl ? (
-                <StlViewer stl={stl} />
+                <StlViewer
+                  stl={stl}
+                  onInfo={(info) => {
+                    setViewerInfo(info);
+                    setPreviewState(info.error ? 'error' : 'parsed');
+                  }}
+                />
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
                   Generate a model and export STL to preview here.
                 </div>
               )}
             </div>
+            {previewState === 'error' && stl && (
+              <div className="border-t border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                STL downloaded, but viewer could not parse it. {viewerInfo?.error}
+                <Button size="sm" variant="outline" className="ml-2" onClick={() => downloadBlob(stl, `${name || 'model'}.stl`, 'application/sla')}>
+                  Download raw STL
+                </Button>
+              </div>
+            )}
             {openScadAvailable === false && (
               <div className="border-t border-border p-3 text-xs text-muted-foreground">
                 <p className="font-medium text-foreground mb-1">OpenSCAD CLI not detected.</p>
