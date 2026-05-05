@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Download, Sparkles, Box, FileCode } from 'lucide-react';
+import { ArrowLeft, Download, Sparkles, Box, FileCode, Bug } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,11 +8,11 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { StatusPill, StatusState } from '@/components/StatusPill';
-import { StlViewer } from '@/components/threed/StlViewer';
+import { StlViewer, type StlViewerInfo } from '@/components/threed/StlViewer';
 import { AcceptanceChecklist } from '@/components/threed/AcceptanceChecklist';
 import { VoiceControls } from '@/components/threed/VoiceControls';
 import { SCAD_TEMPLATES, generateScadWithFix, validateScad } from '@/lib/openscad';
-import { downloadBlob, getOpenScadStatus, renderStl, saveScad } from '@/lib/stl-export';
+import { downloadBlob, getOpenScadStatus, renderStl, saveScad, type RenderStlResult } from '@/lib/stl-export';
 
 export default function ThreeDWorkspace() {
   const { toast } = useToast();
