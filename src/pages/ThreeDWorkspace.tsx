@@ -58,6 +58,12 @@ export default function ThreeDWorkspace() {
     try { return localStorage.getItem(LIVE_KEY) !== '0'; } catch { return true; }
   });
   const [projectsReload, setProjectsReload] = useState(0);
+  const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  const [sketchImage, setSketchImage] = useState<string | null>(null);
+  const [printer, setPrinter] = useState<PrinterConstraints>(DEFAULT_PRINTER);
+  const [assistantState, setAssistantState] = useState<AssistantState>('idle');
+  const [viewerTab, setViewerTab] = useState<'scene' | 'stl'>('scene');
+  const [snapBuddy, setSnapBuddy] = useState<string | null>(null); // second selected node for snap ops
 
   const debounceRef = useRef<number | null>(null);
   const renderingRef = useRef(false);
