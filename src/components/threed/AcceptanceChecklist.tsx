@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { CheckCircle2, XCircle, Loader2, Play } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { CheckCircle2, XCircle, Loader2, Play, ChevronDown } from 'lucide-react';
 import { generateScad, validateScad } from '@/lib/openscad';
 import { getOpenScadStatus, renderStl, get3DStatus, saveScad } from '@/lib/stl-export';
 
