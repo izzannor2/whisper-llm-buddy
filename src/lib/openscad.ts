@@ -45,21 +45,22 @@ export function validateScad(code: string): ScadValidation {
   if (!/(cube|cylinder|sphere|polyhedron|linear_extrude|rotate_extrude|module\s+\w+)/.test(code)) {
     errors.push('No geometry primitives or modules found.');
   }
-  // Missing semicolons: only flag plausible statement lines
+  // Missing semicolons: only flag clear single-line variable assignments
+  // (multi-line expressions and call chains produce too many false positives)
   const rawLines = code.split('\n');
   const stripped = rawLines.map(l => l.replace(/\/\/.*$/, '').trim());
   const badLines: number[] = [];
   stripped.forEach((line, i) => {
     if (!line) return;
-    if (/[;{}\[\],]$/.test(line)) return;
-    if (/^(module|function|if|else|for|intersection_for|let|use|include|union|difference|intersection|hull|minkowski|render|color|translate|rotate|scale|mirror|resize|offset|projection|linear_extrude|rotate_extrude)\b/.test(line)) return;
-    // Line ends with ) — header if the next non-blank line opens a block
-    if (line.endsWith(')')) {
-      let j = i + 1;
-      while (j < stripped.length && !stripped[j]) j++;
-      if ((stripped[j] || '').startsWith('{')) return;
-    }
-    if (!/[=()]/.test(line)) return;
+    // Only check lines that look like a complete top-level assignment: `name = value`
+    // with balanced parens/brackets on the same line, and no trailing terminator.
+    if (!/^[A-Za-z_][A-Za-z0-9_]*\s*=/.test(line)) return;
+    if (/[;{,]$/.test(line)) return;
+    const op = (line.match(/\(/g) || []).length;
+    const cp = (line.match(/\)/g) || []).length;
+    const ob = (line.match(/\[/g) || []).length;
+    const cb = (line.match(/\]/g) || []).length;
+    if (op !== cp || ob !== cb) return; // multi-line expression
     badLines.push(i + 1);
   });
   if (badLines.length) errors.push(`Possible missing semicolons on line(s): ${badLines.slice(0, 5).join(', ')}${badLines.length > 5 ? '…' : ''}.`);
