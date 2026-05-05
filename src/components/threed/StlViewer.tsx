@@ -4,7 +4,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Button } from '@/components/ui/button';
 import {
-  RotateCcw, Maximize2, RefreshCw, Box as BoxIcon, Grid3x3, Move3d, Eye,
+  RotateCcw, Maximize2, RefreshCw, Box as BoxIcon, Grid3x3, Move3d, Eye, Camera,
 } from 'lucide-react';
 
 export interface StlViewerInfo {
