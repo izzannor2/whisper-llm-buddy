@@ -78,7 +78,7 @@ export function StlViewer({ stl, className, onInfo, onScreenshot }: StlViewerPro
     camera.position.set(60, 60, 60);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(width, height);
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
