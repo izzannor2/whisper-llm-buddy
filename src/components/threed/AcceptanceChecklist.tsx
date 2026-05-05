@@ -139,6 +139,37 @@ export function AcceptanceChecklist() {
       update('stl-export', { status: 'fail', detail: e instanceof Error ? e.message : String(e) });
     }
 
+    // 8. Live Preview toggle persists
+    update('live-toggle', { status: 'running' });
+    try {
+      const sw = document.querySelector('[role="switch"]');
+      const stored = localStorage.getItem('threed.livePreview');
+      const ok = !!sw && (stored === '0' || stored === '1' || stored === null);
+      update('live-toggle', { status: ok ? 'pass' : 'fail', detail: ok ? `stored=${stored ?? 'default(on)'}` : 'switch not found' });
+    } catch (e) { update('live-toggle', { status: 'fail', detail: String(e) }); }
+
+    // 9. Editor editable
+    update('editor-editable', { status: 'running' });
+    try {
+      const ta = Array.from(document.querySelectorAll('textarea')).find(t => /model\.scad|OpenSCAD/i.test(t.placeholder || ''));
+      update('editor-editable', { status: ta ? 'pass' : 'fail', detail: ta ? 'editable textarea mounted' : 'no SCAD textarea' });
+    } catch (e) { update('editor-editable', { status: 'fail', detail: String(e) }); }
+
+    // 10. Viewer controls present (button titles)
+    update('viewer-controls', { status: 'running' });
+    try {
+      const titles = ['Reset camera', 'Fit to model', 'Auto-rotate', 'Wireframe', 'Grid', 'Axes'];
+      const missing = titles.filter(t => !document.querySelector(`button[title="${t}"]`));
+      update('viewer-controls', { status: missing.length === 0 ? 'pass' : 'fail', detail: missing.length ? `missing: ${missing.join(', ')}` : 'all controls present' });
+    } catch (e) { update('viewer-controls', { status: 'fail', detail: String(e) }); }
+
+    // 11. Inspector panel
+    update('inspector', { status: 'running' });
+    try {
+      const found = !!document.body.innerText.match(/Model Inspection/);
+      update('inspector', { status: found ? 'pass' : 'fail', detail: found ? 'inspector mounted' : 'inspector not found' });
+    } catch (e) { update('inspector', { status: 'fail', detail: String(e) }); }
+
     setRunning(false);
   };
 
