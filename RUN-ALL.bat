@@ -189,7 +189,18 @@ if not "!AGENT_OK!"=="1" (
     echo  ============================================================
     echo    ERROR: Agent failed to start on :3847
     echo  ============================================================
-    echo    Check the "AI Agent" command window for stack traces.
+    echo    Last 20 lines of logs\server.log:
+    if exist "logs\server.log" (
+        powershell -NoProfile -Command "Get-Content 'logs\server.log' -Tail 20" 2>nul
+    ) else (
+        echo    [no logs\server.log found]
+    )
+    echo.
+    echo    Port 3847 owners (if any):
+    for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":3847 " ^| findstr "LISTENING"') do (
+        echo      PID %%P
+        for /f "tokens=1" %%N in ('tasklist /FI "PID eq %%P" /NH /FO CSV 2^>nul') do echo        process: %%N
+    )
     echo    Common causes:
     echo      - Port 3847 already in use ^(set KILL_NODE=1 and retry^)
     echo      - Missing dependency ^(run REPAIR-APP.bat^)
@@ -199,6 +210,19 @@ if not "!AGENT_OK!"=="1" (
     exit /b 1
 )
 echo  [OK]   Agent responding on :3847
+
+:: Check if frontend port 8080 is occupied by something else
+netstat -ano | findstr ":8080 " | findstr "LISTENING" >nul 2>&1
+if not errorlevel 1 (
+    curl -s --max-time 1 http://127.0.0.1:8080 >nul 2>&1
+    if errorlevel 1 (
+        echo  [WARN] Port 8080 in use by another process:
+        for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8080 " ^| findstr "LISTENING"') do (
+            echo         PID %%P
+            for /f "tokens=1" %%N in ('tasklist /FI "PID eq %%P" /NH /FO CSV 2^>nul') do echo           process: %%N
+        )
+    )
+)
 
 :: --- 8. Start frontend ---
 curl -s --max-time 1 http://127.0.0.1:8080 >nul 2>&1
@@ -225,7 +249,7 @@ set "SNAP_OK=0"
 set "DEV_OK=0"
 set "THREED_OK=0"
 curl -s --max-time 2 http://127.0.0.1:3847/debug/snapshot >nul 2>&1 && set "SNAP_OK=1"
-curl -s --max-time 2 http://127.0.0.1:8080/dev-server/status >nul 2>&1 && set "DEV_OK=1"
+curl -s --max-time 2 http://127.0.0.1:3847/dev-server/status >nul 2>&1 && set "DEV_OK=1"
 curl -s --max-time 2 http://127.0.0.1:3847/3d/status >nul 2>&1 && set "THREED_OK=1"
 echo  [OK]   /status
 if "!SNAP_OK!"=="1"  (echo  [OK]   /debug/snapshot) else (echo  [WARN] /debug/snapshot not responding)
