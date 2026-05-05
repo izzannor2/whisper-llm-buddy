@@ -145,29 +145,40 @@ export function AcceptanceChecklist() {
     return <div className="w-4 h-4 rounded-full border border-muted-foreground/40" />;
   };
 
+  const [open, setOpen] = useState(false);
   const passed = checks.filter(c => c.status === 'pass').length;
+  const failed = checks.filter(c => c.status === 'fail').length;
 
   return (
-    <Card className="p-3 space-y-2">
-      <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold flex-1">Acceptance Tests</h3>
-        <span className="text-xs text-muted-foreground">{passed}/{checks.length}</span>
-        <Button size="sm" variant="outline" onClick={run} disabled={running}>
-          {running ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
-          Run
-        </Button>
-      </div>
-      <ul className="space-y-1.5">
-        {checks.map(c => (
-          <li key={c.id} className="flex items-start gap-2 text-xs">
-            <div className="mt-0.5"><Icon s={c.status} /></div>
-            <div className="flex-1 min-w-0">
-              <div className="text-foreground">{c.label}</div>
-              {c.detail && <div className="text-muted-foreground truncate" title={c.detail}>{c.detail}</div>}
-            </div>
-          </li>
-        ))}
-      </ul>
+    <Card className="p-2">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <div className="flex items-center gap-2">
+          <CollapsibleTrigger className="flex items-center gap-1.5 text-sm font-semibold flex-1 hover:text-accent transition-colors">
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? '' : '-rotate-90'}`} />
+            Acceptance Tests
+          </CollapsibleTrigger>
+          <span className={`text-xs ${failed ? 'text-destructive' : 'text-muted-foreground'}`}>
+            {passed}/{checks.length}{failed ? ` · ${failed} failed` : ''}
+          </span>
+          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); if (!open) setOpen(true); run(); }} disabled={running}>
+            {running ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
+            Run
+          </Button>
+        </div>
+        <CollapsibleContent>
+          <ul className="space-y-1.5 mt-2">
+            {checks.map(c => (
+              <li key={c.id} className="flex items-start gap-2 text-xs">
+                <div className="mt-0.5"><Icon s={c.status} /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-foreground">{c.label}</div>
+                  {c.detail && <div className="text-muted-foreground truncate" title={c.detail}>{c.detail}</div>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
