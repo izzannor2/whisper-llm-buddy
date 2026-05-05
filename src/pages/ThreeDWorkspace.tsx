@@ -400,6 +400,7 @@ export default function ThreeDWorkspace() {
                 Approximate: face/center snaps use primitive params, not exact OpenSCAD geometry.
               </p>
             </div>
+            <SceneTree
               nodes={scene.nodes}
               selectedId={selectedId}
               onSelect={setSelectedId}
