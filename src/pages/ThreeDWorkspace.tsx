@@ -537,8 +537,27 @@ export default function ThreeDWorkspace() {
               {viewerInfo?.bbox && <span>bbox: {viewerInfo.bbox.x}×{viewerInfo.bbox.y}×{viewerInfo.bbox.z} mm</span>}
               {viewerInfo && <span>tris: {viewerInfo.triangles.toLocaleString()}</span>}
             </div>
+            <div className="px-3 py-1 border-b border-border flex items-center gap-2 bg-muted/20">
+              <Tabs value={viewerTab} onValueChange={(v) => setViewerTab(v as 'scene' | 'stl')}>
+                <TabsList className="h-7">
+                  <TabsTrigger value="scene" className="text-[10px] h-6 px-2">Interactive Scene</TabsTrigger>
+                  <TabsTrigger value="stl" className="text-[10px] h-6 px-2">STL Preview</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <span className="text-[10px] text-muted-foreground ml-auto">
+                {viewerTab === 'scene' ? 'click parts · drag gizmo · auto-updates SCAD' : 'final OpenSCAD-rendered geometry'}
+              </span>
+            </div>
             <div className="flex-1 min-h-0">
-              {stl ? (
+              {viewerTab === 'scene' ? (
+                <SceneViewer
+                  scene={scene}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onUpdate={updateNode}
+                  onScreenshot={(u) => { lastScreenshotRef.current = u; }}
+                />
+              ) : stl ? (
                 <StlViewer stl={stl} onInfo={setViewerInfo} onScreenshot={(u) => { lastScreenshotRef.current = u; }} />
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
@@ -546,6 +565,16 @@ export default function ThreeDWorkspace() {
                 </div>
               )}
             </div>
+
+            {(() => {
+              const warnings = checkPrintability(viewerInfo?.bbox ?? null, printer);
+              return warnings.length ? (
+                <div className="border-t border-amber-500/40 bg-amber-500/10 p-2 text-[10px] text-amber-300 font-mono space-y-0.5">
+                  <div className="font-semibold">Printability warnings (approximate):</div>
+                  {warnings.map((w, i) => <div key={i}>• {w}</div>)}
+                </div>
+              ) : null;
+            })()}
 
             {renderError && (
               <div className="border-t border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive font-mono space-y-1">
