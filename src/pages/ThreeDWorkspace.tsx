@@ -281,7 +281,23 @@ export default function ThreeDWorkspace() {
         <h1 className="text-sm font-semibold">3D Printing CAD</h1>
         <div className="ml-auto flex items-center gap-3">
           <VoiceControls
-            onTranscript={(t) => setPrompt((p) => (p ? p + ' ' + t : t))}
+            onTranscript={(t) => {
+              if (scad.trim()) {
+                // Voice-driven modify: route through autoFix-style AI edit on current SCAD.
+                setStatusMsg(`Voice modify: "${t}"…`);
+                autoFixScad(scad, [`User voice request: ${t}. Modify only what is asked.`])
+                  .then((next) => {
+                    if (next && next.trim()) {
+                      setMode('code');
+                      setScad(next);
+                      setStatusMsg('Voice modify applied.');
+                    }
+                  })
+                  .catch((e) => setStatusMsg(e instanceof Error ? e.message : 'Voice modify failed.'));
+              } else {
+                setPrompt((p) => (p ? p + ' ' + t : t));
+              }
+            }}
             speakText={statusMsg || (scad ? 'OpenSCAD model ready.' : '')}
           />
           <StatusPill state={status} message={statusMsg} />
