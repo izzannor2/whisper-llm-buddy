@@ -225,6 +225,7 @@ export function createNode(kind: ShapeKind, op: Op = 'union'): SceneNode {
     params: { ...def.defaults },
     pos: { x: 0, y: 0, z: 0 },
     rot: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
   };
 }
 
