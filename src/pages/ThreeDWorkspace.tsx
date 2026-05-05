@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Download, Sparkles, Box, FileCode } from 'lucide-react';
+import { ArrowLeft, Download, Sparkles, Box, FileCode, Bug } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,11 +8,11 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { StatusPill, StatusState } from '@/components/StatusPill';
-import { StlViewer } from '@/components/threed/StlViewer';
+import { StlViewer, type StlViewerInfo } from '@/components/threed/StlViewer';
 import { AcceptanceChecklist } from '@/components/threed/AcceptanceChecklist';
 import { VoiceControls } from '@/components/threed/VoiceControls';
 import { SCAD_TEMPLATES, generateScadWithFix, validateScad } from '@/lib/openscad';
-import { downloadBlob, getOpenScadStatus, renderStl, saveScad } from '@/lib/stl-export';
+import { downloadBlob, getOpenScadStatus, renderStl, saveScad, type RenderStlResult } from '@/lib/stl-export';
 
 export default function ThreeDWorkspace() {
   const { toast } = useToast();
@@ -23,6 +23,27 @@ export default function ThreeDWorkspace() {
   const [statusMsg, setStatusMsg] = useState<string>('');
   const [openScadAvailable, setOpenScadAvailable] = useState<boolean | null>(null);
   const [name, setName] = useState('model');
+  const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'parsed' | 'error'>('idle');
+  const [viewerInfo, setViewerInfo] = useState<StlViewerInfo | null>(null);
+  const [lastRender, setLastRender] = useState<RenderStlResult | null>(null);
+
+  const copyDebug = async () => {
+    const debug = {
+      generatedAt: new Date().toISOString(),
+      name,
+      scad,
+      scadBytes: scad.length,
+      stlBytes: lastRender?.bytes ?? null,
+      contentType: lastRender?.contentType ?? null,
+      stlPath: lastRender?.stlPath ?? null,
+      openscadStderr: lastRender?.stderr ?? null,
+      renderError: lastRender?.error ?? null,
+      previewState,
+      viewer: viewerInfo,
+    };
+    await navigator.clipboard.writeText(JSON.stringify(debug, null, 2));
+    toast({ title: '3D debug copied' });
+  };
 
   const checkOpenScad = async () => {
     const s = await getOpenScadStatus();
@@ -93,15 +114,25 @@ export default function ThreeDWorkspace() {
       return;
     }
     const r = await renderStl(scad, name || 'model');
+    setLastRender(r);
     if (!r.ok || !r.stl) {
       setStatus('error');
       setStatusMsg(r.error || 'Render failed');
+      setPreviewState('error');
       return;
     }
+    if (r.stl.byteLength <= 100) {
+      setStatus('error');
+      setStatusMsg(`STL too small (${r.stl.byteLength} bytes). Likely empty geometry.`);
+      setPreviewState('error');
+      return;
+    }
+    setPreviewState('loading');
     setStl(r.stl);
+    const kb = (r.stl.byteLength / 1024).toFixed(1);
     setStatus('done');
-    setStatusMsg('STL rendered.');
-    downloadBlob(r.stl, `${name || 'model'}.stl`, 'application/sla');
+    setStatusMsg(`STL rendered: ${kb} KB. Previewing…`);
+    // Preview first; user can download via .stl button
   };
 
   return (
@@ -169,7 +200,15 @@ export default function ThreeDWorkspace() {
                     <Download className="w-3.5 h-3.5 mr-1.5" />.scad
                   </Button>
                   <Button size="sm" variant="ghost" onClick={handleExportStl} disabled={!scad}>
-                    <Download className="w-3.5 h-3.5 mr-1.5" />.stl
+                    <Download className="w-3.5 h-3.5 mr-1.5" />Render .stl
+                  </Button>
+                  {stl && (
+                    <Button size="sm" variant="ghost" onClick={() => downloadBlob(stl, `${name || 'model'}.stl`, 'application/sla')}>
+                      <Download className="w-3.5 h-3.5 mr-1.5" />Save .stl
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={copyDebug}>
+                    <Bug className="w-3.5 h-3.5 mr-1.5" />Debug
                   </Button>
                 </div>
               </div>
@@ -186,15 +225,39 @@ export default function ThreeDWorkspace() {
 
         <ResizablePanel defaultSize={60} minSize={30}>
           <div className="h-full flex flex-col">
+            <div className="px-3 py-1.5 border-b border-border text-[11px] font-mono flex items-center gap-3 bg-muted/30">
+              <span>preview: <span className={
+                previewState === 'parsed' ? 'text-green-500' :
+                previewState === 'error' ? 'text-destructive' :
+                previewState === 'loading' ? 'text-amber-400' : 'text-muted-foreground'
+              }>{previewState}</span></span>
+              {lastRender?.bytes != null && <span>stl: {(lastRender.bytes / 1024).toFixed(1)} KB</span>}
+              {viewerInfo && <span>verts: {viewerInfo.vertices.toLocaleString()}</span>}
+              {lastRender?.contentType && <span className="truncate">type: {lastRender.contentType}</span>}
+            </div>
             <div className="flex-1 min-h-0">
               {stl ? (
-                <StlViewer stl={stl} />
+                <StlViewer
+                  stl={stl}
+                  onInfo={(info) => {
+                    setViewerInfo(info);
+                    setPreviewState(info.error ? 'error' : 'parsed');
+                  }}
+                />
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
                   Generate a model and export STL to preview here.
                 </div>
               )}
             </div>
+            {previewState === 'error' && stl && (
+              <div className="border-t border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                STL downloaded, but viewer could not parse it. {viewerInfo?.error}
+                <Button size="sm" variant="outline" className="ml-2" onClick={() => downloadBlob(stl, `${name || 'model'}.stl`, 'application/sla')}>
+                  Download raw STL
+                </Button>
+              </div>
+            )}
             {openScadAvailable === false && (
               <div className="border-t border-border p-3 text-xs text-muted-foreground">
                 <p className="font-medium text-foreground mb-1">OpenSCAD CLI not detected.</p>

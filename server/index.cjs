@@ -596,11 +596,25 @@ function renderStlHandler(req, res) {
         return res.status(500).json({ ok: false, error: stderr || err.message });
       }
       try {
+        if (!fs.existsSync(stlPath)) {
+          threeDState.lastError = 'OpenSCAD did not produce model.stl. stderr: ' + (stderr || '(empty)');
+          threeDState.lastStlPath = null;
+          return res.status(500).json({ ok: false, error: threeDState.lastError, stderr: stderr || '' });
+        }
+        const stat = fs.statSync(stlPath);
+        if (stat.size < 100) {
+          threeDState.lastError = 'OpenSCAD produced an empty STL. Check model geometry.';
+          threeDState.lastStlPath = stlPath;
+          try { fs.unlinkSync(stlPath); } catch {}
+          return res.status(500).json({ ok: false, error: threeDState.lastError, bytes: stat.size, stderr: stderr || '' });
+        }
         const buf = fs.readFileSync(stlPath);
         threeDState.lastStlPath = stlPath;
         threeDState.lastError = null;
-        res.setHeader('Content-Type', 'application/sla');
+        res.setHeader('Content-Type', 'application/octet-stream');
         res.setHeader('X-Stl-Path', stlPath);
+        res.setHeader('X-Stl-Bytes', String(buf.length));
+        if (stderr) res.setHeader('X-Openscad-Stderr', Buffer.from(stderr).toString('base64').slice(0, 4000));
         res.send(buf);
       } catch (e) {
         threeDState.lastError = 'read failed: ' + e.message;
