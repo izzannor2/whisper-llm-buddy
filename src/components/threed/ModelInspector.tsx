@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, forwardRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, AlertTriangle } from 'lucide-react';
@@ -9,7 +9,7 @@ interface Props {
   info: StlViewerInfo | null;
 }
 
-export function ModelInspector({ info }: Props) {
+export const ModelInspector = forwardRef<HTMLDivElement, Props>(function ModelInspector({ info }, ref) {
   const [open, setOpen] = useState(true);
   const [thinThreshold, setThinThreshold] = useState(1.2);
 
@@ -19,7 +19,7 @@ export function ModelInspector({ info }: Props) {
   const empty = info?.empty || (info?.vertices === 0 && (info?.bytes || 0) > 0);
 
   return (
-    <Card className="p-2">
+    <Card ref={ref} className="p-2">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger className="flex items-center gap-1.5 text-sm font-semibold w-full hover:text-accent transition-colors">
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? '' : '-rotate-90'}`} />
@@ -73,4 +73,4 @@ export function ModelInspector({ info }: Props) {
       </Collapsible>
     </Card>
   );
-}
+});
