@@ -1,77 +1,71 @@
-## Fix RUN-ALL.bat for reliability and debuggability
+# Live 3D Editor Upgrade
 
-Rewrite `RUN-ALL.bat` so failures are visible, the agent is verified before the frontend launches, and Node detection is explicit. No other files change.
+Transform `/3d` from a generate→export→preview flow into a real live editing workspace where SCAD edits auto-render and the STL viewer has full inspection controls.
 
-### Changes to `RUN-ALL.bat`
+## 1. Editable SCAD with Live Preview (`ThreeDWorkspace.tsx`)
 
-1. **Force working directory** (already present, keep at top):
-   ```
-   cd /d "%~dp0"
-   set "PROJECT_ROOT=%CD%"
-   ```
+- Replace the read-only `<pre>` with a `<Textarea>` (monospace) bound to `scad`.
+- Add a **Live Preview** `Switch` (default ON) in the editor header, persisted to `localStorage` (`threed.livePreview`).
+- New pipeline state: `'editing' | 'validating' | 'rendering' | 'ready' | 'error'` shown as a small status row alongside the existing `StatusPill`.
+- Debounce SCAD changes 1500ms (`useEffect` + `setTimeout`):
+  1. `validateScad` → if errors, status `error`, show inline list, skip render.
+  2. `renderStl` POST `/openscad/render`, parse returned bytes.
+  3. On success: update `stl`, `lastRender`, status `ready`.
+  4. On failure: status `error`, show stderr; **keep previous `stl`** so last good preview stays visible (track `staleRender = true`).
+- Manual **Render** button stays and works regardless of toggle (forces an immediate render, bypasses debounce).
+- Inline validation panel under the editor lists `validateScad` errors.
+- Render error panel shows: stderr (from `X-Openscad-Stderr` already returned by `server/index.cjs`), and a "failing line" parsed via regex `/line (\d+)/i` from stderr when present.
 
-2. **Add a visible PATH CHECK block** right after the banner:
-   ```
-   echo === PATH CHECK ===
-   echo PROJECT_ROOT=%PROJECT_ROOT%
-   echo Node candidates:
-   where node 2>nul
-   if exist "bin\node\node.exe" echo Portable: %PROJECT_ROOT%\bin\node\node.exe
-   echo ==================
-   ```
+## 2. Upgraded STL Viewer (`StlViewer.tsx`)
 
-3. **Explicit Node detection** with clear failure message:
-   - Prefer `bin\node\node.exe` if present.
-   - Else fall back to system `node` via `where node`.
-   - Else print `Node.js not found. Install Node 20 LTS or run scripts\prepare-usb.bat` and `pause & exit /b 1`.
+Add a controls bar (overlay, top-right) and props for each toggle. Internally keep refs to `mesh`, `controls`, `grid`, `axes` for live toggling without re-mounting the scene.
 
-4. **Optional port-collision cleanup** (gated, off by default to avoid killing unrelated Node processes). Add a commented `:: taskkill /f /im node.exe >nul 2>&1` line plus a `KILL_NODE` env opt-in:
-   ```
-   if /I "%KILL_NODE%"=="1" taskkill /f /im node.exe >nul 2>&1
-   ```
+Controls:
+- Reset camera (recompute from boundingSphere).
+- Fit to model (same, with padding factor).
+- Auto-rotate toggle (`controls.autoRotate`).
+- Wireframe toggle (swap material to `MeshBasicMaterial({ wireframe: true })` or toggle `material.wireframe`).
+- Solid/shaded toggle (flat vs. standard material).
+- Grid toggle (`grid.visible`).
+- Axis helper toggle (add/remove `THREE.AxesHelper(50)`).
 
-5. **Start the agent with a visible window and log file**, then verify before continuing:
-   ```
-   echo Starting agent...
-   start "AI Agent" cmd /k ""!NODE_BIN!" server\index.cjs"
-   echo Waiting for agent on :3847 ...
-   set "AGENT_OK=0"
-   for /l %%i in (1,1,15) do (
-       timeout /t 1 /nobreak >nul
-       curl -s --max-time 1 http://127.0.0.1:3847/status >nul 2>&1
-       if not errorlevel 1 ( set "AGENT_OK=1" & goto :agent_ready )
-   )
-   :agent_ready
-   if not "!AGENT_OK!"=="1" (
-       echo ERROR: Agent failed to start. See the "AI Agent" window and logs\agent.log
-       pause
-       exit /b 1
-   )
-   echo [OK] Agent responding on :3847
-   ```
-   The `cmd /k` window stays open so the user can read any crash output (was previously hidden via `/B` + log redirect).
+Avoid re-creating the renderer on prop changes — only `stl` triggers geometry replacement; toggles mutate existing objects.
 
-6. **Only start frontend after agent is confirmed**:
-   ```
-   echo Starting frontend...
-   start "WEB" cmd /k "call !NPM_CMD! run dev -- --host 0.0.0.0 --port 8080"
-   ```
-   Then poll `http://127.0.0.1:8080` as today.
+## 3. Model Inspection & Printability Panel
 
-7. **Keep existing health-check block** (`/status`, `/debug/snapshot`, `/dev-server/status`, `/3d/status`) and final READY summary. Make the final lines explicit:
-   ```
-   echo Open:
-   echo   http://localhost:8080
-   echo   http://127.0.0.1:3847/status
-   ```
+New component `ModelInspector.tsx` rendered below the viewer (collapsible card). Computes from the parsed `BufferGeometry` (passed up via `onInfo`, extended):
+- Bounding box (x/y/z mm).
+- Vertex count, triangle count (`position.count / 3`).
+- STL byte size (KB).
+- **Estimated volume**: signed tetrahedron sum over triangles → `Math.abs(sum)/6` mm³, plus cm³.
+- **Empty mesh warning** if 0 verts.
+- **Thin-wall warning**: configurable threshold input (default 1.2mm). Approximation: warn if smallest bbox dimension < threshold. Labeled "approximate".
+- **Manifold check**: placeholder line "Manifold check not available (requires mesh analysis library)".
 
-8. **Preserve** existing optional Ollama and llama.cpp startup (they already degrade gracefully) and the self-heal `mkdir` loop.
+Extend `StlViewerInfo` with `triangles`, `volumeMm3`.
 
-### Behavior after fix
-- User sees a PATH CHECK block immediately, so missing Node is obvious.
-- Agent runs in a visible `cmd /k` window; crashes are no longer hidden.
-- Frontend only launches if `/status` responds within ~15s; otherwise script halts with a clear error and `pause`.
-- All other launchers (`start.bat`, `START-PORTABLE-AI.bat`) continue to wrap `RUN-ALL.bat` unchanged.
+## 4. Render Pipeline & Debug
 
-### Out of scope
-- No changes to `server/index.cjs`, acceptance tests, or 3D code — those were validated in prior passes and the current symptom is the launcher hiding agent failures.
+- `renderStl` already returns `{ stl, bytes, contentType, stlPath, stderr, error }` — no change needed.
+- **Copy 3D Debug** button updated to include: scad, scad bytes, status, stderr, stl bytes, content-type, stl path, viewer parse error, vertices, triangles, bbox, volume, livePreview flag, last validation errors, backend `/3d/status` snapshot (fetched at click time).
+
+## 5. Acceptance tests (`AcceptanceChecklist.tsx` + `scripts/acceptance.bat`)
+
+Extend the in-app `AcceptanceChecklist` with manual checks for:
+- Live Preview toggle persists.
+- Editing SCAD triggers auto-render within ~2s.
+- Wireframe / grid / axes / auto-rotate toggles flip viewer state.
+- Reset camera & Fit to model recenter.
+- Bounding box & triangle count appear after render.
+- Failed render keeps last successful preview visible (stale badge shown).
+
+No new backend endpoints required — `/openscad/render` already returns STL bytes with the headers we need.
+
+## Technical notes
+
+- Files edited: `src/pages/ThreeDWorkspace.tsx`, `src/components/threed/StlViewer.tsx`, `src/components/threed/AcceptanceChecklist.tsx`.
+- New file: `src/components/threed/ModelInspector.tsx`.
+- No new deps (three + STLLoader + OrbitControls already in use).
+- Debounce implemented with `useRef<number>` + `window.setTimeout`; cleared on unmount and on manual render.
+- Stale-preview indicator: small amber badge "stale" in the preview status row when `staleRender` is true.
+- Live preview disabled automatically while a render is in flight to avoid request stacking; queued change re-runs after completion.
