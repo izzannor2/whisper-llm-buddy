@@ -21,6 +21,7 @@ interface StlViewerProps {
   stl?: ArrayBuffer | null;
   className?: string;
   onInfo?: (info: StlViewerInfo) => void;
+  onScreenshot?: (dataUrl: string) => void;
 }
 
 function computeVolume(geom: THREE.BufferGeometry): number {
@@ -42,7 +43,7 @@ function computeVolume(geom: THREE.BufferGeometry): number {
   return Math.abs(sum);
 }
 
-export function StlViewer({ stl, className, onInfo }: StlViewerProps) {
+export function StlViewer({ stl, className, onInfo, onScreenshot }: StlViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
