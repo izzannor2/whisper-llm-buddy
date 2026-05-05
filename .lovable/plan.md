@@ -1,47 +1,77 @@
-## Goal
+## Fix RUN-ALL.bat for reliability and debuggability
 
-Make sure the whole stack — `RUN-ALL.bat`, the local agent, the 3D Printing mode, and the acceptance/smoke tests — actually exercises the new 3D routes and reports clearly when something is missing.
+Rewrite `RUN-ALL.bat` so failures are visible, the agent is verified before the frontend launches, and Node detection is explicit. No other files change.
 
-The frontend, backend handlers, and UI workspace already exist and are wired correctly. The remaining gaps are in **test coverage and launcher verification** for the 3D pipeline.
+### Changes to `RUN-ALL.bat`
 
-## Changes
+1. **Force working directory** (already present, keep at top):
+   ```
+   cd /d "%~dp0"
+   set "PROJECT_ROOT=%CD%"
+   ```
 
-### 1. `scripts/route-smoke-test.mjs`
-- Add `/3d` to the `ROUTES` array so the SPA smoke test confirms the 3D workspace is reachable after `vite build`.
+2. **Add a visible PATH CHECK block** right after the banner:
+   ```
+   echo === PATH CHECK ===
+   echo PROJECT_ROOT=%PROJECT_ROOT%
+   echo Node candidates:
+   where node 2>nul
+   if exist "bin\node\node.exe" echo Portable: %PROJECT_ROOT%\bin\node\node.exe
+   echo ==================
+   ```
 
-### 2. `scripts/acceptance.bat`
-Add backend route checks for the 3D pipeline (run only when agent is up; reuse existing `:check_url` helper):
-- `GET /3d/status` → 200
-- `GET /3d/diagnostics` → 200
-- `GET /openscad/status` → 200
-- `POST /3d/save-scad` (with a tiny inline JSON body via `curl -d`) → 200, then verify `projects/3d/acceptance_test/model.scad` exists.
-- `POST /openscad/render` → 200 **or** 422 (422 is the correct "OpenSCAD CLI not installed" response and must NOT be treated as a failure).
-- After render, assert `projects/3d/acceptance_test/model.stl` does **not** exist when the response was 422 (no fake STL).
-- Add `[PASS] file exists: src\pages\ThreeDWorkspace.tsx` and `src\components\threed\AcceptanceChecklist.tsx` to the existing `:check_file` block.
+3. **Explicit Node detection** with clear failure message:
+   - Prefer `bin\node\node.exe` if present.
+   - Else fall back to system `node` via `where node`.
+   - Else print `Node.js not found. Install Node 20 LTS or run scripts\prepare-usb.bat` and `pause & exit /b 1`.
 
-Add a new helper `:check_url_2xx_or_422` for the render endpoint so a missing-OpenSCAD environment still passes.
+4. **Optional port-collision cleanup** (gated, off by default to avoid killing unrelated Node processes). Add a commented `:: taskkill /f /im node.exe >nul 2>&1` line plus a `KILL_NODE` env opt-in:
+   ```
+   if /I "%KILL_NODE%"=="1" taskkill /f /im node.exe >nul 2>&1
+   ```
 
-### 3. `RUN-ALL.bat`
-Add one line in the "Verify health endpoints" section:
-- `curl -s --max-time 2 http://127.0.0.1:3847/3d/status` → reports `[OK] /3d/status` or `[WARN]`.
+5. **Start the agent with a visible window and log file**, then verify before continuing:
+   ```
+   echo Starting agent...
+   start "AI Agent" cmd /k ""!NODE_BIN!" server\index.cjs"
+   echo Waiting for agent on :3847 ...
+   set "AGENT_OK=0"
+   for /l %%i in (1,1,15) do (
+       timeout /t 1 /nobreak >nul
+       curl -s --max-time 1 http://127.0.0.1:3847/status >nul 2>&1
+       if not errorlevel 1 ( set "AGENT_OK=1" & goto :agent_ready )
+   )
+   :agent_ready
+   if not "!AGENT_OK!"=="1" (
+       echo ERROR: Agent failed to start. See the "AI Agent" window and logs\agent.log
+       pause
+       exit /b 1
+   )
+   echo [OK] Agent responding on :3847
+   ```
+   The `cmd /k` window stays open so the user can read any crash output (was previously hidden via `/B` + log redirect).
 
-This makes the launcher surface 3D backend health on every start.
+6. **Only start frontend after agent is confirmed**:
+   ```
+   echo Starting frontend...
+   start "WEB" cmd /k "call !NPM_CMD! run dev -- --host 0.0.0.0 --port 8080"
+   ```
+   Then poll `http://127.0.0.1:8080` as today.
 
-### 4. `src/lib/diagnostics.ts` (sanity)
-Confirmed already includes `threeDStatus` and `threeD`. No change needed unless a key is missing — verify on implementation.
+7. **Keep existing health-check block** (`/status`, `/debug/snapshot`, `/dev-server/status`, `/3d/status`) and final READY summary. Make the final lines explicit:
+   ```
+   echo Open:
+   echo   http://localhost:8080
+   echo   http://127.0.0.1:3847/status
+   ```
 
-### 5. No changes needed to:
-- `server/index.cjs` — all four routes (`/3d/status`, `/3d/save-scad`, `/3d/diagnostics`, `/openscad/status`, `/openscad/render`, `/3d/export-stl`) are implemented and use `PROJECT_ROOT` + shared `renderStlHandler`.
-- `src/pages/ThreeDWorkspace.tsx` — workspace, prompt, templates, editor, voice controls, STL viewer, and acceptance checklist are wired.
-- `src/components/ModesSidebar.tsx` / `src/pages/Index.tsx` — `3d-printing` mode is visible and routes to `/3d`.
+8. **Preserve** existing optional Ollama and llama.cpp startup (they already degrade gracefully) and the self-heal `mkdir` loop.
 
-## Verification after implementation
+### Behavior after fix
+- User sees a PATH CHECK block immediately, so missing Node is obvious.
+- Agent runs in a visible `cmd /k` window; crashes are no longer hidden.
+- Frontend only launches if `/status` responds within ~15s; otherwise script halts with a clear error and `pause`.
+- All other launchers (`start.bat`, `START-PORTABLE-AI.bat`) continue to wrap `RUN-ALL.bat` unchanged.
 
-1. `RUN-ALL.bat` boots and prints `[OK] /3d/status`.
-2. Visiting `/3d` shows prompt box, templates, editor, voice controls, STL viewer placeholder, and the collapsible Acceptance Tests panel.
-3. `scripts\acceptance.bat` (with agent running, OpenSCAD absent) returns `RESULT: PASS` — including the 3D rows and the "no fake STL" assertion.
-4. `node scripts/route-smoke-test.mjs` returns PASS for `/3d`.
-
-## Notes for non-technical readers
-
-This pass doesn't add new features — it makes the existing one-click launcher and test scripts actually check the 3D Printing mode end-to-end, so a broken install is caught immediately instead of surfacing later as "Failed to fetch" in the browser.
+### Out of scope
+- No changes to `server/index.cjs`, acceptance tests, or 3D code — those were validated in prior passes and the current symptom is the launcher hiding agent failures.
