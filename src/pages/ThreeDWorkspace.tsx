@@ -195,6 +195,30 @@ export default function ThreeDWorkspace() {
     });
   const setOpForSelected = (op: SceneNode['op']) => { if (selectedId) updateNode(selectedId, { op }); };
 
+  // Snap ops use selected as target, snapBuddy as reference.
+  const applySnap = (kind: 'face+x' | 'face-x' | 'face+y' | 'face-y' | 'face+z' | 'face-z' | 'center' | 'alignX' | 'alignY' | 'alignZ') => {
+    if (!selectedId || !snapBuddy || selectedId === snapBuddy) {
+      toast({ variant: 'destructive', title: 'Pick two parts', description: 'Select a target part, then choose a reference part in the snap row.' });
+      return;
+    }
+    const target = scene.nodes.find((n) => n.id === selectedId);
+    const ref = scene.nodes.find((n) => n.id === snapBuddy);
+    if (!target || !ref) return;
+    let patch: Partial<SceneNode> | null = null;
+    if (kind === 'center') patch = snapCenterToCenter(target, ref);
+    else if (kind === 'alignX') patch = snapAlignAxis(target, ref, 'x');
+    else if (kind === 'alignY') patch = snapAlignAxis(target, ref, 'y');
+    else if (kind === 'alignZ') patch = snapAlignAxis(target, ref, 'z');
+    else {
+      const axis = kind[5] as 'x' | 'y' | 'z';
+      const side: 1 | -1 = kind[4] === '+' ? 1 : -1;
+      patch = snapFaceToFace(target, ref, axis, side);
+    }
+    if (patch) updateNode(selectedId, patch);
+  };
+  const setOpFor = (id: string, op: SceneNode['op']) => updateNode(id, { op });
+
+
   const handleGenerate = async () => {
     if (!prompt.trim()) { toast({ variant: 'destructive', title: 'Enter a prompt' }); return; }
     setStatus('thinking');
