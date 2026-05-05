@@ -106,7 +106,7 @@ if defined LLAMA_BIN if defined GGUF_FILE (
     curl -s --max-time 1 http://127.0.0.1:8081/health >nul 2>&1
     if errorlevel 1 (
         echo  [..]  Starting llama-server with !GGUF_FILE!
-        start "LLAMA" /B cmd /c "\"!LLAMA_BIN!\" -m \"!GGUF_FILE!\" --port 8081 --host 127.0.0.1 -ngl 99 >> logs\llama.log 2>&1"
+        start "LLAMA" /B "!LLAMA_BIN!" -m "!GGUF_FILE!" --port 8081 --host 127.0.0.1 -ngl 99
         echo  [OK]   llama-server launching on :8081
     ) else (
         echo  [OK]   llama-server already on :8081
@@ -123,7 +123,7 @@ if not errorlevel 1 (
     goto :agent_ready
 )
 echo  Starting agent...
-start "AI Agent" cmd /k ""!NODE_BIN!" server\index.cjs"
+start "AI Agent" cmd /k call "!NODE_BIN!" server\index.cjs
 echo  Waiting for agent on :3847 ...
 set "AGENT_OK=0"
 for /l %%i in (1,1,15) do (
