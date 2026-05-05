@@ -26,6 +26,7 @@ export interface SceneNode {
   params: Record<string, number | string>;
   pos: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number };
+  scale?: { x: number; y: number; z: number };
 }
 
 export interface Scene {
