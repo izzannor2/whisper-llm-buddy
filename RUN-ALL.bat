@@ -123,7 +123,7 @@ if not errorlevel 1 (
     goto :agent_ready
 )
 echo  Starting agent...
-start "AI Agent" cmd /k ""!NODE_BIN!" server\index.cjs"
+start "AI Agent" cmd /k call "!NODE_BIN!" server\index.cjs
 echo  Waiting for agent on :3847 ...
 set "AGENT_OK=0"
 for /l %%i in (1,1,15) do (
