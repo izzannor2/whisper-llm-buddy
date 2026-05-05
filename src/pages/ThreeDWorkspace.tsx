@@ -506,6 +506,20 @@ export default function ThreeDWorkspace() {
               )}
             </Card>
 
+            <AIAssistantPanel
+              scad={scad}
+              scene={scene}
+              selected={selectedNode}
+              bbox={viewerInfo?.bbox ?? null}
+              referenceImage={referenceImage}
+              sketchImage={sketchImage}
+              printer={printer}
+              onResultScad={(s) => { setMode('code'); setScad(s); }}
+              onState={(s, msg) => { setAssistantState(s); if (msg) setStatusMsg(msg); }}
+            />
+            <ReferenceImagePanel imageDataUrl={referenceImage} onChange={setReferenceImage} />
+            <SketchPad saved={sketchImage} onSave={setSketchImage} />
+            <PrinterConstraintsPanel value={printer} onChange={setPrinter} />
             <AIModifyPanel scad={scad} onResult={(s) => { setMode('code'); setScad(s); }} onStatus={setStatusMsg} />
             <AcceptanceChecklist />
           </div>
