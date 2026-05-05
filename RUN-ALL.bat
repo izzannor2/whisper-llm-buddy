@@ -138,12 +138,15 @@ echo  [..]  Verifying services...
 set "AGENT_OK=0"
 set "SNAP_OK=0"
 set "DEV_OK=0"
+set "THREED_OK=0"
 curl -s --max-time 2 http://127.0.0.1:3847/status >nul 2>&1 && set "AGENT_OK=1"
 curl -s --max-time 2 http://127.0.0.1:3847/debug/snapshot >nul 2>&1 && set "SNAP_OK=1"
 curl -s --max-time 2 http://127.0.0.1:8080/dev-server/status >nul 2>&1 && set "DEV_OK=1"
+curl -s --max-time 2 http://127.0.0.1:3847/3d/status >nul 2>&1 && set "THREED_OK=1"
 if "!AGENT_OK!"=="1" (echo  [OK]   /status) else (echo  [WARN] /status not responding)
 if "!SNAP_OK!"=="1"  (echo  [OK]   /debug/snapshot) else (echo  [WARN] /debug/snapshot not responding)
 if "!DEV_OK!"=="1"   (echo  [OK]   /dev-server/status) else (echo  [INFO] /dev-server/status not responding ^(may be normal^))
+if "!THREED_OK!"=="1" (echo  [OK]   /3d/status) else (echo  [WARN] /3d/status not responding)
 
 start "" "http://localhost:8080"
 
