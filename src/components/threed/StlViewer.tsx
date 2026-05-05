@@ -240,6 +240,18 @@ export function StlViewer({ stl, className, onInfo, onScreenshot }: StlViewerPro
     ctrl.update();
   };
 
+  const screenshot = () => {
+    const r = rendererRef.current; const s = sceneRef.current; const c = cameraRef.current;
+    if (!r || !s || !c) return;
+    r.render(s, c);
+    try {
+      const url = r.domElement.toDataURL('image/png');
+      onScreenshot?.(url);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'preview.png'; a.click();
+    } catch (e) { console.error('screenshot failed', e); }
+  };
+
   return (
     <div className="relative w-full h-full">
       <div ref={mountRef} className={className} style={{ width: '100%', height: '100%' }} />
@@ -277,6 +289,9 @@ export function StlViewer({ stl, className, onInfo, onScreenshot }: StlViewerPro
         </Button>
         <Button size="icon" variant={showAxes ? 'default' : 'ghost'} className="h-7 w-7" title="Axes" onClick={() => setShowAxes(v => !v)}>
           <Move3d className="w-3.5 h-3.5" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-7 w-7" title="Screenshot" onClick={screenshot}>
+          <Camera className="w-3.5 h-3.5" />
         </Button>
       </div>
 
