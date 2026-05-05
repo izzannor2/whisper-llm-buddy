@@ -100,3 +100,16 @@ export function downloadBlob(data: BlobPart, filename: string, mime: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+export async function savePreview(name: string, dataUrl: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await fetch(`${AGENT}/3d/project/${encodeURIComponent(name)}/preview`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ png: dataUrl }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: j.error || `HTTP ${r.status}` };
+    return { ok: true };
+  } catch { return { ok: false, error: OFFLINE_MSG }; }
+}
