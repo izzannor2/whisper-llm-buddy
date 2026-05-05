@@ -4,7 +4,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Button } from '@/components/ui/button';
 import {
-  RotateCcw, Maximize2, RefreshCw, Box as BoxIcon, Grid3x3, Move3d, Eye,
+  RotateCcw, Maximize2, RefreshCw, Box as BoxIcon, Grid3x3, Move3d, Eye, Camera,
 } from 'lucide-react';
 
 export interface StlViewerInfo {
@@ -21,6 +21,7 @@ interface StlViewerProps {
   stl?: ArrayBuffer | null;
   className?: string;
   onInfo?: (info: StlViewerInfo) => void;
+  onScreenshot?: (dataUrl: string) => void;
 }
 
 function computeVolume(geom: THREE.BufferGeometry): number {
@@ -42,7 +43,7 @@ function computeVolume(geom: THREE.BufferGeometry): number {
   return Math.abs(sum);
 }
 
-export function StlViewer({ stl, className, onInfo }: StlViewerProps) {
+export function StlViewer({ stl, className, onInfo, onScreenshot }: StlViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -77,7 +78,7 @@ export function StlViewer({ stl, className, onInfo }: StlViewerProps) {
     camera.position.set(60, 60, 60);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(width, height);
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -239,6 +240,18 @@ export function StlViewer({ stl, className, onInfo }: StlViewerProps) {
     ctrl.update();
   };
 
+  const screenshot = () => {
+    const r = rendererRef.current; const s = sceneRef.current; const c = cameraRef.current;
+    if (!r || !s || !c) return;
+    r.render(s, c);
+    try {
+      const url = r.domElement.toDataURL('image/png');
+      onScreenshot?.(url);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'preview.png'; a.click();
+    } catch (e) { console.error('screenshot failed', e); }
+  };
+
   return (
     <div className="relative w-full h-full">
       <div ref={mountRef} className={className} style={{ width: '100%', height: '100%' }} />
@@ -276,6 +289,9 @@ export function StlViewer({ stl, className, onInfo }: StlViewerProps) {
         </Button>
         <Button size="icon" variant={showAxes ? 'default' : 'ghost'} className="h-7 w-7" title="Axes" onClick={() => setShowAxes(v => !v)}>
           <Move3d className="w-3.5 h-3.5" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-7 w-7" title="Screenshot" onClick={screenshot}>
+          <Camera className="w-3.5 h-3.5" />
         </Button>
       </div>
 

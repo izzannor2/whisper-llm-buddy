@@ -707,6 +707,64 @@ app.get('/3d/diagnostics', (req, res) => {
   });
 });
 
+// GET /3d/projects — list saved 3D projects under projects/3d/
+app.get('/3d/projects', (req, res) => {
+  const dir = threeDProjectsDir();
+  try {
+    if (!fs.existsSync(dir)) return res.json({ ok: true, projects: [] });
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => {
+        const p = path.join(dir, e.name);
+        const scad = path.join(p, 'model.scad');
+        const stl = path.join(p, 'model.stl');
+        const meta = path.join(p, 'metadata.json');
+        const preview = path.join(p, 'preview.png');
+        let metaJson = {};
+        try { if (fs.existsSync(meta)) metaJson = JSON.parse(fs.readFileSync(meta, 'utf8')); } catch {}
+        return {
+          name: e.name,
+          dir: p,
+          hasScad: fs.existsSync(scad),
+          hasStl: fs.existsSync(stl),
+          hasPreview: fs.existsSync(preview),
+          stlBytes: fs.existsSync(stl) ? fs.statSync(stl).size : 0,
+          scadBytes: fs.existsSync(scad) ? fs.statSync(scad).size : 0,
+          metadata: metaJson,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ ok: true, projects: entries, projectsDir: dir });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /3d/project/:name/scad — load saved SCAD
+app.get('/3d/project/:name/scad', (req, res) => {
+  const safeName = String(req.params.name).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+  const fp = path.join(threeDProjectsDir(), safeName, 'model.scad');
+  if (!fs.existsSync(fp)) return res.status(404).json({ ok: false, error: 'not found' });
+  try { res.json({ ok: true, name: safeName, scad: fs.readFileSync(fp, 'utf8') }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// POST /3d/project/:name/preview — save a PNG preview (base64 in body.png)
+app.post('/3d/project/:name/preview', (req, res) => {
+  const safeName = String(req.params.name).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+  const dir = path.join(threeDProjectsDir(), safeName);
+  const { png } = req.body || {};
+  if (typeof png !== 'string') return res.status(400).json({ ok: false, error: 'png (base64) required' });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const b64 = png.replace(/^data:image\/png;base64,/, '');
+    fs.writeFileSync(path.join(dir, 'preview.png'), Buffer.from(b64, 'base64'));
+    res.json({ ok: true, path: path.join(dir, 'preview.png') });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Restart portable Ollama with the project's .ollama folder
 app.post('/agent/restart-ollama', requireSession, (req, res) => {
   const portableBin = path.join(PROJECT_ROOT, 'bin', 'ollama', process.platform === 'win32' ? 'ollama.exe' : 'ollama');
