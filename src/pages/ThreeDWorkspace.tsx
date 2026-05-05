@@ -114,7 +114,7 @@ export default function ThreeDWorkspace() {
     }
     setPipeline('rendering');
     setRenderError(null);
-    const r = await renderStl(scad, name || 'model');
+    const r = await renderStl(working, name || 'model');
     setLastRender(r);
     if (!r.ok || !r.stl || r.stl.byteLength <= 100) {
       const stderr = r.stderr || '';
