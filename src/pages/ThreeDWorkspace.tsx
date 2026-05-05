@@ -200,7 +200,15 @@ export default function ThreeDWorkspace() {
                     <Download className="w-3.5 h-3.5 mr-1.5" />.scad
                   </Button>
                   <Button size="sm" variant="ghost" onClick={handleExportStl} disabled={!scad}>
-                    <Download className="w-3.5 h-3.5 mr-1.5" />.stl
+                    <Download className="w-3.5 h-3.5 mr-1.5" />Render .stl
+                  </Button>
+                  {stl && (
+                    <Button size="sm" variant="ghost" onClick={() => downloadBlob(stl, `${name || 'model'}.stl`, 'application/sla')}>
+                      <Download className="w-3.5 h-3.5 mr-1.5" />Save .stl
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={copyDebug}>
+                    <Bug className="w-3.5 h-3.5 mr-1.5" />Debug
                   </Button>
                 </div>
               </div>
