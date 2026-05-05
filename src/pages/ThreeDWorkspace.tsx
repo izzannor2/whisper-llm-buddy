@@ -114,15 +114,25 @@ export default function ThreeDWorkspace() {
       return;
     }
     const r = await renderStl(scad, name || 'model');
+    setLastRender(r);
     if (!r.ok || !r.stl) {
       setStatus('error');
       setStatusMsg(r.error || 'Render failed');
+      setPreviewState('error');
       return;
     }
+    if (r.stl.byteLength <= 100) {
+      setStatus('error');
+      setStatusMsg(`STL too small (${r.stl.byteLength} bytes). Likely empty geometry.`);
+      setPreviewState('error');
+      return;
+    }
+    setPreviewState('loading');
     setStl(r.stl);
+    const kb = (r.stl.byteLength / 1024).toFixed(1);
     setStatus('done');
-    setStatusMsg('STL rendered.');
-    downloadBlob(r.stl, `${name || 'model'}.stl`, 'application/sla');
+    setStatusMsg(`STL rendered: ${kb} KB. Previewing…`);
+    // Preview first; user can download via .stl button
   };
 
   return (
