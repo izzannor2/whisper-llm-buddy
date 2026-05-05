@@ -1,12 +1,39 @@
 @echo off
-setlocal enabledelayedexpansion
 title AI Companion Hub - RUN-ALL (Portable)
 color 0A
 
 :: ============================================================
-:: ONE-CLICK MASTER LAUNCHER
-:: Visible failures. Agent verified before frontend launches.
+:: STAGE 0 - Transcript logging wrapper
+:: Re-exec self piped through PowerShell Tee so EVERY line of
+:: output (including crashes) is written to logs\run-all.log
+:: while still being visible on screen.
 :: ============================================================
+cd /d "%~dp0"
+if not exist "logs" mkdir "logs" 2>nul
+if not defined _RUNALL_LOGGED (
+    set "_RUNALL_LOGGED=1"
+    echo [RUN-ALL] Transcript: %~dp0logs\run-all.log
+    echo [RUN-ALL] Started %DATE% %TIME% > "logs\run-all.log"
+    where powershell >nul 2>&1
+    if not errorlevel 1 (
+        cmd /c ""%~f0" %*" 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath 'logs\run-all.log' -Append"
+    ) else (
+        cmd /c ""%~f0" %*" >> "logs\run-all.log" 2>&1
+        type "logs\run-all.log"
+    )
+    echo.
+    echo [RUN-ALL] Exit code: %ERRORLEVEL%  ^(full log: logs\run-all.log^)
+    pause
+    exit /b %ERRORLEVEL%
+)
+
+setlocal enabledelayedexpansion
+:: Verbose echo when DEBUG=1
+if /I "%DEBUG%"=="1" @echo on
+
+:: Trap - any unhandled goto/label miss lands here
+if 0==1 goto :crash_dump
+
 cd /d "%~dp0"
 set "PROJECT_ROOT=%CD%"
 set "OLLAMA_MODELS=%PROJECT_ROOT%\.ollama"
@@ -18,11 +45,33 @@ echo  ============================================================
 echo    AI Companion Hub - RUN-ALL
 echo  ============================================================
 echo.
-echo  === PATH CHECK ===
+echo  === ENVIRONMENT DUMP ===
+echo  Date/Time : %DATE% %TIME%
+echo  User      : %USERNAME%
+echo  Computer  : %COMPUTERNAME%
+echo  OS        : %OS%
+echo  CWD       : %CD%
 echo  PROJECT_ROOT=%PROJECT_ROOT%
-echo  Node candidates:
-where node 2>nul
-if exist "bin\node\node.exe" echo  Portable: %PROJECT_ROOT%\bin\node\node.exe
+echo  COMSPEC   : %COMSPEC%
+echo  PATHEXT   : %PATHEXT%
+echo.
+echo  === TOOL CHECK ===
+echo  - where node:
+where node 2>&1
+echo  - where npm:
+where npm 2>&1
+echo  - where curl:
+where curl 2>&1
+echo  - where powershell:
+where powershell 2>&1
+echo  - where taskkill:
+where taskkill 2>&1
+if exist "bin\node\node.exe" (
+    echo  - Portable node: %PROJECT_ROOT%\bin\node\node.exe
+    "bin\node\node.exe" --version 2>&1
+) else (
+    echo  - Portable node: NOT PRESENT
+)
 echo  ==================
 echo.
 
@@ -194,5 +243,18 @@ echo    Logs:   %PROJECT_ROOT%\logs\
 echo  ============================================================
 echo.
 echo  Closing this window does NOT stop services. Use STOP-PORTABLE-AI.bat to stop.
+echo  Full transcript saved to: %PROJECT_ROOT%\logs\run-all.log
 pause >nul
 endlocal
+exit /b 0
+
+:crash_dump
+echo.
+echo  ============================================================
+echo    [CRASH] RUN-ALL.bat hit unexpected error path
+echo  ============================================================
+echo    Last errorlevel : %ERRORLEVEL%
+echo    See logs\run-all.log for full transcript.
+echo  ============================================================
+pause
+exit /b 1
