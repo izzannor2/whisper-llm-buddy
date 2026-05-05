@@ -18,7 +18,7 @@ import { SceneTree } from '@/components/threed/SceneTree';
 import { ShapeProperties } from '@/components/threed/ShapeProperties';
 import { AIModifyPanel } from '@/components/threed/AIModifyPanel';
 import { ProjectsPanel } from '@/components/threed/ProjectsPanel';
-import { SCAD_TEMPLATES, generateScadWithFix, validateScad } from '@/lib/openscad';
+import { SCAD_TEMPLATES, generateScadWithFix, validateScad, autoFixScad } from '@/lib/openscad';
 import { downloadBlob, get3DStatus, getOpenScadStatus, renderStl, saveScad, savePreview, type RenderStlResult } from '@/lib/stl-export';
 import {
   createNode, emptyScene, sceneToScad, SCENE_TEMPLATES, type Scene, type SceneNode, type ShapeKind,
