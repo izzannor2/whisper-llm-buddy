@@ -25,6 +25,8 @@ call :check_file src\components\ide\PreviewHealthCard.tsx
 call :check_file src\lib\prompt-presets.ts
 call :check_file scripts\route-smoke-test.mjs
 call :check_file scripts\route-smoke-test.bat
+call :check_file src\pages\ThreeDWorkspace.tsx
+call :check_file src\components\threed\AcceptanceChecklist.tsx
 
 call :check_wraps start.bat "RUN-ALL.bat"
 call :check_wraps START-PORTABLE-AI.bat "RUN-ALL.bat"
@@ -37,6 +39,12 @@ call :check_url /updates/applied       http://127.0.0.1:3847/updates/applied
 call :check_url /agent/ollama-info     http://127.0.0.1:3847/agent/ollama-info
 call :check_url /scan/gguf             http://127.0.0.1:3847/scan/gguf
 call :check_url /scan/ollama           http://127.0.0.1:3847/scan/ollama
+call :check_url /3d/status             http://127.0.0.1:3847/3d/status
+call :check_url /3d/diagnostics        http://127.0.0.1:3847/3d/diagnostics
+call :check_url /openscad/status       http://127.0.0.1:3847/openscad/status
+
+call :check_save_scad
+call :check_render_stl
 
 call :check_models_ok ollama  http://127.0.0.1:11434/api/tags
 call :check_models_ok gguf    http://127.0.0.1:3847/scan/gguf
