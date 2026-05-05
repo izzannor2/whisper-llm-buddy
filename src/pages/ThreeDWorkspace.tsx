@@ -316,23 +316,38 @@ export default function ThreeDWorkspace() {
         <Box className="w-5 h-5 text-accent" />
         <h1 className="text-sm font-semibold">3D Printing CAD</h1>
         <div className="ml-auto flex items-center gap-3">
+          <span className="text-[10px] font-mono text-muted-foreground">
+            assistant: <span className={
+              assistantState === 'ready' ? 'text-green-400' :
+              assistantState === 'error' ? 'text-destructive' :
+              assistantState === 'idle' ? 'text-muted-foreground' : 'text-amber-400'
+            }>{assistantState}</span>
+          </span>
           <VoiceControls
             onTranscript={(t) => {
-              if (scad.trim()) {
-                // Voice-driven modify: route through autoFix-style AI edit on current SCAD.
-                setStatusMsg(`Voice modify: "${t}"…`);
-                autoFixScad(scad, [`User voice request: ${t}. Modify only what is asked.`])
-                  .then((next) => {
-                    if (next && next.trim()) {
-                      setMode('code');
-                      setScad(next);
-                      setStatusMsg('Voice modify applied.');
-                    }
-                  })
-                  .catch((e) => setStatusMsg(e instanceof Error ? e.message : 'Voice modify failed.'));
-              } else {
-                setPrompt((p) => (p ? p + ' ' + t : t));
-              }
+              const text = t.trim();
+              if (!text) return;
+              setStatusMsg(`Voice: "${text}"…`);
+              setAssistantState('thinking');
+              const partHint = selectedNode ? ` (selected part: ${selectedNode.name} [${selectedNode.kind}])` : '';
+              const userReq = `${text}${partHint}. Modify only what is asked. Keep the rest of the model intact.`;
+              autoFixScad(scad || '// empty', [userReq])
+                .then((next) => {
+                  if (next && next.trim()) {
+                    setAssistantState('updating');
+                    setMode('code');
+                    setScad(next);
+                    setAssistantState('ready');
+                    setStatusMsg('Voice change applied.');
+                  } else {
+                    setAssistantState('error');
+                    setStatusMsg('AI returned no code.');
+                  }
+                })
+                .catch((e) => {
+                  setAssistantState('error');
+                  setStatusMsg(e instanceof Error ? e.message : 'Voice modify failed.');
+                });
             }}
             speakText={statusMsg || (scad ? 'OpenSCAD model ready.' : '')}
           />
