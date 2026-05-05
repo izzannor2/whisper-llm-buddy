@@ -23,6 +23,27 @@ export default function ThreeDWorkspace() {
   const [statusMsg, setStatusMsg] = useState<string>('');
   const [openScadAvailable, setOpenScadAvailable] = useState<boolean | null>(null);
   const [name, setName] = useState('model');
+  const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'parsed' | 'error'>('idle');
+  const [viewerInfo, setViewerInfo] = useState<StlViewerInfo | null>(null);
+  const [lastRender, setLastRender] = useState<RenderStlResult | null>(null);
+
+  const copyDebug = async () => {
+    const debug = {
+      generatedAt: new Date().toISOString(),
+      name,
+      scad,
+      scadBytes: scad.length,
+      stlBytes: lastRender?.bytes ?? null,
+      contentType: lastRender?.contentType ?? null,
+      stlPath: lastRender?.stlPath ?? null,
+      openscadStderr: lastRender?.stderr ?? null,
+      renderError: lastRender?.error ?? null,
+      previewState,
+      viewer: viewerInfo,
+    };
+    await navigator.clipboard.writeText(JSON.stringify(debug, null, 2));
+    toast({ title: '3D debug copied' });
+  };
 
   const checkOpenScad = async () => {
     const s = await getOpenScadStatus();
