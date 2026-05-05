@@ -84,13 +84,33 @@ export default function ThreeDWorkspace() {
     if (renderingRef.current) { queuedRef.current = true; return; }
     renderingRef.current = true;
     setPipeline('validating');
-    const v = validateScad(scad);
+    let working = scad;
+    let v = validateScad(working);
     setValidationErrors(v.errors);
     if (!v.ok) {
-      setPipeline('error');
-      setStale(stl !== null);
-      renderingRef.current = false;
-      return;
+      // Try one AI auto-fix pass before giving up.
+      try {
+        setStatusMsg(`Auto-fixing SCAD: ${v.errors[0]}`);
+        const fixed = await autoFixScad(working, v.errors);
+        const v2 = validateScad(fixed);
+        if (v2.ok) {
+          working = fixed;
+          setScad(fixed);
+          setValidationErrors([]);
+          setStatusMsg('Auto-fix applied.');
+        } else {
+          setValidationErrors(v2.errors);
+          setPipeline('error');
+          setStale(stl !== null);
+          renderingRef.current = false;
+          return;
+        }
+      } catch {
+        setPipeline('error');
+        setStale(stl !== null);
+        renderingRef.current = false;
+        return;
+      }
     }
     setPipeline('rendering');
     setRenderError(null);
