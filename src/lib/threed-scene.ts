@@ -26,6 +26,7 @@ export interface SceneNode {
   params: Record<string, number | string>;
   pos: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number };
+  scale?: { x: number; y: number; z: number };
 }
 
 export interface Scene {
@@ -224,6 +225,7 @@ export function createNode(kind: ShapeKind, op: Op = 'union'): SceneNode {
     params: { ...def.defaults },
     pos: { x: 0, y: 0, z: 0 },
     rot: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
   };
 }
 
@@ -234,7 +236,9 @@ export function emptyScene(): Scene {
 function nodeToScad(n: SceneNode): string {
   const def = SHAPE_DEFS[n.kind];
   const body = def.toScad(n.params);
-  const inner = `translate([${n.pos.x}, ${n.pos.y}, ${n.pos.z}]) rotate([${n.rot.x}, ${n.rot.y}, ${n.rot.z}]) { ${body} }`;
+  const sx = n.scale?.x ?? 1, sy = n.scale?.y ?? 1, sz = n.scale?.z ?? 1;
+  const scaleWrap = (sx !== 1 || sy !== 1 || sz !== 1) ? `scale([${sx}, ${sy}, ${sz}]) ` : '';
+  const inner = `translate([${n.pos.x}, ${n.pos.y}, ${n.pos.z}]) rotate([${n.rot.x}, ${n.rot.y}, ${n.rot.z}]) ${scaleWrap}{ ${body} }`;
   return `// ${n.name} [${n.kind}]\n${inner}`;
 }
 

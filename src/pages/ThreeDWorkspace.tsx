@@ -23,6 +23,12 @@ import { downloadBlob, get3DStatus, getOpenScadStatus, renderStl, saveScad, save
 import {
   createNode, emptyScene, sceneToScad, SCENE_TEMPLATES, type Scene, type SceneNode, type ShapeKind,
 } from '@/lib/threed-scene';
+import { snapCenterToCenter, snapAlignAxis, snapFaceToFace } from '@/lib/threed-snap';
+import { SceneViewer } from '@/components/threed/SceneViewer';
+import { ReferenceImagePanel } from '@/components/threed/ReferenceImagePanel';
+import { SketchPad } from '@/components/threed/SketchPad';
+import { PrinterConstraintsPanel, DEFAULT_PRINTER, checkPrintability, type PrinterConstraints } from '@/components/threed/PrinterConstraintsPanel';
+import { AIAssistantPanel, type AssistantState } from '@/components/threed/AIAssistantPanel';
 
 type Pipeline = 'idle' | 'editing' | 'validating' | 'rendering' | 'ready' | 'error';
 
@@ -52,6 +58,12 @@ export default function ThreeDWorkspace() {
     try { return localStorage.getItem(LIVE_KEY) !== '0'; } catch { return true; }
   });
   const [projectsReload, setProjectsReload] = useState(0);
+  const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  const [sketchImage, setSketchImage] = useState<string | null>(null);
+  const [printer, setPrinter] = useState<PrinterConstraints>(DEFAULT_PRINTER);
+  const [assistantState, setAssistantState] = useState<AssistantState>('idle');
+  const [viewerTab, setViewerTab] = useState<'scene' | 'stl'>('scene');
+  const [snapBuddy, setSnapBuddy] = useState<string | null>(null); // second selected node for snap ops
 
   const debounceRef = useRef<number | null>(null);
   const renderingRef = useRef(false);
@@ -183,6 +195,30 @@ export default function ThreeDWorkspace() {
     });
   const setOpForSelected = (op: SceneNode['op']) => { if (selectedId) updateNode(selectedId, { op }); };
 
+  // Snap ops use selected as target, snapBuddy as reference.
+  const applySnap = (kind: 'face+x' | 'face-x' | 'face+y' | 'face-y' | 'face+z' | 'face-z' | 'center' | 'alignX' | 'alignY' | 'alignZ') => {
+    if (!selectedId || !snapBuddy || selectedId === snapBuddy) {
+      toast({ variant: 'destructive', title: 'Pick two parts', description: 'Select a target part, then choose a reference part in the snap row.' });
+      return;
+    }
+    const target = scene.nodes.find((n) => n.id === selectedId);
+    const ref = scene.nodes.find((n) => n.id === snapBuddy);
+    if (!target || !ref) return;
+    let patch: Partial<SceneNode> | null = null;
+    if (kind === 'center') patch = snapCenterToCenter(target, ref);
+    else if (kind === 'alignX') patch = snapAlignAxis(target, ref, 'x');
+    else if (kind === 'alignY') patch = snapAlignAxis(target, ref, 'y');
+    else if (kind === 'alignZ') patch = snapAlignAxis(target, ref, 'z');
+    else {
+      const axis = kind[5] as 'x' | 'y' | 'z';
+      const side: 1 | -1 = kind[4] === '+' ? 1 : -1;
+      patch = snapFaceToFace(target, ref, axis, side);
+    }
+    if (patch) updateNode(selectedId, patch);
+  };
+  const setOpFor = (id: string, op: SceneNode['op']) => updateNode(id, { op });
+
+
   const handleGenerate = async () => {
     if (!prompt.trim()) { toast({ variant: 'destructive', title: 'Enter a prompt' }); return; }
     setStatus('thinking');
@@ -280,23 +316,38 @@ export default function ThreeDWorkspace() {
         <Box className="w-5 h-5 text-accent" />
         <h1 className="text-sm font-semibold">3D Printing CAD</h1>
         <div className="ml-auto flex items-center gap-3">
+          <span className="text-[10px] font-mono text-muted-foreground">
+            assistant: <span className={
+              assistantState === 'ready' ? 'text-green-400' :
+              assistantState === 'error' ? 'text-destructive' :
+              assistantState === 'idle' ? 'text-muted-foreground' : 'text-amber-400'
+            }>{assistantState}</span>
+          </span>
           <VoiceControls
             onTranscript={(t) => {
-              if (scad.trim()) {
-                // Voice-driven modify: route through autoFix-style AI edit on current SCAD.
-                setStatusMsg(`Voice modify: "${t}"…`);
-                autoFixScad(scad, [`User voice request: ${t}. Modify only what is asked.`])
-                  .then((next) => {
-                    if (next && next.trim()) {
-                      setMode('code');
-                      setScad(next);
-                      setStatusMsg('Voice modify applied.');
-                    }
-                  })
-                  .catch((e) => setStatusMsg(e instanceof Error ? e.message : 'Voice modify failed.'));
-              } else {
-                setPrompt((p) => (p ? p + ' ' + t : t));
-              }
+              const text = t.trim();
+              if (!text) return;
+              setStatusMsg(`Voice: "${text}"…`);
+              setAssistantState('thinking');
+              const partHint = selectedNode ? ` (selected part: ${selectedNode.name} [${selectedNode.kind}])` : '';
+              const userReq = `${text}${partHint}. Modify only what is asked. Keep the rest of the model intact.`;
+              autoFixScad(scad || '// empty', [userReq])
+                .then((next) => {
+                  if (next && next.trim()) {
+                    setAssistantState('updating');
+                    setMode('code');
+                    setScad(next);
+                    setAssistantState('ready');
+                    setStatusMsg('Voice change applied.');
+                  } else {
+                    setAssistantState('error');
+                    setStatusMsg('AI returned no code.');
+                  }
+                })
+                .catch((e) => {
+                  setAssistantState('error');
+                  setStatusMsg(e instanceof Error ? e.message : 'Voice modify failed.');
+                });
             }}
             speakText={statusMsg || (scad ? 'OpenSCAD model ready.' : '')}
           />
@@ -313,6 +364,41 @@ export default function ThreeDWorkspace() {
               <Button size="sm" variant="outline" className="h-7 flex-1 text-[10px]" onClick={() => setOpForSelected('union')} disabled={!selectedNode}>Union</Button>
               <Button size="sm" variant="outline" className="h-7 flex-1 text-[10px]" onClick={() => setOpForSelected('difference')} disabled={!selectedNode}>Cut</Button>
               <Button size="sm" variant="outline" className="h-7 flex-1 text-[10px]" onClick={() => setOpForSelected('intersection')} disabled={!selectedNode}>∩</Button>
+            </div>
+            {/* Snap / connect tools */}
+            <div className="border border-border rounded-md bg-muted/20 p-2 space-y-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Snap / Connect</div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground">Reference part:</span>
+                <select
+                  value={snapBuddy ?? ''}
+                  onChange={(e) => setSnapBuddy(e.target.value || null)}
+                  className="flex-1 h-6 text-[10px] rounded border border-input bg-background"
+                >
+                  <option value="">— choose —</option>
+                  {scene.nodes.filter((n) => n.id !== selectedId).map((n) => (
+                    <option key={n.id} value={n.id}>{n.name} [{n.kind}]</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-3 gap-1 text-[10px]">
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('center')}>Center</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('alignX')}>Align X</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('alignY')}>Align Y</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('alignZ')}>Align Z</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face+x')}>Face +X</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face-x')}>Face −X</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face+y')}>Face +Y</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face-y')}>Face −Y</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => applySnap('face+z')}>Face +Z</Button>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" disabled={!selectedId} onClick={() => selectedId && setOpFor(selectedId, 'union')}>Merge (union)</Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" disabled={!selectedId} onClick={() => selectedId && setOpFor(selectedId, 'difference')}>Cut (subtract)</Button>
+              </div>
+              <p className="text-[9px] text-muted-foreground leading-snug">
+                Approximate: face/center snaps use primitive params, not exact OpenSCAD geometry.
+              </p>
             </div>
             <SceneTree
               nodes={scene.nodes}
@@ -420,6 +506,20 @@ export default function ThreeDWorkspace() {
               )}
             </Card>
 
+            <AIAssistantPanel
+              scad={scad}
+              scene={scene}
+              selected={selectedNode}
+              bbox={viewerInfo?.bbox ?? null}
+              referenceImage={referenceImage}
+              sketchImage={sketchImage}
+              printer={printer}
+              onResultScad={(s) => { setMode('code'); setScad(s); }}
+              onState={(s, msg) => { setAssistantState(s); if (msg) setStatusMsg(msg); }}
+            />
+            <ReferenceImagePanel imageDataUrl={referenceImage} onChange={setReferenceImage} />
+            <SketchPad saved={sketchImage} onSave={setSketchImage} />
+            <PrinterConstraintsPanel value={printer} onChange={setPrinter} />
             <AIModifyPanel scad={scad} onResult={(s) => { setMode('code'); setScad(s); }} onStatus={setStatusMsg} />
             <AcceptanceChecklist />
           </div>
@@ -437,8 +537,27 @@ export default function ThreeDWorkspace() {
               {viewerInfo?.bbox && <span>bbox: {viewerInfo.bbox.x}×{viewerInfo.bbox.y}×{viewerInfo.bbox.z} mm</span>}
               {viewerInfo && <span>tris: {viewerInfo.triangles.toLocaleString()}</span>}
             </div>
+            <div className="px-3 py-1 border-b border-border flex items-center gap-2 bg-muted/20">
+              <Tabs value={viewerTab} onValueChange={(v) => setViewerTab(v as 'scene' | 'stl')}>
+                <TabsList className="h-7">
+                  <TabsTrigger value="scene" className="text-[10px] h-6 px-2">Interactive Scene</TabsTrigger>
+                  <TabsTrigger value="stl" className="text-[10px] h-6 px-2">STL Preview</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <span className="text-[10px] text-muted-foreground ml-auto">
+                {viewerTab === 'scene' ? 'click parts · drag gizmo · auto-updates SCAD' : 'final OpenSCAD-rendered geometry'}
+              </span>
+            </div>
             <div className="flex-1 min-h-0">
-              {stl ? (
+              {viewerTab === 'scene' ? (
+                <SceneViewer
+                  scene={scene}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onUpdate={updateNode}
+                  onScreenshot={(u) => { lastScreenshotRef.current = u; }}
+                />
+              ) : stl ? (
                 <StlViewer stl={stl} onInfo={setViewerInfo} onScreenshot={(u) => { lastScreenshotRef.current = u; }} />
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
@@ -446,6 +565,16 @@ export default function ThreeDWorkspace() {
                 </div>
               )}
             </div>
+
+            {(() => {
+              const warnings = checkPrintability(viewerInfo?.bbox ?? null, printer);
+              return warnings.length ? (
+                <div className="border-t border-amber-500/40 bg-amber-500/10 p-2 text-[10px] text-amber-300 font-mono space-y-0.5">
+                  <div className="font-semibold">Printability warnings (approximate):</div>
+                  {warnings.map((w, i) => <div key={i}>• {w}</div>)}
+                </div>
+              ) : null;
+            })()}
 
             {renderError && (
               <div className="border-t border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive font-mono space-y-1">

@@ -19,6 +19,8 @@ export function ShapeProperties({ node, onChange }: Props) {
   };
   const setPos = (axis: 'x' | 'y' | 'z', v: string) => onChange({ pos: { ...node.pos, [axis]: parseFloat(v) || 0 } });
   const setRot = (axis: 'x' | 'y' | 'z', v: string) => onChange({ rot: { ...node.rot, [axis]: parseFloat(v) || 0 } });
+  const setScale = (axis: 'x' | 'y' | 'z', v: string) => onChange({ scale: { ...(node.scale ?? { x: 1, y: 1, z: 1 }), [axis]: parseFloat(v) || 1 } });
+  const sc = node.scale ?? { x: 1, y: 1, z: 1 };
 
   return (
     <div className="border border-border rounded-md bg-muted/20 p-2 space-y-2">
@@ -47,6 +49,11 @@ export function ShapeProperties({ node, onChange }: Props) {
         <Label className="text-xs col-span-2 mt-1 text-muted-foreground">Rotation (deg)</Label>
         {(['x', 'y', 'z'] as const).map((a) => (
           <FieldRow key={`r${a}`} label={`Rot ${a.toUpperCase()}`} value={String(node.rot[a])} type="number" step={5} onChange={(v) => setRot(a, v)} />
+        ))}
+
+        <Label className="text-xs col-span-2 mt-1 text-muted-foreground">Scale</Label>
+        {(['x', 'y', 'z'] as const).map((a) => (
+          <FieldRow key={`s${a}`} label={`Scale ${a.toUpperCase()}`} value={String(sc[a])} type="number" step={0.1} onChange={(v) => setScale(a, v)} />
         ))}
       </div>
     </div>
