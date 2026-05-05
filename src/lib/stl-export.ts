@@ -44,7 +44,18 @@ export async function saveScad(scad: string, name: string): Promise<{ ok: boolea
   }
 }
 
-export async function renderStl(scad: string, name: string): Promise<{ ok: boolean; stl?: ArrayBuffer; error?: string; missing?: boolean }> {
+export interface RenderStlResult {
+  ok: boolean;
+  stl?: ArrayBuffer;
+  error?: string;
+  missing?: boolean;
+  bytes?: number;
+  contentType?: string;
+  stlPath?: string | null;
+  stderr?: string | null;
+}
+
+export async function renderStl(scad: string, name: string): Promise<RenderStlResult> {
   let r: Response;
   try {
     r = await fetch(`${AGENT}/openscad/render`, {
@@ -56,25 +67,28 @@ export async function renderStl(scad: string, name: string): Promise<{ ok: boole
     return { ok: false, error: 'Local agent is offline. Start RUN-ALL.bat.' };
   }
   const ctype = r.headers.get('content-type') || '';
+  const stlPath = r.headers.get('x-stl-path');
+  const stderrB64 = r.headers.get('x-openscad-stderr');
+  let stderr: string | null = null;
+  try { if (stderrB64) stderr = atob(stderrB64); } catch {}
   if (!r.ok) {
     if (ctype.includes('application/json')) {
       const data = await r.json().catch(() => ({}));
       const msg = data.missing
         ? 'OpenSCAD CLI not installed. Install OpenSCAD to export STL.'
         : (data.error || `HTTP ${r.status}`);
-      return { ok: false, missing: !!data.missing, error: msg };
+      return { ok: false, missing: !!data.missing, error: msg, contentType: ctype, stderr: data.stderr || stderr };
     }
     const text = await r.text().catch(() => '');
-    return { ok: false, error: text || `HTTP ${r.status}` };
+    return { ok: false, error: text || `HTTP ${r.status}`, contentType: ctype, stderr };
   }
-  // Guard: success must be binary STL, never JSON
   if (ctype.includes('application/json')) {
     const data = await r.json().catch(() => ({}));
-    return { ok: false, error: data.error || 'Unexpected JSON response from render' };
+    return { ok: false, error: data.error || 'Unexpected JSON response from render', contentType: ctype, stderr };
   }
   const stl = await r.arrayBuffer();
-  if (!stl || stl.byteLength === 0) return { ok: false, error: 'Empty STL response' };
-  return { ok: true, stl };
+  if (!stl || stl.byteLength === 0) return { ok: false, error: 'Empty STL response', contentType: ctype, stderr };
+  return { ok: true, stl, bytes: stl.byteLength, contentType: ctype, stlPath, stderr };
 }
 
 export function downloadBlob(data: BlobPart, filename: string, mime: string) {
