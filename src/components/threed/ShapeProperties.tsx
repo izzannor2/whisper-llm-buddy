@@ -50,6 +50,15 @@ export function ShapeProperties({ node, onChange }: Props) {
         {(['x', 'y', 'z'] as const).map((a) => (
           <FieldRow key={`r${a}`} label={`Rot ${a.toUpperCase()}`} value={String(node.rot[a])} type="number" step={5} onChange={(v) => setRot(a, v)} />
         ))}
+
+        <Label className="text-xs col-span-2 mt-1 text-muted-foreground">Scale</Label>
+        {(['x', 'y', 'z'] as const).map((a) => (
+          <FieldRow key={`s${a}`} label={`Scale ${a.toUpperCase()}`} value={String(sc[a])} type="number" step={0.1} onChange={(v) => setScale(a, v)} />
+        ))}
+      </div>
+    </div>
+  );
+}
       </div>
     </div>
   );
