@@ -23,6 +23,12 @@ import { downloadBlob, get3DStatus, getOpenScadStatus, renderStl, saveScad, save
 import {
   createNode, emptyScene, sceneToScad, SCENE_TEMPLATES, type Scene, type SceneNode, type ShapeKind,
 } from '@/lib/threed-scene';
+import { snapCenterToCenter, snapAlignAxis, snapFaceToFace } from '@/lib/threed-snap';
+import { SceneViewer } from '@/components/threed/SceneViewer';
+import { ReferenceImagePanel } from '@/components/threed/ReferenceImagePanel';
+import { SketchPad } from '@/components/threed/SketchPad';
+import { PrinterConstraintsPanel, DEFAULT_PRINTER, checkPrintability, type PrinterConstraints } from '@/components/threed/PrinterConstraintsPanel';
+import { AIAssistantPanel, type AssistantState } from '@/components/threed/AIAssistantPanel';
 
 type Pipeline = 'idle' | 'editing' | 'validating' | 'rendering' | 'ready' | 'error';
 
