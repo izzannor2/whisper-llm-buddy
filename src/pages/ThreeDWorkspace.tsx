@@ -18,7 +18,7 @@ import { SceneTree } from '@/components/threed/SceneTree';
 import { ShapeProperties } from '@/components/threed/ShapeProperties';
 import { AIModifyPanel } from '@/components/threed/AIModifyPanel';
 import { ProjectsPanel } from '@/components/threed/ProjectsPanel';
-import { SCAD_TEMPLATES, generateScadWithFix, validateScad } from '@/lib/openscad';
+import { SCAD_TEMPLATES, generateScadWithFix, validateScad, autoFixScad } from '@/lib/openscad';
 import { downloadBlob, get3DStatus, getOpenScadStatus, renderStl, saveScad, savePreview, type RenderStlResult } from '@/lib/stl-export';
 import {
   createNode, emptyScene, sceneToScad, SCENE_TEMPLATES, type Scene, type SceneNode, type ShapeKind,
@@ -84,17 +84,37 @@ export default function ThreeDWorkspace() {
     if (renderingRef.current) { queuedRef.current = true; return; }
     renderingRef.current = true;
     setPipeline('validating');
-    const v = validateScad(scad);
+    let working = scad;
+    let v = validateScad(working);
     setValidationErrors(v.errors);
     if (!v.ok) {
-      setPipeline('error');
-      setStale(stl !== null);
-      renderingRef.current = false;
-      return;
+      // Try one AI auto-fix pass before giving up.
+      try {
+        setStatusMsg(`Auto-fixing SCAD: ${v.errors[0]}`);
+        const fixed = await autoFixScad(working, v.errors);
+        const v2 = validateScad(fixed);
+        if (v2.ok) {
+          working = fixed;
+          setScad(fixed);
+          setValidationErrors([]);
+          setStatusMsg('Auto-fix applied.');
+        } else {
+          setValidationErrors(v2.errors);
+          setPipeline('error');
+          setStale(stl !== null);
+          renderingRef.current = false;
+          return;
+        }
+      } catch {
+        setPipeline('error');
+        setStale(stl !== null);
+        renderingRef.current = false;
+        return;
+      }
     }
     setPipeline('rendering');
     setRenderError(null);
-    const r = await renderStl(scad, name || 'model');
+    const r = await renderStl(working, name || 'model');
     setLastRender(r);
     if (!r.ok || !r.stl || r.stl.byteLength <= 100) {
       const stderr = r.stderr || '';
@@ -261,7 +281,23 @@ export default function ThreeDWorkspace() {
         <h1 className="text-sm font-semibold">3D Printing CAD</h1>
         <div className="ml-auto flex items-center gap-3">
           <VoiceControls
-            onTranscript={(t) => setPrompt((p) => (p ? p + ' ' + t : t))}
+            onTranscript={(t) => {
+              if (scad.trim()) {
+                // Voice-driven modify: route through autoFix-style AI edit on current SCAD.
+                setStatusMsg(`Voice modify: "${t}"…`);
+                autoFixScad(scad, [`User voice request: ${t}. Modify only what is asked.`])
+                  .then((next) => {
+                    if (next && next.trim()) {
+                      setMode('code');
+                      setScad(next);
+                      setStatusMsg('Voice modify applied.');
+                    }
+                  })
+                  .catch((e) => setStatusMsg(e instanceof Error ? e.message : 'Voice modify failed.'));
+              } else {
+                setPrompt((p) => (p ? p + ' ' + t : t));
+              }
+            }}
             speakText={statusMsg || (scad ? 'OpenSCAD model ready.' : '')}
           />
           <StatusPill state={status} message={statusMsg} />

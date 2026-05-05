@@ -83,6 +83,22 @@ export async function generateScad(prompt: string): Promise<string> {
   return stripFences(text || '');
 }
 
+// Ask the AI to repair existing SCAD against validator errors. Used pre-render.
+export async function autoFixScad(code: string, errors: string[]): Promise<string> {
+  if (!errors.length) return code;
+  const settings = loadSettings();
+  const text = await sendChatMessage(
+    [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: `Fix the following OpenSCAD code. Issues: ${errors.join('; ')}.\nReturn ONLY corrected OpenSCAD, no commentary.\n\n${code}` },
+    ],
+    settings,
+    undefined,
+    { role: '3d-printing' } as any,
+  );
+  return stripFences(text || code);
+}
+
 export async function generateScadWithFix(
   prompt: string,
   maxAttempts = 3,
