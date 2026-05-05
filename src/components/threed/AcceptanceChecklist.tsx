@@ -22,6 +22,10 @@ const INITIAL: Check[] = [
   { id: 'save-scad', label: '/3d/save-scad persists model.scad', status: 'pending' },
   { id: 'scad-gen', label: 'OpenSCAD generation creates valid .scad (passes validator)', status: 'pending' },
   { id: 'stl-export', label: 'STL export returns clear missing-OpenSCAD message when CLI absent (no fake STL)', status: 'pending' },
+  { id: 'live-toggle', label: 'Live Preview toggle present and persists', status: 'pending' },
+  { id: 'editor-editable', label: 'SCAD editor is an editable textarea', status: 'pending' },
+  { id: 'viewer-controls', label: 'Viewer has rotate/zoom/wireframe/grid/axes controls', status: 'pending' },
+  { id: 'inspector', label: 'Model Inspection panel renders', status: 'pending' },
 ];
 
 export function AcceptanceChecklist() {
