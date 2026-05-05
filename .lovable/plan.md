@@ -1,146 +1,47 @@
+## Goal
 
-# Refinement + 3D Printing Pass
+Make sure the whole stack — `RUN-ALL.bat`, the local agent, the 3D Printing mode, and the acceptance/smoke tests — actually exercises the new 3D routes and reports clearly when something is missing.
 
-## 1. Mode Cleanup
+The frontend, backend handlers, and UI workspace already exist and are wired correctly. The remaining gaps are in **test coverage and launcher verification** for the 3D pipeline.
 
-Collapse the mode list in `ModesSidebar.tsx` and `ide-types.ts` to six top-level modes:
+## Changes
 
-- App Builder (`app-builder`)
-- IDE / Coding (`ide-coding` — new id; replaces "Chat" entry, used for general coding chat)
-- AI Improvement (`ai-improvement`)
-- Embedded / IoT (`embedded-iot`)
-- 3D Printing (`3d-printing` — new)
-- Advanced (group containing: System Helper, Sandbox, Plugin, Advanced Prompt Override, Learning)
+### 1. `scripts/route-smoke-test.mjs`
+- Add `/3d` to the `ROUTES` array so the SPA smoke test confirms the 3D workspace is reachable after `vite build`.
 
-Implementation:
-- Add `'3d-printing'` and `'ide-coding'` to `IDEMode` union and `MODE_INFO`.
-- In `ModesSidebar`, render the six primary entries flat, then a collapsible "Advanced" section (using existing `Collapsible` UI) containing the relocated modes.
-- Remove the standalone "Chat" pseudo-entry (it was just app-builder remap) — IDE/Coding takes its place.
-- Update `MODES_LIST`, `MODE_ICONS`, and any `currentMode` checks. Keep legacy ids functional via a small migration in `ide-store.ts` (e.g. map old `system-helper` selection to still work if persisted).
+### 2. `scripts/acceptance.bat`
+Add backend route checks for the 3D pipeline (run only when agent is up; reuse existing `:check_url` helper):
+- `GET /3d/status` → 200
+- `GET /3d/diagnostics` → 200
+- `GET /openscad/status` → 200
+- `POST /3d/save-scad` (with a tiny inline JSON body via `curl -d`) → 200, then verify `projects/3d/acceptance_test/model.scad` exists.
+- `POST /openscad/render` → 200 **or** 422 (422 is the correct "OpenSCAD CLI not installed" response and must NOT be treated as a failure).
+- After render, assert `projects/3d/acceptance_test/model.stl` does **not** exist when the response was 422 (no fake STL).
+- Add `[PASS] file exists: src\pages\ThreeDWorkspace.tsx` and `src\components\threed\AcceptanceChecklist.tsx` to the existing `:check_file` block.
 
-## 2. Settings as Single Source of Truth
+Add a new helper `:check_url_2xx_or_422` for the render endpoint so a missing-OpenSCAD environment still passes.
 
-Audit and consolidate. All of these must live only inside `IDESettings` / Settings page tabs:
+### 3. `RUN-ALL.bat`
+Add one line in the "Verify health endpoints" section:
+- `curl -s --max-time 2 http://127.0.0.1:3847/3d/status` → reports `[OK] /3d/status` or `[WARN]`.
 
-- Model routing (currently `ModelRoutingPanel` — embed in Settings → "Routing" tab)
-- Jailbreak / override (Settings → "Advanced")
-- Backend (ollama / llama.cpp / cloud — Settings → "Backend")
-- Voice (Settings → "Voice")
+This makes the launcher surface 3D backend health on every start.
 
-Actions:
-- Remove inline routing/override/backend toggles from the chat header, sidebar footer, and any panel that duplicates them. Replace with a "Open Settings → <Tab>" deep link using the existing `Settings Deep Linking` event.
-- The sidebar footer keeps only: Online/Offline status badge + Settings button.
+### 4. `src/lib/diagnostics.ts` (sanity)
+Confirmed already includes `threeDStatus` and `threeD`. No change needed unless a key is missing — verify on implementation.
 
-## 3. New Mode: 3D Printing
+### 5. No changes needed to:
+- `server/index.cjs` — all four routes (`/3d/status`, `/3d/save-scad`, `/3d/diagnostics`, `/openscad/status`, `/openscad/render`, `/3d/export-stl`) are implemented and use `PROJECT_ROOT` + shared `renderStlHandler`.
+- `src/pages/ThreeDWorkspace.tsx` — workspace, prompt, templates, editor, voice controls, STL viewer, and acceptance checklist are wired.
+- `src/components/ModesSidebar.tsx` / `src/pages/Index.tsx` — `3d-printing` mode is visible and routes to `/3d`.
 
-New files:
+## Verification after implementation
 
-- `src/pages/ThreeDWorkspace.tsx` — the workspace route (`/3d`).
-- `src/lib/openscad.ts` — code helpers: prompt → OpenSCAD via Lovable AI, validate, save.
-- `src/lib/stl-export.ts` — calls local agent (port 3847) to run `openscad -o file.stl file.scad`.
-- `src/components/threed/ScadPromptPanel.tsx` — prompt + template buttons.
-- `src/components/threed/ScadCodePanel.tsx` — generated `.scad` source with copy/download.
-- `src/components/threed/StlViewer.tsx` — three.js viewer (loads `STLLoader`).
-- `src/components/threed/OpenScadInstall.tsx` — install instructions when CLI absent.
+1. `RUN-ALL.bat` boots and prints `[OK] /3d/status`.
+2. Visiting `/3d` shows prompt box, templates, editor, voice controls, STL viewer placeholder, and the collapsible Acceptance Tests panel.
+3. `scripts\acceptance.bat` (with agent running, OpenSCAD absent) returns `RESULT: PASS` — including the 3D rows and the "no fake STL" assertion.
+4. `node scripts/route-smoke-test.mjs` returns PASS for `/3d`.
 
-Behavior:
-- AI generates OpenSCAD source via existing Lovable AI gateway (edge function `chat`, system prompt: "Output valid OpenSCAD only").
-- Files saved under `/projects/3d/<name>/model.scad` through the local agent's file API; download works via Blob in the browser too (no agent required).
-- Optional STL conversion: agent endpoint `POST /openscad/render` runs `openscad -o out.stl in.scad`. If the binary is missing, surface the install panel.
-- Does NOT touch the existing preview iframe / Vite preview server.
+## Notes for non-technical readers
 
-Add route in `App.tsx`:
-```tsx
-const ThreeDWorkspace = lazy(() => import('./pages/ThreeDWorkspace'));
-<Route path="/3d" element={<ThreeDWorkspace />} />
-```
-
-## 4. 3D UI Layout
-
-`ThreeDWorkspace` layout (resizable horizontal split):
-
-```text
-+----------------------+--------------------------+
-| Prompt + Templates   |  3D Preview (STL viewer) |
-| (gear, enclosure,    |                          |
-|  RC parts, mount,    |                          |
-|  bracket, knob)      +--------------------------+
-| Status indicator     |  Generated .scad code    |
-|                      |  + Download .scad / .stl |
-+----------------------+--------------------------+
-```
-
-Templates are one-click prompt seeds (e.g. "Parametric spur gear, 20 teeth, 5 mm bore").
-
-## 5. STL Export Path
-
-Local agent (`server/index.cjs`) gets new endpoint:
-```js
-POST /openscad/render  { scad: string, name: string }
-  -> spawn 'openscad', ['-o', `${name}.stl`, '-']
-  -> returns { ok, stlPath } or { ok:false, missing:true }
-```
-
-Detection via `GET /openscad/status` running `openscad --version`. If missing, the UI shows `OpenScadInstall` with platform-specific commands (`winget install OpenSCAD.OpenSCAD`, `brew install --cask openscad`, `apt install openscad`).
-
-## 6. Auto-Fix Loop (App Builder + 3D Printing)
-
-New helper `src/lib/auto-fix.ts`:
-
-```text
-generate(prompt) -> code
-loop up to 3 times:
-  validate(code)               // build for app-builder, syntax for OpenSCAD
-  if ok: break
-  code = aiFix(code, errors)   // re-prompt with errors
-return { code, attempts, fixed }
-```
-
-- App Builder validation hooks into existing `build-pipeline.ts` errors.
-- 3D validation: try OpenSCAD CLI dry-run when present; otherwise a lightweight regex/syntax check.
-
-## 7. Status Indicators
-
-Single shared component `src/components/StatusPill.tsx` with states: `idle | thinking | generating | fixing | done | error`. Used in App Builder header and 3D workspace. Drives off the existing chat streaming + auto-fix events.
-
-## 8. Model Recommendations
-
-`src/lib/model-recommendations.ts`:
-- Inputs: active mode, hardware capability score (already computed by Model Capability Scoring memory).
-- Output: ordered recommended model ids per backend (ollama / llama.cpp / cloud).
-- Example: 3D Printing on low-RAM box → `qwen2.5-coder:3b` local or `google/gemini-3-flash-preview` cloud.
-- Surfaced as a "Recommended" badge inside the model dropdowns in Settings → Backend, and a one-line hint in each workspace.
-
-## 9. Project Structure
-
-Standardize outputs under `./projects/`:
-
-```text
-projects/
-  apps/<project-name>/
-  code/<snippet-or-script>/
-  3d/<model-name>/
-```
-
-- Update `project-export.ts` and the local agent file root to use these subfolders.
-- Existing exports get migrated lazily (move on first save, otherwise leave).
-
-## 10. Remove Unused / Duplicated UI
-
-After audit, remove or consolidate:
-- Duplicate routing/backend toggles outside Settings (see §2).
-- The "Chat" pseudo-mode entry (replaced by IDE/Coding).
-- Any tab content shells that render nothing in the right pane.
-- Unused imports / dead `MODE_INFO` keys after the cleanup.
-
-## Files Touched (summary)
-
-- Edit: `src/lib/ide-types.ts`, `src/lib/ide-store.ts`, `src/components/ModesSidebar.tsx`, `src/App.tsx`, `src/pages/IDESettings.tsx`, `src/pages/IDE.tsx`, `src/components/SettingsDialog.tsx`, `src/components/ModelRoutingPanel.tsx`, `server/index.cjs`, `src/lib/project-export.ts`.
-- Add: `src/pages/ThreeDWorkspace.tsx`, `src/lib/openscad.ts`, `src/lib/stl-export.ts`, `src/lib/auto-fix.ts`, `src/lib/model-recommendations.ts`, `src/components/StatusPill.tsx`, `src/components/threed/*` (4 files).
-- Remove/inline: duplicate routing/backend controls outside Settings, "Chat" sidebar entry.
-
-## Out of Scope
-
-- No new auth, no DB schema changes.
-- No changes to the Vite preview server or existing IDE preview iframe.
-- Brave / web search behavior stays as-is (offline by policy).
+This pass doesn't add new features — it makes the existing one-click launcher and test scripts actually check the 3D Printing mode end-to-end, so a broken install is caught immediately instead of surfacing later as "Failed to fetch" in the browser.

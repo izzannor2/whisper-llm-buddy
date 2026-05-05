@@ -14,7 +14,7 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as wait } from 'node:timers/promises';
 
-const ROUTES = ['/', '/models', '/ide', '/settings', '/improve', '/iot', '/sandbox'];
+const ROUTES = ['/', '/models', '/ide', '/settings', '/improve', '/iot', '/sandbox', '/3d'];
 const PORT = process.env.SMOKE_PORT || 4180;
 const HOST = `http://127.0.0.1:${PORT}`;
 
