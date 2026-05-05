@@ -59,10 +59,6 @@ export function ShapeProperties({ node, onChange }: Props) {
     </div>
   );
 }
-      </div>
-    </div>
-  );
-}
 
 function FieldRow({ label, value, type, step, onChange }: { label: string; value: string; type: 'number' | 'text'; step?: number; onChange: (v: string) => void }) {
   return (
