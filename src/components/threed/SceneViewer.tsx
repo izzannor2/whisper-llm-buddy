@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Move, RotateCw, Maximize2, Magnet, Grid3x3, Camera } from 'lucide-react';
 import type { Scene, SceneNode } from '@/lib/threed-scene';
 
+const SNAP_TOL = 2.0; // mm — distance under which a soft snap engages
+const GUIDE_COLOR = { center: 0x5cffd1, face: 0xffd166, axis: 0x7c5cff };
+
 interface Props {
   scene: Scene;
   selectedId: string | null;
