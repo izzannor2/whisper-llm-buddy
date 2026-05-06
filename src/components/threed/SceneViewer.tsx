@@ -410,6 +410,12 @@ export function SceneViewer({ scene, selectedId, onSelect, onUpdate, onScreensho
         Click to select · drag gizmo to move/rotate/scale · changes regenerate SCAD
         <span className="ml-2 opacity-60">(approximate proxy mesh — final geometry is from OpenSCAD)</span>
       </div>
+      {snapHints.length > 0 && (
+        <div className="absolute top-2 right-2 text-[10px] font-mono bg-accent/30 text-accent-foreground border border-accent/60 backdrop-blur px-2 py-1 rounded shadow-lg pointer-events-none">
+          <div className="font-semibold mb-0.5">SNAP</div>
+          {snapHints.slice(0, 4).map((h, i) => <div key={i}>• {h}</div>)}
+        </div>
+      )}
     </div>
   );
 }
