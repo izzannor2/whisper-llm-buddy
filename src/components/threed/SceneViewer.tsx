@@ -364,6 +364,8 @@ export function SceneViewer({ scene, selectedId, onSelect, onUpdate, onScreensho
   }, [selectedId]);
 
   useEffect(() => { transformRef.current?.setMode(mode); }, [mode]);
+  useEffect(() => { snapRef.current = snap; }, [snap]);
+  useEffect(() => { sceneNodesRef.current = scene.nodes; }, [scene]);
   useEffect(() => {
     const grid = sceneRef.current?.getObjectByName('grid');
     if (grid) grid.visible = showGrid;
