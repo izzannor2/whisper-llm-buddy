@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Move, RotateCw, Maximize2, Magnet, Grid3x3, Camera } from 'lucide-react';
 import type { Scene, SceneNode } from '@/lib/threed-scene';
 
+const SNAP_TOL = 2.0; // mm — distance under which a soft snap engages
+const GUIDE_COLOR = { center: 0x5cffd1, face: 0xffd166, axis: 0x7c5cff };
+
 interface Props {
   scene: Scene;
   selectedId: string | null;
@@ -102,14 +105,18 @@ export function SceneViewer({ scene, selectedId, onSelect, onUpdate, onScreensho
   const transformRef = useRef<TransformControls | null>(null);
   const meshesRef = useRef<Map<string, THREE.Mesh>>(new Map());
   const groupRef = useRef<THREE.Group | null>(null);
+  const guidesRef = useRef<THREE.Group | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
   const onUpdateRef = useRef(onUpdate);
   const onSelectRef = useRef(onSelect);
+  const snapRef = useRef(true);
+  const sceneNodesRef = useRef<SceneNode[]>([]);
 
   const [mode, setMode] = useState<Mode>('translate');
   const [snap, setSnap] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [snapHints, setSnapHints] = useState<string[]>([]);
 
   useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
@@ -136,26 +143,123 @@ export function SceneViewer({ scene, selectedId, onSelect, onUpdate, onScreensho
     orbit.enableDamping = true;
     orbitRef.current = orbit;
 
+    const guides = new THREE.Group();
+    guides.name = 'snapGuides';
+    sceneObj.add(guides);
+    guidesRef.current = guides;
+
+    const clearGuides = () => {
+      while (guides.children.length) {
+        const c = guides.children.pop()!;
+        (c as any).geometry?.dispose?.();
+        (c as any).material?.dispose?.();
+      }
+    };
+
+    const addLine = (a: THREE.Vector3, b: THREE.Vector3, color: number) => {
+      const g = new THREE.BufferGeometry().setFromPoints([a, b]);
+      const m = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 });
+      const line = new THREE.Line(g, m);
+      guides.add(line);
+    };
+
+    const addMarker = (p: THREE.Vector3, color: number) => {
+      const g = new THREE.SphereGeometry(0.8, 12, 12);
+      const m = new THREE.MeshBasicMaterial({ color });
+      const s = new THREE.Mesh(g, m);
+      s.position.copy(p);
+      guides.add(s);
+    };
+
+    // Live snap: examines the dragged mesh against other meshes' centers/faces.
+    // Mutates obj.position when within tolerance, and draws on-screen guides.
+    const applyLiveSnap = (obj: THREE.Mesh): string[] => {
+      clearGuides();
+      const hints: string[] = [];
+      if (!snapRef.current) return hints;
+      const targetId = obj.userData.nodeId as string;
+      const others = Array.from(meshesRef.current.values()).filter((m) => m.userData.nodeId !== targetId);
+      if (!others.length) return hints;
+      const tBox = new THREE.Box3().setFromObject(obj);
+      const tCenter = tBox.getCenter(new THREE.Vector3());
+      const tHalf = tBox.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+
+      let snappedAxis = { x: false, y: false, z: false };
+
+      for (const ref of others) {
+        const rBox = new THREE.Box3().setFromObject(ref);
+        const rCenter = rBox.getCenter(new THREE.Vector3());
+        const rHalf = rBox.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+
+        // Center-to-center per axis (alignment)
+        (['x', 'y', 'z'] as const).forEach((ax) => {
+          if (snappedAxis[ax]) return;
+          const d = Math.abs(tCenter[ax] - rCenter[ax]);
+          if (d < SNAP_TOL) {
+            obj.position[ax] += (rCenter[ax] - tCenter[ax]);
+            snappedAxis[ax] = true;
+            const a = rCenter.clone(); a[ax] -= 60;
+            const b = rCenter.clone(); b[ax] += 60;
+            addLine(a, b, GUIDE_COLOR.axis);
+            hints.push(`align ${ax.toUpperCase()} centers`);
+          }
+        });
+
+        // Face-to-face on each axis (target face touches ref face)
+        (['x', 'y', 'z'] as const).forEach((ax) => {
+          for (const sgn of [1, -1] as const) {
+            const refFace = rCenter[ax] + sgn * rHalf[ax];
+            const tgtOpposite = tCenter[ax] - sgn * tHalf[ax];
+            const d = Math.abs(refFace - tgtOpposite);
+            if (d < SNAP_TOL) {
+              obj.position[ax] += (refFace - tgtOpposite);
+              const p = rCenter.clone(); p[ax] = refFace;
+              addMarker(p, GUIDE_COLOR.face);
+              hints.push(`face ${sgn > 0 ? '+' : '−'}${ax.toUpperCase()} touch`);
+            }
+          }
+        });
+
+        // Full center coincidence
+        if (tCenter.distanceTo(rCenter) < SNAP_TOL) {
+          obj.position.add(rCenter.clone().sub(tCenter));
+          addMarker(rCenter, GUIDE_COLOR.center);
+          hints.push('center↔center');
+        }
+      }
+      return hints;
+    };
+
     const transform = new TransformControls(camera, renderer.domElement);
-    transform.addEventListener('dragging-changed', (e: any) => { orbit.enabled = !e.value; });
+    transform.addEventListener('dragging-changed', (e: any) => {
+      orbit.enabled = !e.value;
+      if (!e.value) { clearGuides(); setSnapHints([]); }
+    });
     transform.addEventListener('objectChange', () => {
       const obj = transform.object as THREE.Mesh | undefined;
       if (!obj) return;
-      const id = obj.userData.nodeId as string;
-      if (snap && transform.mode === 'translate') {
-        obj.position.x = snapValue(obj.position.x, 1);
-        obj.position.y = snapValue(obj.position.y, 1);
-        obj.position.z = snapValue(obj.position.z, 1);
-      }
-      if (snap && transform.mode === 'rotate') {
+      if (snapRef.current && transform.mode === 'rotate') {
         const step = (15 * Math.PI) / 180;
         obj.rotation.x = snapValue(obj.rotation.x, step);
         obj.rotation.y = snapValue(obj.rotation.y, step);
         obj.rotation.z = snapValue(obj.rotation.z, step);
       }
+      if (transform.mode === 'translate') {
+        // Soft snap to other parts (center, face, axis-align) within SNAP_TOL.
+        const hints = applyLiveSnap(obj);
+        setSnapHints(hints);
+        if (snapRef.current && !hints.length) {
+          // Grid snap fallback
+          obj.position.x = snapValue(obj.position.x, 1);
+          obj.position.y = snapValue(obj.position.y, 1);
+          obj.position.z = snapValue(obj.position.z, 1);
+        }
+      }
     });
     transform.addEventListener('mouseUp', () => {
       const obj = transform.object as THREE.Mesh | undefined;
+      clearGuides();
+      setSnapHints([]);
       if (!obj) return;
       const id = obj.userData.nodeId as string;
       onUpdateRef.current(id, {
@@ -260,6 +364,8 @@ export function SceneViewer({ scene, selectedId, onSelect, onUpdate, onScreensho
   }, [selectedId]);
 
   useEffect(() => { transformRef.current?.setMode(mode); }, [mode]);
+  useEffect(() => { snapRef.current = snap; }, [snap]);
+  useEffect(() => { sceneNodesRef.current = scene.nodes; }, [scene]);
   useEffect(() => {
     const grid = sceneRef.current?.getObjectByName('grid');
     if (grid) grid.visible = showGrid;
@@ -304,6 +410,12 @@ export function SceneViewer({ scene, selectedId, onSelect, onUpdate, onScreensho
         Click to select · drag gizmo to move/rotate/scale · changes regenerate SCAD
         <span className="ml-2 opacity-60">(approximate proxy mesh — final geometry is from OpenSCAD)</span>
       </div>
+      {snapHints.length > 0 && (
+        <div className="absolute top-2 right-2 text-[10px] font-mono bg-accent/30 text-accent-foreground border border-accent/60 backdrop-blur px-2 py-1 rounded shadow-lg pointer-events-none">
+          <div className="font-semibold mb-0.5">SNAP</div>
+          {snapHints.slice(0, 4).map((h, i) => <div key={i}>• {h}</div>)}
+        </div>
+      )}
     </div>
   );
 }
