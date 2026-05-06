@@ -105,14 +105,18 @@ export function SceneViewer({ scene, selectedId, onSelect, onUpdate, onScreensho
   const transformRef = useRef<TransformControls | null>(null);
   const meshesRef = useRef<Map<string, THREE.Mesh>>(new Map());
   const groupRef = useRef<THREE.Group | null>(null);
+  const guidesRef = useRef<THREE.Group | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
   const onUpdateRef = useRef(onUpdate);
   const onSelectRef = useRef(onSelect);
+  const snapRef = useRef(true);
+  const sceneNodesRef = useRef<SceneNode[]>([]);
 
   const [mode, setMode] = useState<Mode>('translate');
   const [snap, setSnap] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [snapHints, setSnapHints] = useState<string[]>([]);
 
   useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
