@@ -144,25 +144,35 @@ export function SceneViewer({ scene, selectedId, onSelect, onUpdate, onScreensho
     orbitRef.current = orbit;
 
     const transform = new TransformControls(camera, renderer.domElement);
-    transform.addEventListener('dragging-changed', (e: any) => { orbit.enabled = !e.value; });
+    transform.addEventListener('dragging-changed', (e: any) => {
+      orbit.enabled = !e.value;
+      if (!e.value) { clearGuides(); setSnapHints([]); }
+    });
     transform.addEventListener('objectChange', () => {
       const obj = transform.object as THREE.Mesh | undefined;
       if (!obj) return;
-      const id = obj.userData.nodeId as string;
-      if (snap && transform.mode === 'translate') {
-        obj.position.x = snapValue(obj.position.x, 1);
-        obj.position.y = snapValue(obj.position.y, 1);
-        obj.position.z = snapValue(obj.position.z, 1);
-      }
-      if (snap && transform.mode === 'rotate') {
+      if (snapRef.current && transform.mode === 'rotate') {
         const step = (15 * Math.PI) / 180;
         obj.rotation.x = snapValue(obj.rotation.x, step);
         obj.rotation.y = snapValue(obj.rotation.y, step);
         obj.rotation.z = snapValue(obj.rotation.z, step);
       }
+      if (transform.mode === 'translate') {
+        // Soft snap to other parts (center, face, axis-align) within SNAP_TOL.
+        const hints = applyLiveSnap(obj);
+        setSnapHints(hints);
+        if (snapRef.current && !hints.length) {
+          // Grid snap fallback
+          obj.position.x = snapValue(obj.position.x, 1);
+          obj.position.y = snapValue(obj.position.y, 1);
+          obj.position.z = snapValue(obj.position.z, 1);
+        }
+      }
     });
     transform.addEventListener('mouseUp', () => {
       const obj = transform.object as THREE.Mesh | undefined;
+      clearGuides();
+      setSnapHints([]);
       if (!obj) return;
       const id = obj.userData.nodeId as string;
       onUpdateRef.current(id, {
