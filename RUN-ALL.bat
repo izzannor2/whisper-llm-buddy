@@ -147,6 +147,7 @@ echo  [INFO] Ollama not installed - skipping
 
 :: --- 6. Start llama.cpp (optional) ---
 set "LLAMA_BIN="
+set "LLAMA_UP=0"
 for /r "bin\llama" %%f in (llama-server.exe) do if not defined LLAMA_BIN set "LLAMA_BIN=%%~ff"
 set "GGUF_FILE="
 for /r "models\gguf" %%f in (*.gguf) do if not defined GGUF_FILE set "GGUF_FILE=%%~ff"
@@ -155,11 +156,17 @@ if not defined GGUF_FILE goto :llama_skip
 curl -s --max-time 1 http://127.0.0.1:8081/health >nul 2>&1
 if not errorlevel 1 (
     echo  [OK]   llama-server already on :8081
+    set "LLAMA_UP=1"
     goto :llama_done
 )
 echo  [..]  Starting llama-server with !GGUF_FILE!
-start "LLAMA" /B "!LLAMA_BIN!" -m "!GGUF_FILE!" --port 8081 --host 127.0.0.1 -ngl 99
-echo  [OK]   llama-server launching on :8081
+start "LLAMA" /B cmd /c """!LLAMA_BIN!"" -m ""!GGUF_FILE!"" --port 8081 --host 127.0.0.1 -ngl 99 >> logs\llama.log 2>&1"
+for /l %%i in (1,1,8) do (
+    timeout /t 1 /nobreak >nul
+    curl -s --max-time 1 http://127.0.0.1:8081/health >nul 2>&1
+    if not errorlevel 1 set "LLAMA_UP=1"
+)
+if "!LLAMA_UP!"=="1" (echo  [OK]   llama-server on :8081) else (echo  [WARN] llama-server did not respond - see logs\llama.log)
 goto :llama_done
 
 :llama_skip
