@@ -1,71 +1,75 @@
-# Live 3D Editor Upgrade
 
-Transform `/3d` from a generate→export→preview flow into a real live editing workspace where SCAD edits auto-render and the STL viewer has full inspection controls.
+## Goal
 
-## 1. Editable SCAD with Live Preview (`ThreeDWorkspace.tsx`)
+Make `RUN-ALL.bat` the single entry point that boots **every** local service in one click:
 
-- Replace the read-only `<pre>` with a `<Textarea>` (monospace) bound to `scad`.
-- Add a **Live Preview** `Switch` (default ON) in the editor header, persisted to `localStorage` (`threed.livePreview`).
-- New pipeline state: `'editing' | 'validating' | 'rendering' | 'ready' | 'error'` shown as a small status row alongside the existing `StatusPill`.
-- Debounce SCAD changes 1500ms (`useEffect` + `setTimeout`):
-  1. `validateScad` → if errors, status `error`, show inline list, skip render.
-  2. `renderStl` POST `/openscad/render`, parse returned bytes.
-  3. On success: update `stl`, `lastRender`, status `ready`.
-  4. On failure: status `error`, show stderr; **keep previous `stl`** so last good preview stays visible (track `staleRender = true`).
-- Manual **Render** button stays and works regardless of toggle (forces an immediate render, bypasses debounce).
-- Inline validation panel under the editor lists `validateScad` errors.
-- Render error panel shows: stderr (from `X-Openscad-Stderr` already returned by `server/index.cjs`), and a "failing line" parsed via regex `/line (\d+)/i` from stderr when present.
+1. Local agent (`server/index.cjs` on `:3847`)
+2. Ollama (`:11434`) with portable models dir `.ollama`
+3. llama.cpp `llama-server` (`:8081`) when a GGUF is present
+4. Vite dev server (`:8080`)
+5. Browser opens to `http://localhost:8080`
 
-## 2. Upgraded STL Viewer (`StlViewer.tsx`)
+## Current state
 
-Add a controls bar (overlay, top-right) and props for each toggle. Internally keep refs to `mesh`, `controls`, `grid`, `axes` for live toggling without re-mounting the scene.
+`RUN-ALL.bat` already attempts all five steps. The script structure is sound, but a few gaps can cause one of the services to silently not start:
 
-Controls:
-- Reset camera (recompute from boundingSphere).
-- Fit to model (same, with padding factor).
-- Auto-rotate toggle (`controls.autoRotate`).
-- Wireframe toggle (swap material to `MeshBasicMaterial({ wireframe: true })` or toggle `material.wireframe`).
-- Solid/shaded toggle (flat vs. standard material).
-- Grid toggle (`grid.visible`).
-- Axis helper toggle (add/remove `THREE.AxesHelper(50)`).
+- **Ollama launcher uses `&&` inside `cmd /c`**: the `set OLLAMA_MODELS=... && set OLLAMA_HOST=... && ollama.exe serve` chain breaks when delayed-expansion vars contain spaces. Switch to `&` separators and quote properly so env vars actually reach the child process.
+- **llama-server is started without log redirection** (line 161). Failures vanish. Redirect to `logs\llama.log` like Ollama.
+- **Agent launched with `cmd /k`** keeps a window open but the script never tails `logs\server.log` if it dies *after* the 15s wait. Add a final post-wait health re-check before claiming READY.
+- **Frontend launched with `cmd /k`** but `npm run dev` errors (port conflict, missing dep) only surface in that window. Add a health re-poll after the 30s wait and dump `logs\web.log` if it never came up.
+- **No log file for the frontend / agent windows** when launched with `cmd /k` — output only lives in the spawned console. Tee to `logs\agent.log` and `logs\web.log` in addition to the visible window so RUN-ALL transcript captures failures.
+- **Port-busy detection** exists for 8080 but not for 11434 / 8081 / 3847 before launch. Add symmetric pre-checks so we report PID/process instead of double-launching.
+- **Ollama auto-pull**: if `OLLAMA_UP=1` but `/api/tags` returns empty, optionally pull a default small model so the user has something to chat with on first run (gated behind `AUTO_PULL=1` env to avoid surprise downloads).
 
-Avoid re-creating the renderer on prop changes — only `stl` triggers geometry replacement; toggles mutate existing objects.
+## Plan
 
-## 3. Model Inspection & Printability Panel
+### 1. Fix Ollama startup env propagation
+Replace line 134 with a form that survives delayed expansion and quoted paths:
+```text
+start "OLLAMA" /B cmd /c "set ""OLLAMA_MODELS=!OLLAMA_MODELS!"" & set ""OLLAMA_HOST=!OLLAMA_HOST!"" & ""!OLLAMA_BIN!"" serve >> logs\ollama.log 2>&1"
+```
 
-New component `ModelInspector.tsx` rendered below the viewer (collapsible card). Computes from the parsed `BufferGeometry` (passed up via `onInfo`, extended):
-- Bounding box (x/y/z mm).
-- Vertex count, triangle count (`position.count / 3`).
-- STL byte size (KB).
-- **Estimated volume**: signed tetrahedron sum over triangles → `Math.abs(sum)/6` mm³, plus cm³.
-- **Empty mesh warning** if 0 verts.
-- **Thin-wall warning**: configurable threshold input (default 1.2mm). Approximation: warn if smallest bbox dimension < threshold. Labeled "approximate".
-- **Manifold check**: placeholder line "Manifold check not available (requires mesh analysis library)".
+### 2. Add log redirection + readiness re-check for llama-server
+- Change line 161 to `start "LLAMA" /B cmd /c "...llama-server.exe... >> logs\llama.log 2>&1"`.
+- Add a 5-iteration `curl /health` poll after launch, set `LLAMA_UP=1`, print OK/WARN.
 
-Extend `StlViewerInfo` with `triangles`, `volumeMm3`.
+### 3. Tee agent + web windows to log files
+- Agent: `start "AI Agent" cmd /k "call ""!NODE_BIN!"" server\index.cjs 2>&1 | powershell -NoProfile -Command \"$input | Tee-Object logs\agent.log -Append\""`
+- Web: same pattern with `logs\web.log`.
+- Fall back to plain `>> logs\agent.log 2>&1` (no visible window) if PowerShell is missing.
 
-## 4. Render Pipeline & Debug
+### 4. Symmetric port pre-checks
+Before each service launch, run a small `:check_port <port> <name>` subroutine that:
+- Skips launch if our own service already answers (current behavior).
+- Reports PID + image name if a foreign process owns the port and aborts that step (not the whole script).
 
-- `renderStl` already returns `{ stl, bytes, contentType, stlPath, stderr, error }` — no change needed.
-- **Copy 3D Debug** button updated to include: scad, scad bytes, status, stderr, stl bytes, content-type, stl path, viewer parse error, vertices, triangles, bbox, volume, livePreview flag, last validation errors, backend `/3d/status` snapshot (fetched at click time).
+### 5. Final health summary + non-zero exit on critical failures
+After step 10, build a status table:
+```text
+Agent  : OK/FAIL
+Web    : OK/FAIL
+Ollama : OK/SKIPPED/FAIL
+Llama  : OK/SKIPPED/FAIL
+```
+Exit `1` only if Agent or Web failed (Ollama/llama remain optional).
 
-## 5. Acceptance tests (`AcceptanceChecklist.tsx` + `scripts/acceptance.bat`)
+### 6. Optional first-run model pull
+Gate behind `AUTO_PULL=1`:
+```text
+if "!OLLAMA_UP!"=="1" if /I "%AUTO_PULL%"=="1" (
+    curl -s http://127.0.0.1:11434/api/tags | findstr /C:"\"name\"" >nul || start "PULL" /B cmd /c ""!OLLAMA_BIN!" pull qwen2.5:3b >> logs\ollama-pull.log 2>&1"
+)
+```
 
-Extend the in-app `AcceptanceChecklist` with manual checks for:
-- Live Preview toggle persists.
-- Editing SCAD triggers auto-render within ~2s.
-- Wireframe / grid / axes / auto-rotate toggles flip viewer state.
-- Reset camera & Fit to model recenter.
-- Bounding box & triangle count appear after render.
-- Failed render keeps last successful preview visible (stale badge shown).
+### 7. Documentation
+Update the closing banner to list every started service with its log path so the user immediately knows where to look if something is missing.
 
-No new backend endpoints required — `/openscad/render` already returns STL bytes with the headers we need.
+## Files touched
 
-## Technical notes
+- `RUN-ALL.bat` (only file edited)
 
-- Files edited: `src/pages/ThreeDWorkspace.tsx`, `src/components/threed/StlViewer.tsx`, `src/components/threed/AcceptanceChecklist.tsx`.
-- New file: `src/components/threed/ModelInspector.tsx`.
-- No new deps (three + STLLoader + OrbitControls already in use).
-- Debounce implemented with `useRef<number>` + `window.setTimeout`; cleared on unmount and on manual render.
-- Stale-preview indicator: small amber badge "stale" in the preview status row when `staleRender` is true.
-- Live preview disabled automatically while a render is in flight to avoid request stacking; queued change re-runs after completion.
+## Out of scope
+
+- Changes to `server/index.cjs`, `server/static.cjs`, or any frontend code.
+- Changing the offline / dist-based launcher (`start-offline.bat`) — separate flow.
+- Bundling new binaries; we only fix orchestration of what's already in `bin/`.

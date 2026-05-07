@@ -131,7 +131,7 @@ for /f "delims=" %%O in ('where ollama') do if not defined OLLAMA_BIN set "OLLAM
 :ollama_have
 if not defined OLLAMA_BIN goto :ollama_skip
 echo  [..]  Starting Ollama  ^(models: !OLLAMA_MODELS!^)
-start "OLLAMA" /B cmd /c "set OLLAMA_MODELS=!OLLAMA_MODELS!&& set OLLAMA_HOST=!OLLAMA_HOST!&& "!OLLAMA_BIN!" serve >> logs\ollama.log 2>&1"
+start "OLLAMA" /B cmd /c "set ""OLLAMA_MODELS=!OLLAMA_MODELS!"" & set ""OLLAMA_HOST=!OLLAMA_HOST!"" & ""!OLLAMA_BIN!"" serve >> logs\ollama.log 2>&1"
 for /l %%i in (1,1,8) do (
     timeout /t 1 /nobreak >nul
     curl -s --max-time 1 http://127.0.0.1:11434/api/tags >nul 2>&1
