@@ -212,8 +212,15 @@ Deno.serve(async (req) => {
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      return new Response(JSON.stringify({ error: `AI gateway error: ${response.status}` }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const fallbackable = response.status >= 500;
+      return new Response(JSON.stringify({
+        error: fallbackable ? "AI_SERVICE_UNAVAILABLE" : `AI gateway error: ${response.status}`,
+        detail: errorText?.slice(0, 500),
+        fallback: fallbackable,
+        choices: [{ message: { role: 'assistant', content: '' } }],
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
