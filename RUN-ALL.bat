@@ -242,13 +242,19 @@ start "WEB" cmd /k "call !NPM_CMD! run dev -- --host 0.0.0.0 --port 8080"
 :web_started
 
 :: --- 9. Wait for web ---
+set "WEB_OK=0"
 echo  [..]  Waiting for web server...
 for /l %%i in (1,1,30) do (
     timeout /t 1 /nobreak >nul
     curl -s --max-time 1 http://127.0.0.1:8080 >nul 2>&1
-    if not errorlevel 1 goto :web_ready
+    if not errorlevel 1 set "WEB_OK=1"
+    if "!WEB_OK!"=="1" goto :web_ready
 )
 :web_ready
+if not "!WEB_OK!"=="1" (
+    echo  [ERROR] Web server did not respond on :8080 within 30s
+    echo          Check the WEB window for Vite errors, or logs\web.log
+)
 
 :: --- 10. Verify health endpoints ---
 echo  [..]  Verifying services...
@@ -263,22 +269,35 @@ if "!SNAP_OK!"=="1"  (echo  [OK]   /debug/snapshot) else (echo  [WARN] /debug/sn
 if "!DEV_OK!"=="1"   (echo  [OK]   /dev-server/status) else (echo  [INFO] /dev-server/status not responding)
 if "!THREED_OK!"=="1" (echo  [OK]   /3d/status) else (echo  [WARN] /3d/status not responding)
 
-start "" "http://localhost:8080"
+:: --- 10b. Optional first-run model pull ---
+if "!OLLAMA_UP!"=="1" if /I "%AUTO_PULL%"=="1" (
+    curl -s http://127.0.0.1:11434/api/tags 2>nul | findstr /C:"\"name\"" >nul 2>&1
+    if errorlevel 1 (
+        echo  [..]  AUTO_PULL=1 - pulling qwen2.5:3b in background
+        start "OLLAMA-PULL" /B cmd /c """!OLLAMA_BIN!"" pull qwen2.5:3b >> logs\ollama-pull.log 2>&1"
+    )
+)
+
+if "!WEB_OK!"=="1" start "" "http://localhost:8080"
 
 echo.
 echo  ============================================================
-echo    READY
+echo    SERVICE STATUS
 echo  ============================================================
-echo    Open:
-echo      http://localhost:8080
-echo      http://127.0.0.1:3847/status
-if "!OLLAMA_UP!"=="1" echo      http://localhost:11434
-if defined GGUF_FILE if defined LLAMA_BIN echo      http://localhost:8081
+if "!AGENT_OK!"=="1" (echo    Agent  [OK]    http://127.0.0.1:3847    log: logs\server.log) else (echo    Agent  [FAIL]  log: logs\server.log)
+if "!WEB_OK!"=="1"   (echo    Web    [OK]    http://localhost:8080    log: WEB window) else (echo    Web    [FAIL]  log: WEB window)
+if "!OLLAMA_UP!"=="1" (echo    Ollama [OK]    http://localhost:11434   log: logs\ollama.log) else (echo    Ollama [SKIP]  log: logs\ollama.log)
+if "!LLAMA_UP!"=="1"  (echo    Llama  [OK]    http://localhost:8081    log: logs\llama.log) else (
+    if defined LLAMA_BIN if defined GGUF_FILE (echo    Llama  [FAIL]  log: logs\llama.log) else (echo    Llama  [SKIP]  no GGUF or binary)
+)
+echo  ============================================================
 echo    Logs:   %PROJECT_ROOT%\logs\
+echo    Stop:   STOP-PORTABLE-AI.bat
+echo    Transcript: %PROJECT_ROOT%\logs\run-all.log
 echo  ============================================================
 echo.
-echo  Closing this window does NOT stop services. Use STOP-PORTABLE-AI.bat to stop.
-echo  Full transcript saved to: %PROJECT_ROOT%\logs\run-all.log
+echo  Closing this window does NOT stop services.
 pause >nul
 endlocal
-exit /b 0
+if "!WEB_OK!"=="1" if "!AGENT_OK!"=="1" exit /b 0
+exit /b 1
