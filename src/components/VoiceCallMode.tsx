@@ -74,7 +74,7 @@ export function VoiceCallMode({
   const [isHoldingSpace, setIsHoldingSpace] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOff, setIsSpeakerOff] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('gemini-flash');
+  const [selectedModel, setSelectedModel] = useState('');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
