@@ -97,11 +97,12 @@ export const DEFAULT_API_KEYS: APIKeys = {
 };
 
 export const DEFAULT_SETTINGS: ChatSettings = {
-  backend: 'cloud', // Default to cloud since it's always available
+  // Local-first default. Cloud is opt-in only via Settings → Advanced.
+  backend: 'ollama',
   localUrl: 'http://127.0.0.1:8081',
   ollamaUrl: 'http://localhost:11434',
-  ollamaModel: '', // Empty - will be populated when Ollama is scanned
-  model: 'gemini-flash', // Default cloud model
+  ollamaModel: '', // Empty - populated by Model Routing / Ollama scan
+  model: '', // Empty - cloud model only set when user explicitly picks one
   huggingfaceModel: '', // Empty - user must enter their own
   temperature: 0.7,
   topP: 0.9,
@@ -282,34 +283,8 @@ export async function sendChatMessage(
     });
     return response;
   } catch (err) {
-    // Model fallback: if primary fails and it's not cloud, retry with cloud
-    if (settings.backend !== 'cloud' && SUPABASE_URL && SUPABASE_KEY) {
-      console.warn(`[Fallback] ${settings.backend} failed, switching to cloud:`, err);
-      try {
-        const { toast } = await import('sonner');
-        toast.warning('Primary model failed, switching to cloud backup');
-      } catch {}
-      const fallbackSettings = { ...settings, backend: 'cloud' as const, model: 'gemini-flash' };
-      fallback = true;
-      fallbackReason = err instanceof Error ? err.message : String(err);
-      usedBackend = 'cloud';
-      usedModel = 'gemini-flash';
-      try {
-        const out = await sendCloudMessage(allMessages, fallbackSettings, onChunk);
-        pushModelCall({
-          timestamp: startedAt, role, backend: usedBackend, model: usedModel,
-          responseMs: Date.now() - startedAt, ok: true, fallback, fallbackReason, overrideApplied,
-        });
-        return out;
-      } catch (e2) {
-        pushModelCall({
-          timestamp: startedAt, role, backend: usedBackend, model: usedModel,
-          responseMs: Date.now() - startedAt, ok: false, fallback, fallbackReason, overrideApplied,
-          error: e2 instanceof Error ? e2.message : String(e2),
-        });
-        throw e2;
-      }
-    }
+    // No silent cloud fallback. Cloud is opt-in only — surface the real error
+    // so the UI can show a clear setup card or actionable message.
     pushModelCall({
       timestamp: startedAt, role, backend: usedBackend, model: usedModel,
       responseMs: Date.now() - startedAt, ok: false, fallback: false, overrideApplied,

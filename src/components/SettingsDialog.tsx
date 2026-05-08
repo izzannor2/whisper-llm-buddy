@@ -592,7 +592,7 @@ export function SettingsDialog({
                     : 'border-border hover:border-muted-foreground'
                 )}
                 onClick={() =>
-                  setLocalSettings({ ...localSettings, backend: 'cloud', model: 'gemini-flash' })
+                  setLocalSettings({ ...localSettings, backend: 'cloud', model: localSettings.model || '' })
                 }
               >
                 <Cloud className="w-5 h-5 mb-1 text-primary" />

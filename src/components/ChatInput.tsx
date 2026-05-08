@@ -96,7 +96,7 @@ interface SpeechRecognition extends EventTarget {
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
-  function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice, selectedModel = 'llama-3.2-1b',
+  function ChatInput({ onSend, isLoading, onStop, autoSendOnVoice, selectedModel = '',
     onModelChange, modelLoaded = false, modeKey = 'chat', planningMode = false, onPlanningToggle,
     webSearchEnabled = false, onWebSearchToggle, isOfflineMode = false, onVoiceCall,
     availableOllamaModels = [], llamaCppAvailable = false, llamaCppModels = [], onSettingsChange,
