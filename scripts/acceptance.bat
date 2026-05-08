@@ -149,6 +149,11 @@ if "!CODE!"=="200" (
 )
 exit /b 0
 
+:check_no_leak
+findstr /C:"%~2" "%~1" >nul 2>&1
+if errorlevel 1 ( echo  [PASS] no leak in %~1: "%~2" ) else ( echo  [FAIL] LEAK in %~1: "%~2" & set /a FAIL+=1 )
+exit /b 0
+
 :check_export_stl
 set "BODY={\"scad\":\"cube(10);\",\"name\":\"acceptance_test\"}"
 curl -s -o nul -w "%%{http_code}" --max-time 30 -H "content-type: application/json" -d "!BODY!" "http://127.0.0.1:3847/3d/export-stl" > "%TEMP%\acc.tmp" 2>nul
