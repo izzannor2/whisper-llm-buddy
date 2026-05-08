@@ -62,6 +62,13 @@ echo  --- Update checks ---
 call :check_file src\lib\update-system.ts
 call :check_file public\updates\manifest.json
 
+echo.
+echo  --- Default purity checks (no cloud/Gemini/llama-3.2 leaks) ---
+call :check_no_leak src\lib\chat-api.ts        "backend: 'cloud'"
+call :check_no_leak src\lib\chat-api.ts        "model: 'gemini-flash'"
+call :check_no_leak src\components\ChatInput.tsx        "selectedModel = 'llama-3.2-1b'"
+call :check_no_leak src\components\VoiceCallMode.tsx    "useState('gemini-flash')"
+
 if "!DO_BUILD!"=="1" (
     echo.
     echo  [ ] running: npm run build  ^(may take a minute^)
