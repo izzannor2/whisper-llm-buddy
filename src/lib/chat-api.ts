@@ -270,10 +270,8 @@ export async function sendChatMessage(
 
   const role = meta?.role || 'unknown';
   const startedAt = Date.now();
-  let fallback = false;
-  let fallbackReason: string | undefined;
-  let usedBackend = settings.backend;
-  let usedModel = backendModelLabel(settings);
+  const usedBackend = settings.backend;
+  const usedModel = backendModelLabel(settings);
 
   try {
     const response = await dispatchToBackend(allMessages, settings, onChunk);
