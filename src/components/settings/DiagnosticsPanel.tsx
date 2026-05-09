@@ -55,6 +55,7 @@ export function DiagnosticsPanel() {
 
   return (
     <div className="space-y-4">
+      <ReleaseCheckPanel />
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
