@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { buildBundle, copyBundle, copySupportReport, downloadBundle, type DiagnosticBundle } from '@/lib/diagnostics';
 import { subscribe, getBuffer, type BusEvent, emitError } from '@/lib/error-bus';
 import { getModelCallLog, clearModelCallLog, type ModelCallRecord } from '@/lib/chat-api';
+import { ReleaseCheckPanel } from './ReleaseCheckPanel';
 
 function StatusDot({ s }: { s: 'ok' | 'missing' | 'error' | 'offline' }) {
   if (s === 'ok') return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 inline" />;
