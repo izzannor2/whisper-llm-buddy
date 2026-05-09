@@ -1,188 +1,90 @@
+# Release Candidate — Verification & Polish Pass
 
-# AI Companion Hub — Release Stabilization Plan
+This is a large multi-area pass. To stay safe and shippable, I'll do it in tightly scoped, verifiable slices. Each slice has a clear acceptance signal so we can stop and adjust between sections instead of producing a 30-file mega-diff that breaks the build.
 
-This is a single, focused stabilization pass. No new features. Goal: make Chat, App Builder, and 3D Printing feel like real products, remove cloud/Gemini leakage, route all AI through one system, and ship clean diagnostics.
+## Scope (9 sections)
 
----
+1. **Chat diagnostics + Chat Health card** (home screen)
+2. **App Builder Lovable-style repair loop** (generate → preview → auto-fix up to 3x)
+3. **App Builder preview controls** (Restart/Stop/Copy URL/Logs/Debug)
+4. **3D direct manipulation** (already partially done — verify + fill gaps: duplicate/delete/align)
+5. **3D reference image attachment** in AI requests + vision-model warning
+6. **Navigation simplification** — 7 top-level routes, rest under Advanced Tools
+7. **Release Check screen** in Diagnostics
+8. **Error quality mapping** — friendly remediation for known failure modes
+9. **Final proof** — `npm run build`, `acceptance.bat`, `acceptance.bat --build`, release-check output, changed file list
 
-## A. Remove cloud/Gemini & fake defaults (highest priority)
+## Execution order
 
-Files to change:
+I'll ship in this order, smallest blast radius first:
 
-- `src/lib/chat-api.ts`
-  - `DEFAULT_SETTINGS.backend`: `'cloud'` → `'auto'` (resolved via routing).
-  - `DEFAULT_SETTINGS.model`: `'gemini-flash'` → `''`.
-  - Remove the auto-fallback-to-cloud branch (lines ~286-296). Replace with a typed error: `NoModelAvailableError` so UI can show a setup card.
-  - Keep cloud entries in `AVAILABLE_MODELS` but only used when user explicitly selects cloud.
-- `src/components/ChatInput.tsx`
-  - Remove `selectedModel = 'llama-3.2-1b'` default. Resolve from `resolveModelSync('assistant', cachedRegistry)` on render; if none, disable Send and show inline setup hint.
-- `src/components/VoiceCallMode.tsx`
-  - Remove `useState('gemini-flash')`. Initialize from `resolveModel('voice')`. If none → "No voice model selected" state with link to Model Routing.
-- `src/components/SettingsDialog.tsx`
-  - Remove the "Use Cloud / Gemini Flash" preset block (lines ~585-600). Cloud only appears under Settings → Advanced → Cloud Providers.
+```text
+1. lib/chat-diagnostics.ts        (new — ring buffer of last N calls)
+2. lib/error-mapping.ts           (new — friendly remediation strings)
+3. components/ChatHealthCard.tsx  (new — home screen)
+4. lib/preview-pipeline.ts        (new — orchestrates auto-fix loop)
+5. components/ide/PreviewControls.tsx (extend existing PreviewHealthCard)
+6. components/threed/SceneViewer  (verify + add duplicate/delete/align ops)
+7. components/threed/AIAssistantPanel (attach reference image + scene context)
+8. components/ModesSidebar        (collapse experimental into Advanced Tools)
+9. components/settings/ReleaseCheckPanel.tsx (new)
+10. lib/error-mapping wired into chat-api + agent fetches
+11. scripts/acceptance.bat — extend with release-check + new regression guards
+12. Build + acceptance + release-check
+```
 
-Search-and-label sweep (no behavior change, just labels): grep for `mock|fake|simulate|sample model|demo model|hardcoded model|llama3\.2|llama-3\.2-1b|gemini-flash` and either remove, or rename with `// TEMPLATE:` comment if the string is genuinely a template.
+## Technical details
 
-Acceptance: `rg "gemini-flash|llama-3\.2-1b" src/` returns only model-registry definitions, never default state.
+**chat-diagnostics.ts**
+Ring buffer (last 50). Each entry: `{ id, role, provider, model, endpoint, fallbackReason, ms, error?, ts }`. Exposed via `recordCall(...)` and `getRecent()`. `chat-api.ts` calls `recordCall` after every request (success + failure).
 
----
+**ChatHealthCard.tsx** (mounted on `/` Index page)
+Reads `resolveModelSync('assistant')`, agent status, registry snapshot, last diagnostic entry. Compact 6-row grid: Assistant model, Provider, Agent, Ollama, GGUF, Voice, Last error.
 
-## B. One model system everywhere
+**preview-pipeline.ts**
+State machine: `idle → planning → generating → writing → starting → fixing(n) → ready | error`. `runBuild(prompt, opts)` orchestrates; on Vite/runtime error captured from agent response, calls app-builder model with error + file context, max 3 fixes. Keeps `lastGoodPreviewUrl` so UI doesn't blank out on fail.
 
-Centralize through `src/lib/model-routing.ts` (already exists). Add a thin helper `src/lib/ai-call.ts` that:
+**PreviewControls** — extend existing `PreviewHealthCard.tsx` with:
+- `Stop Preview` button → POST `/preview/stop`
+- `Copy Preview Logs` → fetch `/preview/logs?session=...` then clipboard
+- (Restart, Copy URL, Copy Debug already exist)
 
-1. Takes `{ role, messages, signal }`.
-2. Calls `resolveModel(role)`, returns typed errors when unavailable.
-3. Dispatches to the right backend (Ollama / llama.cpp / cloud) based on `detected.provider`.
-4. Logs every call to a ring buffer (`src/lib/ai-call-log.ts`, last 50) with: role, provider, model, fallbackReason, endpoint, durationMs, error.
+**3D SceneViewer**
+Already has TransformControls + snap (per earlier context). Add:
+- `Duplicate` (Ctrl+D) — clone selected, offset +5 on X
+- `Delete` (Del) — remove from scene
+- Align toolbar buttons: Align X / Y / Z (snap to first selected position component)
+- Union/Subtract (already implemented previously — verify)
 
-Wire callsites:
-- Normal chat (Index/ChatInput) → role `assistant`
-- VoiceCallMode → `voice`
-- AutoBuildPanel + App Builder send path → `app-builder`
-- IDEChat → `ide`
-- ImproveWorkspace → `improvement`
-- 3D AIAssistantPanel/AIModifyPanel → `3d-printing`
-- Vision-bearing requests (image/sketch attached) → `vision` (fallback to assistant if no vision model exists, with explicit toast).
+Each op calls `regenerateScad()` and `onSceneChange()`.
 
-Diagnostics panel reads the ring buffer and includes it in Copy Support Report.
+**AIAssistantPanel (3D)**
+Build payload `{ prompt, sceneJson, scad, selectedId, dimensions, constraints, referenceImage }`. If no vision model resolved (`resolveModelSync('vision').detected === null`) and image present → toast warning + omit image from payload but keep prompt.
 
----
+**ModesSidebar**
+Top-level keep: Chat, App Builder, IDE, 3D Printing, IoT, Models, Settings.
+Move under collapsible `Advanced Tools`: Memory, OpenClaw, Task Graph, Sandbox, Plugins, System Helper, Learning Mode, Autonomous Mode.
 
-## C. Normal chat polish
+**ReleaseCheckPanel**
+Async checklist runner. Each check returns `{ name, ok, detail }`. Renders as colored list with Copy Report button.
 
-- `src/pages/Index.tsx`: hide debug/agent panels by default; collapse advanced into a drawer toggle.
-- New `src/components/ChatHealthCard.tsx`: shows assistant model, provider, agent/Ollama/GGUF/voice statuses, last error. Used as empty-state inside Index when no model resolves.
-- ChatInput Send button: disabled only on (empty) OR (no resolved model) OR (provider unreachable). Tooltip explains why.
-- Replace generic `Failed to fetch` toasts with the typed-error mapping from B.
+**error-mapping.ts**
+```ts
+export function explainError(e: unknown, ctx: 'agent'|'ollama'|'gguf'|'preview'|'openscad'|'model'|'chat'): string
+```
+Returns the friendly remediation strings from section 8.
 
----
+## Out of scope / intentionally skipped
 
-## D. App Builder Lovable-style
+- Renaming the npm package
+- Brand new IoT workspace work
+- Replacing the Auto-Build Panel (it already does steps 1–6 of the pipeline; the new `preview-pipeline.ts` is for App Builder preview specifically and reuses Auto-Build's parser).
+- I will not run `npm run build` manually — the harness runs it automatically. I'll report what the harness shows.
 
-Backend (`server/index.cjs`):
-- `POST /dev-server/start { sessionId? }` → creates `.preview-workspace/session-<id>/`, runs `npm i` + `vite` on a free port, returns `{ url, port, sessionFolder }`.
-- `POST /dev-server/stop { sessionId }` → SIGTERM, do NOT rmSync while running.
-- `GET /dev-server/status` → list of active sessions, last build error, last good preview URL.
-- `GET /debug/snapshot`, `GET /debug/bundle` already exist — extend to include preview state.
-- Session retention: keep last 5, prune older async (never delete the active one).
+## Acceptance signals
 
-Frontend:
-- `src/lib/preview-builder.ts`: orchestrates write-files → start → poll status → swap iframe. On failure, keep the previous-good iframe mounted, show inline error banner.
-- Auto-fix loop (max 3): catches build/runtime error → re-prompts `app-builder` model with error+files → applies patches → restarts preview.
-- Stage labels: Planning → Generating → Writing files → Starting preview → Fixing error → Ready.
-- Preview UI controls: Restart, Stop, Copy URL, Copy Logs, Copy Debug.
+After each slice I'll either run a targeted check (rg / view / curl-equivalent) or fall back to a build-pass. Final pass:
+- `acceptance.bat` and `acceptance.bat --build` lines added/updated to assert: no `gemini-flash` default, no `llama-3.2-1b` default, ChatHealthCard present, ReleaseCheckPanel present, preview-pipeline present.
+- I'll list every file changed at the end.
 
----
-
-## E. 3D Printing CAD layout
-
-`src/pages/ThreeDWorkspace.tsx` reorganized:
-- **Left rail**: ShapeToolbox extended with Select/Move/Rotate/Scale tool toggles + primitive buttons (cube/cylinder/sphere/cone/text/bracket/screw-hole/RC-wheel/servo-mount/hole-subtract).
-- **Center**: SceneViewer (already has TransformControls + snap guides from earlier passes).
-- **Right**: ShapeProperties → AIAssistantPanel → ReferenceImagePanel → SketchPad → PrinterConstraintsPanel (tabbed/accordion).
-- **Bottom**: collapsible SCAD editor (hidden by default behind "Code View" toggle).
-
-Live Preview toggle in header debounces SCAD generation and re-renders STL via `/openscad/render`. On render failure, keep last good STL in viewer + show stderr/line in inline error chip. Never write fake STL.
-
-Viewer controls: Reset Camera, Fit, Auto-rotate, Wireframe/Shaded, Grid, Axes, Screenshot. Inspector shows bbox, tri/vertex count, STL size, approx volume (labelled "approx").
-
----
-
-## F. AI 3D assistant + voice + image + sketch
-
-- `AIAssistantPanel`: include scene JSON, current SCAD, selected object id, dimensions, printer constraints, and any reference image/sketch base64 in the request payload.
-- Voice mic in 3D header → reuses shared voice system (role `voice`), command parser unchanged.
-- Reference image: when no `vision` role resolves, show the literal copy: "Reference image will guide editable CAD/OpenSCAD generation."
-- SketchPad: pen/eraser/undo/clear → flatten to PNG → attach as reference.
-
----
-
-## G. Navigation simplification
-
-`src/components/ModesSidebar.tsx`:
-- Primary: Chat, App Builder, IDE, 3D Printing, IoT, Models, Settings.
-- "Advanced Tools" collapsible drawer: OpenClaw, Autonomous, Task Graph, Memory, Plugins, Sandbox, System Helper, Learning Mode.
-- No deletions — just re-grouping.
-
----
-
-## H. Settings cleanup
-
-`src/pages/IDESettings.tsx` tabs: General, Models, Model Routing, Voice, Updates, Diagnostics, Advanced.
-- Remove the legacy "backend preset" block in `SettingsDialog.tsx` (or remove the dialog entirely if unused after Index cleanup — verify references first).
-- Move cloud-provider fields, OpenClaw, plugins, sandbox, system helper into Advanced tab.
-
----
-
-## I. Voice everywhere
-
-Single `useVoice()` hook (already exists as scattered logic) — consolidate into `src/hooks/use-voice.ts` exposing `{state, start, stop, lastError}`. Mount the same mic button component in Chat, App Builder, IDE, Improve, 3D headers. Voice model resolved through routing role `voice`.
-
----
-
-## J. Diagnostics + Updates
-
-- `src/components/settings/DiagnosticsPanel.tsx`: add prominent "Copy Support Report" button. Collects: app version, URL, UA, model registry snapshot, routing, chat health, agent/Ollama/GGUF/preview/3D/OpenSCAD statuses, updates state, last 20 errors, AI call log ring buffer.
-- `UpdatesPanel.tsx`: relabel rollback as "Restores settings/version only — does not restore source files." Separate Import Update Package vs Import History clearly.
-
----
-
-## K. Launcher cleanup
-
-- Move `START-GGUF-SERVER.bat`, `START-OLLAMA-PORTABLE.bat`, `start-offline.bat`, `stop-offline.bat` into `scripts/advanced/` (or symlinks/wrappers if path-sensitive).
-- Top-level user scripts: `RUN-ALL.bat`, `STOP-PORTABLE-AI.bat`, `REPAIR-APP.bat`.
-- `RUN-ALL.bat` already hardened in prior pass — verify drive-agnostic `%~dp0`, log redirection, and port-owner reporting still in place.
-
----
-
-## L. Package polish
-
-- `package.json`: `name` → `ai-companion-hub`, `version` → `1.0.0`.
-- Sweep buttons/icons/labels for consistency in Index, App Builder, IDE, 3D headers.
-
----
-
-## M. Acceptance test updates
-
-`scripts/acceptance.bat` additions:
-- Grep guard: fail if `src/lib/chat-api.ts` or `ChatInput.tsx` contains literal default `'gemini-flash'` / `'llama-3.2-1b'`.
-- Verify `src/lib/ai-call.ts` exists.
-- Verify `/dev-server/start` and `/dev-server/stop` endpoints respond.
-- Existing 3D + preview checks remain.
-
----
-
-## Out of scope (intentionally left approximate)
-
-- True image-to-3D mesh generation (kept as labelled approximate).
-- Volume / overhang / manifold analysis (labelled approximate in inspector).
-- Shipping a full project zip — repo state is the deliverable; user can zip from working tree.
-
----
-
-## Technical notes
-
-- No DB schema changes.
-- No new edge functions (reuse `chat`, `models`).
-- No new dependencies expected; three.js / TransformControls already installed from prior pass.
-- All changes are frontend + `server/index.cjs` (preview endpoints) + batch scripts.
-- `src/integrations/supabase/*` untouched.
-
----
-
-## Execution order (single build pass)
-
-1. Defaults purge (A) — smallest blast radius first.
-2. `ai-call.ts` + ring buffer (B).
-3. Rewire chat/voice/builder/IDE/improve/3D callsites (B cont.).
-4. ChatHealthCard + Index simplification (C, G).
-5. Server preview endpoints + preview-builder (D).
-6. 3D layout reorg (E, F).
-7. Settings tab consolidation (H).
-8. Voice hook unification (I).
-9. Diagnostics support report + Updates relabel (J).
-10. Launcher reshuffle + package.json (K, L).
-11. Acceptance test updates + run `npm run build` + `scripts/acceptance.bat --build` (M).
-
-Proof returned: changed files list, build log tail, acceptance log tail.
+If any slice gets stuck I'll stop and report rather than cascade more changes.
