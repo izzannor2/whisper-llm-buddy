@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Sparkles, Wand2 } from 'lucide-react';
 import { sendChatMessage, loadSettings } from '@/lib/chat-api';
+import { resolveModelSync } from '@/lib/model-routing';
+import { getCachedRegistry } from '@/lib/model-registry';
+import { toast } from 'sonner';
 import type { Scene, SceneNode } from '@/lib/threed-scene';
 import type { PrinterConstraints } from './PrinterConstraintsPanel';
 
