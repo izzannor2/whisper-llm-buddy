@@ -11,6 +11,7 @@ import { ChatInput, ChatInputRef, type ChatInputProps } from '@/components/ChatI
 // SettingsDialog removed — settings now live exclusively at /settings
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { EmptyState } from '@/components/EmptyState';
+import { ChatHealthCard } from '@/components/ChatHealthCard';
 import { CodeLibrary } from '@/components/CodeLibrary';
 import { OpenClawOverlay } from '@/components/OpenClawOverlay';
 import { LockScreen } from '@/components/LockScreen';
