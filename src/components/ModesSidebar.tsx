@@ -35,14 +35,14 @@ interface ModesSidebarProps {
 type ModeEntry = { id: IDEMode; name: string; description: string; icon: React.ReactNode };
 
 const PRIMARY_MODES: ModeEntry[] = [
+  { id: 'ide-coding', name: 'Chat', description: 'General assistant chat', icon: <MessageSquare className="w-5 h-5" /> },
   { id: 'app-builder', name: 'App Builder', description: 'Full-stack web apps with live preview', icon: <Layers className="w-5 h-5" /> },
-  { id: 'ide-coding', name: 'IDE / Coding', description: 'General coding chat and snippets', icon: <MessageSquare className="w-5 h-5" /> },
-  { id: 'ai-improvement', name: 'AI Improvement', description: 'Modify this app itself', icon: <Sparkles className="w-5 h-5" /> },
-  { id: 'embedded-iot', name: 'Embedded / IoT', description: 'ESP32, Arduino, Raspberry Pi', icon: <Cpu className="w-5 h-5" /> },
+  { id: 'embedded-iot', name: 'IoT / Embedded', description: 'ESP32, Arduino, Raspberry Pi', icon: <Cpu className="w-5 h-5" /> },
   { id: '3d-printing', name: '3D Printing', description: 'OpenSCAD models and STL export', icon: <Box className="w-5 h-5" /> },
 ];
 
 const ADVANCED_MODES: ModeEntry[] = [
+  { id: 'ai-improvement', name: 'AI Improvement', description: 'Modify this app itself', icon: <Sparkles className="w-5 h-5" /> },
   { id: 'system-helper', name: 'System Helper', description: 'Computer tasks and cleanup', icon: <Terminal className="w-5 h-5" /> },
   { id: 'sandbox', name: 'Sandbox', description: 'Safe experimental environment', icon: <FlaskConical className="w-5 h-5" /> },
   { id: 'plugin', name: 'Plugins', description: 'Manage custom plugins', icon: <Plug className="w-5 h-5" /> },

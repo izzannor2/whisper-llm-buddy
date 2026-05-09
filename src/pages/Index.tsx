@@ -11,6 +11,7 @@ import { ChatInput, ChatInputRef, type ChatInputProps } from '@/components/ChatI
 // SettingsDialog removed — settings now live exclusively at /settings
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { EmptyState } from '@/components/EmptyState';
+import { ChatHealthCard } from '@/components/ChatHealthCard';
 import { CodeLibrary } from '@/components/CodeLibrary';
 import { OpenClawOverlay } from '@/components/OpenClawOverlay';
 import { LockScreen } from '@/components/LockScreen';
@@ -607,7 +608,10 @@ export default function Index() {
         <ScrollArea className="flex-1" ref={scrollRef}>
           <div className="max-w-4xl mx-auto py-6 px-4 h-full">
             {!currentConversation || currentConversation.messages.length === 0 ? (
-              <EmptyState mode={currentMode} modeKey={currentModeKey} />
+              <div className="flex flex-col items-center gap-6 pt-4">
+                <EmptyState mode={currentMode} modeKey={currentModeKey} />
+                <ChatHealthCard />
+              </div>
             ) : (
               <div className="space-y-6">
                 {currentConversation.messages.map((msg) => (

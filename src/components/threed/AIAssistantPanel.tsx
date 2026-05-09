@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Sparkles, Wand2 } from 'lucide-react';
 import { sendChatMessage, loadSettings } from '@/lib/chat-api';
+import { resolveModelSync } from '@/lib/model-routing';
+import { getCachedRegistry } from '@/lib/model-registry';
+import { toast } from 'sonner';
 import type { Scene, SceneNode } from '@/lib/threed-scene';
 import type { PrinterConstraints } from './PrinterConstraintsPanel';
 
@@ -59,11 +62,17 @@ export function AIAssistantPanel(props: Props) {
       ].join('');
 
       const userMsg: any = { role: 'user', content: ctx };
-      // If we have images and the model supports it, attach as multimodal — chat-api may pass through.
+      // Vision-model gating: only attach images if a vision model is wired.
+      const visionRes = resolveModelSync('vision', getCachedRegistry());
+      const hasVisionModel = !!visionRes.detected;
       const images: string[] = [];
       if (props.referenceImage) images.push(props.referenceImage);
       if (props.sketchImage) images.push(props.sketchImage);
-      if (images.length) (userMsg as any).images = images;
+      if (images.length && hasVisionModel) {
+        (userMsg as any).images = images;
+      } else if (images.length && !hasVisionModel) {
+        toast.info('No vision model selected. Image will guide the user visually only — not sent to AI.');
+      }
 
       props.onState('updating', 'Updating model…');
       const reply = await sendChatMessage(
