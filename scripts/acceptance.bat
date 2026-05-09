@@ -21,6 +21,9 @@ call :check_file src\components\settings\DiagnosticsPanel.tsx
 call :check_file src\components\ide\PreviewHealthCard.tsx
 call :check_file src\pages\ThreeDWorkspace.tsx
 call :check_file src\components\threed\AcceptanceChecklist.tsx
+call :check_file src\components\ChatHealthCard.tsx
+call :check_file src\components\settings\ReleaseCheckPanel.tsx
+call :check_file src\lib\error-mapping.ts
 call :check_wraps start.bat "RUN-ALL.bat"
 call :check_wraps START-PORTABLE-AI.bat "RUN-ALL.bat"
 
