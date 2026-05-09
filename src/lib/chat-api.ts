@@ -273,11 +273,12 @@ export async function sendChatMessage(
   const startedAt = Date.now();
   const usedBackend = settings.backend;
   const usedModel = backendModelLabel(settings);
+  const endpoint = backendEndpoint(settings);
 
   try {
     const response = await dispatchToBackend(allMessages, settings, onChunk);
     pushModelCall({
-      timestamp: startedAt, role, backend: usedBackend, model: usedModel,
+      timestamp: startedAt, role, backend: usedBackend, model: usedModel, endpoint,
       responseMs: Date.now() - startedAt, ok: true, fallback: false, overrideApplied,
     });
     return response;
@@ -285,11 +286,24 @@ export async function sendChatMessage(
     // No silent cloud fallback. Cloud is opt-in only — surface the real error
     // so the UI can show a clear setup card or actionable message.
     pushModelCall({
-      timestamp: startedAt, role, backend: usedBackend, model: usedModel,
+      timestamp: startedAt, role, backend: usedBackend, model: usedModel, endpoint,
       responseMs: Date.now() - startedAt, ok: false, fallback: false, overrideApplied,
       error: err instanceof Error ? err.message : String(err),
     });
     throw err;
+  }
+}
+
+function backendEndpoint(s: ChatSettings): string {
+  switch (s.backend) {
+    case 'local': return `${s.localUrl}/v1/chat/completions`;
+    case 'ollama': return `${s.ollamaUrl}/api/chat`;
+    case 'openai': return 'https://api.openai.com/v1/chat/completions';
+    case 'anthropic': return 'https://api.anthropic.com/v1/messages';
+    case 'google': return 'https://generativelanguage.googleapis.com';
+    case 'huggingface': return 'https://api-inference.huggingface.co';
+    case 'blackbox': return 'https://www.blackbox.ai/api/chat';
+    default: return '(supabase edge: chat)';
   }
 }
 
