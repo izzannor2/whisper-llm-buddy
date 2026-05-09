@@ -219,6 +219,7 @@ export interface ModelCallRecord {
   role: string;
   backend: string;
   model: string;
+  endpoint?: string;
   responseMs: number;
   ok: boolean;
   fallback: boolean;
