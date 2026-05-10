@@ -21,6 +21,7 @@ import { SystemCommand, parseCommandFromAIResponse, executeCommand as executeSys
 import { downloadProjectAsZip, downloadStartupScript, generateDocumentation } from '@/lib/project-export';
 import { parseCodeBlocks, applyCodeBlocks, isBuildTrigger, getAppBuilderBuildPrompt, getAppBuilderPlanPrompt } from '@/lib/code-parser';
 import { buildPreviewHTML } from '@/lib/preview-builder';
+import { attemptPreviewRepair, PREVIEW_REPAIR_MAX_ATTEMPTS } from '@/lib/preview-repair';
 import { checkAgentStatus, downloadAgentScript, startDevServer, stopDevServer, AgentStatus, onOutput } from '@/lib/local-backend-agent';
 import { onOpenClawEventForIDE } from '@/lib/openclaw-bridge';
 import { initTTS, speakAIResponse, getTTSSettings } from '@/lib/tts-engine';
@@ -73,6 +74,12 @@ export default function IDE() {
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [filesCollapsed, setFilesCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  // Auto-repair (Lovable-style) state
+  const [lastGoodPreviewHtml, setLastGoodPreviewHtml] = useState<string | undefined>();
+  const repairAttemptsRef = useRef(0);
+  const generationCompletedAtRef = useRef(0);
+  const repairInFlightRef = useRef(false);
+  const [isRepairing, setIsRepairing] = useState(false);
 
   // Listen for debug messages from preview iframe
   useEffect(() => {
@@ -82,13 +89,47 @@ export default function IDE() {
         if (settings.autoOpenDebugOnError && rightPanelTab !== 'debug') {
           setRightPanelTab('debug');
         }
+        // Auto-repair window: only fire shortly after a generation, max 3 times
+        const sinceGen = Date.now() - generationCompletedAtRef.current;
+        if (
+          (settings.mode === 'app-builder' || settings.mode === 'ai-improvement') &&
+          sinceGen < 30_000 &&
+          repairAttemptsRef.current < PREVIEW_REPAIR_MAX_ATTEMPTS &&
+          !repairInFlightRef.current &&
+          project
+        ) {
+          repairInFlightRef.current = true;
+          setIsRepairing(true);
+          repairAttemptsRef.current += 1;
+          const attempt = repairAttemptsRef.current;
+          toast.info(`Auto-repair attempt ${attempt}/${PREVIEW_REPAIR_MAX_ATTEMPTS}…`);
+          attemptPreviewRepair(project.files, [event.data.message])
+            .then((res) => {
+              if (res.patchedFiles && res.filesChanged.length > 0) {
+                const updatedProject = { ...project, files: res.patchedFiles, updatedAt: Date.now() };
+                setProject(updatedProject);
+                saveProject(updatedProject);
+                const html = buildPreviewHTML(res.patchedFiles);
+                setPreviewHtml(html);
+                toast.success(`Auto-repair patched ${res.filesChanged.length} file(s)`);
+              } else {
+                toast.warning(res.finalError || 'Auto-repair produced no changes');
+              }
+            })
+            .catch((e) => toast.error(`Auto-repair failed: ${e?.message || e}`))
+            .finally(() => { repairInFlightRef.current = false; setIsRepairing(false); });
+        }
       } else if (event.data?.type === 'preview-log') {
         setDebugLogs(prev => [...prev.slice(-99), { type: 'info', message: event.data.message, timestamp: Date.now() }]);
+      } else if (event.data?.type === 'preview-ready') {
+        // No errors received → snapshot last-good HTML
+        if (previewHtml) setLastGoodPreviewHtml(previewHtml);
+        repairAttemptsRef.current = 0;
       }
     };
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
-  }, [settings.autoOpenDebugOnError, rightPanelTab]);
+  }, [settings.autoOpenDebugOnError, settings.mode, rightPanelTab, project, previewHtml]);
 
   useEffect(() => {
     setSettings(getIDESettings());
@@ -372,8 +413,10 @@ export default function IDE() {
           const totalChanges = created.length + updated.length;
           toast.success(`Applied ${totalChanges} file${totalChanges > 1 ? 's' : ''}: ${created.length} created, ${updated.length} updated`);
 
-          // Auto-generate preview
+          // Auto-generate preview + open auto-repair window
           generatePreview(updatedFiles);
+          generationCompletedAtRef.current = Date.now();
+          repairAttemptsRef.current = 0;
         }
       }
 
