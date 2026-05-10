@@ -74,6 +74,12 @@ export default function IDE() {
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [filesCollapsed, setFilesCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  // Auto-repair (Lovable-style) state
+  const [lastGoodPreviewHtml, setLastGoodPreviewHtml] = useState<string | undefined>();
+  const repairAttemptsRef = useRef(0);
+  const generationCompletedAtRef = useRef(0);
+  const repairInFlightRef = useRef(false);
+  const [isRepairing, setIsRepairing] = useState(false);
 
   // Listen for debug messages from preview iframe
   useEffect(() => {
