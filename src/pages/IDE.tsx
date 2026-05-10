@@ -129,7 +129,7 @@ export default function IDE() {
     };
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
-  }, [settings.autoOpenDebugOnError, rightPanelTab]);
+  }, [settings.autoOpenDebugOnError, settings.mode, rightPanelTab, project, previewHtml]);
 
   useEffect(() => {
     setSettings(getIDESettings());
