@@ -285,12 +285,17 @@ export async function sendChatMessage(
   } catch (err) {
     // No silent cloud fallback. Cloud is opt-in only — surface the real error
     // so the UI can show a clear setup card or actionable message.
+    const { explainAndFormat } = await import('./error-mapping');
+    const ctx = usedBackend === 'ollama' ? 'ollama'
+      : usedBackend === 'local' ? 'gguf'
+      : 'chat';
+    const friendly = explainAndFormat(err, ctx as any);
     pushModelCall({
       timestamp: startedAt, role, backend: usedBackend, model: usedModel, endpoint,
       responseMs: Date.now() - startedAt, ok: false, fallback: false, overrideApplied,
-      error: err instanceof Error ? err.message : String(err),
+      error: friendly,
     });
-    throw err;
+    throw new Error(friendly);
   }
 }
 
