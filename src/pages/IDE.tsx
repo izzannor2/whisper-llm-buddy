@@ -21,6 +21,7 @@ import { SystemCommand, parseCommandFromAIResponse, executeCommand as executeSys
 import { downloadProjectAsZip, downloadStartupScript, generateDocumentation } from '@/lib/project-export';
 import { parseCodeBlocks, applyCodeBlocks, isBuildTrigger, getAppBuilderBuildPrompt, getAppBuilderPlanPrompt } from '@/lib/code-parser';
 import { buildPreviewHTML } from '@/lib/preview-builder';
+import { attemptPreviewRepair, PREVIEW_REPAIR_MAX_ATTEMPTS } from '@/lib/preview-repair';
 import { checkAgentStatus, downloadAgentScript, startDevServer, stopDevServer, AgentStatus, onOutput } from '@/lib/local-backend-agent';
 import { onOpenClawEventForIDE } from '@/lib/openclaw-bridge';
 import { initTTS, speakAIResponse, getTTSSettings } from '@/lib/tts-engine';
