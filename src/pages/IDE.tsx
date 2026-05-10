@@ -89,8 +89,42 @@ export default function IDE() {
         if (settings.autoOpenDebugOnError && rightPanelTab !== 'debug') {
           setRightPanelTab('debug');
         }
+        // Auto-repair window: only fire shortly after a generation, max 3 times
+        const sinceGen = Date.now() - generationCompletedAtRef.current;
+        if (
+          (settings.mode === 'app-builder' || settings.mode === 'ai-improvement') &&
+          sinceGen < 30_000 &&
+          repairAttemptsRef.current < PREVIEW_REPAIR_MAX_ATTEMPTS &&
+          !repairInFlightRef.current &&
+          project
+        ) {
+          repairInFlightRef.current = true;
+          setIsRepairing(true);
+          repairAttemptsRef.current += 1;
+          const attempt = repairAttemptsRef.current;
+          toast.info(`Auto-repair attempt ${attempt}/${PREVIEW_REPAIR_MAX_ATTEMPTS}…`);
+          attemptPreviewRepair(project.files, [event.data.message])
+            .then((res) => {
+              if (res.patchedFiles && res.filesChanged.length > 0) {
+                const updatedProject = { ...project, files: res.patchedFiles, updatedAt: Date.now() };
+                setProject(updatedProject);
+                saveProject(updatedProject);
+                const html = buildPreviewHTML(res.patchedFiles);
+                setPreviewHtml(html);
+                toast.success(`Auto-repair patched ${res.filesChanged.length} file(s)`);
+              } else {
+                toast.warning(res.finalError || 'Auto-repair produced no changes');
+              }
+            })
+            .catch((e) => toast.error(`Auto-repair failed: ${e?.message || e}`))
+            .finally(() => { repairInFlightRef.current = false; setIsRepairing(false); });
+        }
       } else if (event.data?.type === 'preview-log') {
         setDebugLogs(prev => [...prev.slice(-99), { type: 'info', message: event.data.message, timestamp: Date.now() }]);
+      } else if (event.data?.type === 'preview-ready') {
+        // No errors received → snapshot last-good HTML
+        if (previewHtml) setLastGoodPreviewHtml(previewHtml);
+        repairAttemptsRef.current = 0;
       }
     };
     window.addEventListener('message', handlePreviewMessage);
