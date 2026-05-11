@@ -24,7 +24,19 @@ export function ShapeProperties({ node, onChange }: Props) {
 
   return (
     <div className="border border-border rounded-md bg-muted/20 p-2 space-y-2">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{def.label} — Properties</div>
+      <div className="flex items-center gap-2">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground flex-1">{def.label} — Properties</div>
+        <button
+          className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:bg-accent/30"
+          onClick={() => onChange({ visible: !node.visible })}
+          title="Toggle visibility"
+        >{node.visible ? 'Hide' : 'Show'}</button>
+        <button
+          className={`text-[10px] px-1.5 py-0.5 rounded border ${node.locked ? 'border-amber-400 text-amber-400' : 'border-border'} hover:bg-accent/30`}
+          onClick={() => onChange({ locked: !node.locked })}
+          title="Toggle lock (prevents transform gizmo)"
+        >{node.locked ? 'Locked' : 'Unlocked'}</button>
+      </div>
 
       <div className="grid grid-cols-[80px_1fr] gap-1.5 items-center text-xs">
         <Label className="text-xs">Boolean</Label>

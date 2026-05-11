@@ -23,6 +23,7 @@ export interface SceneNode {
   kind: ShapeKind;
   op: Op;            // how this node combines with the running model. 'difference' = subtract / hole.
   visible: boolean;
+  locked?: boolean;
   params: Record<string, number | string>;
   pos: { x: number; y: number; z: number };
   rot: { x: number; y: number; z: number };
