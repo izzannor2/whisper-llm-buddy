@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Copy, Trash2, ArrowUp, ArrowDown, Pencil } from 'lucide-react';
+import { Eye, EyeOff, Copy, Trash2, ArrowUp, ArrowDown, Pencil, Lock, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
