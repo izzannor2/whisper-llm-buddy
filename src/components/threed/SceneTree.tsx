@@ -57,6 +57,9 @@ export function SceneTree({ nodes, selectedId, onSelect, onUpdate, onDuplicate, 
                 <span className="flex-1 truncate" onDoubleClick={(e) => { e.stopPropagation(); setEditing(n.id); }}>{n.name}</span>
               )}
               <span className="text-[9px] text-muted-foreground font-mono">{n.kind}</span>
+              <button onClick={(e) => { e.stopPropagation(); onUpdate(n.id, { locked: !n.locked }); }} className="text-muted-foreground hover:text-foreground" title={n.locked ? 'Unlock' : 'Lock'}>
+                {n.locked ? <Lock className="w-3 h-3 text-amber-400" /> : <Unlock className="w-3 h-3" />}
+              </button>
               <button onClick={(e) => { e.stopPropagation(); setEditing(n.id); }} className="text-muted-foreground hover:text-foreground" title="Rename"><Pencil className="w-3 h-3" /></button>
               <button onClick={(e) => { e.stopPropagation(); onMove(n.id, -1); }} disabled={i === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30" title="Move up"><ArrowUp className="w-3 h-3" /></button>
               <button onClick={(e) => { e.stopPropagation(); onMove(n.id, 1); }} disabled={i === nodes.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30" title="Move down"><ArrowDown className="w-3 h-3" /></button>
