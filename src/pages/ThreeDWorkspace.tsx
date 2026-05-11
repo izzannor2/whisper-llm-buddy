@@ -556,6 +556,9 @@ export default function ThreeDWorkspace() {
                   onSelect={setSelectedId}
                   onUpdate={updateNode}
                   onScreenshot={(u) => { lastScreenshotRef.current = u; }}
+                  onDelete={deleteNode}
+                  onDuplicate={duplicateNode}
+                  onSetOp={(id, op) => updateNode(id, { op })}
                 />
               ) : stl ? (
                 <StlViewer stl={stl} onInfo={setViewerInfo} onScreenshot={(u) => { lastScreenshotRef.current = u; }} />
