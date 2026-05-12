@@ -29,6 +29,8 @@ import { ReferenceImagePanel } from '@/components/threed/ReferenceImagePanel';
 import { SketchPad } from '@/components/threed/SketchPad';
 import { PrinterConstraintsPanel, DEFAULT_PRINTER, checkPrintability, type PrinterConstraints } from '@/components/threed/PrinterConstraintsPanel';
 import { AIAssistantPanel, type AssistantState } from '@/components/threed/AIAssistantPanel';
+import { MakerLabPanel } from '@/components/threed/MakerLabPanel';
+import { PrintPrepPanel } from '@/components/threed/PrintPrepPanel';
 
 type Pipeline = 'idle' | 'editing' | 'validating' | 'rendering' | 'ready' | 'error';
 
