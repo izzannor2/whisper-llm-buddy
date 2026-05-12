@@ -530,6 +530,7 @@ export default function ThreeDWorkspace() {
             />
             <ReferenceImagePanel imageDataUrl={referenceImage} onChange={setReferenceImage} />
             <SketchPad saved={sketchImage} onSave={setSketchImage} />
+            <PrintPrepPanel scene={scene} printer={printer} viewer={viewerInfo} onScene={setScene} />
             <PrinterConstraintsPanel value={printer} onChange={setPrinter} />
             <AIModifyPanel scad={scad} onResult={(s) => { setMode('code'); setScad(s); }} onStatus={setStatusMsg} />
             <AcceptanceChecklist />
