@@ -29,6 +29,8 @@ import { ReferenceImagePanel } from '@/components/threed/ReferenceImagePanel';
 import { SketchPad } from '@/components/threed/SketchPad';
 import { PrinterConstraintsPanel, DEFAULT_PRINTER, checkPrintability, type PrinterConstraints } from '@/components/threed/PrinterConstraintsPanel';
 import { AIAssistantPanel, type AssistantState } from '@/components/threed/AIAssistantPanel';
+import { MakerLabPanel } from '@/components/threed/MakerLabPanel';
+import { PrintPrepPanel } from '@/components/threed/PrintPrepPanel';
 
 type Pipeline = 'idle' | 'editing' | 'validating' | 'rendering' | 'ready' | 'error';
 
@@ -300,6 +302,14 @@ export default function ThreeDWorkspace() {
     setSelectedId(null);
   };
 
+  const applyMakerlabScene = (s: Scene, generatorId: string) => {
+    setScene(s);
+    setMode('visual');
+    setSelectedId(null);
+    if (!name || name === 'model') setName(generatorId);
+    toast({ title: 'MakerLab inserted', description: `${generatorId} — ${s.nodes.length} part${s.nodes.length === 1 ? '' : 's'}` });
+  };
+
   const pipelineColor =
     pipeline === 'ready' ? 'text-green-500' :
     pipeline === 'error' ? 'text-destructive' :
@@ -433,6 +443,7 @@ export default function ThreeDWorkspace() {
                     </Button>
                   ))}
                 </div>
+                <MakerLabPanel onApply={applyMakerlabScene} />
                 <p className="text-[10px] text-muted-foreground">
                   Edit shapes via the left panel. The SCAD code below is auto-generated from the scene.
                 </p>
@@ -519,6 +530,7 @@ export default function ThreeDWorkspace() {
             />
             <ReferenceImagePanel imageDataUrl={referenceImage} onChange={setReferenceImage} />
             <SketchPad saved={sketchImage} onSave={setSketchImage} />
+            <PrintPrepPanel scene={scene} printer={printer} viewer={viewerInfo} onScene={setScene} />
             <PrinterConstraintsPanel value={printer} onChange={setPrinter} />
             <AIModifyPanel scad={scad} onResult={(s) => { setMode('code'); setScad(s); }} onStatus={setStatusMsg} />
             <AcceptanceChecklist />
