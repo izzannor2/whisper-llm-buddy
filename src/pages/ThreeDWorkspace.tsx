@@ -302,6 +302,14 @@ export default function ThreeDWorkspace() {
     setSelectedId(null);
   };
 
+  const applyMakerlabScene = (s: Scene, generatorId: string) => {
+    setScene(s);
+    setMode('visual');
+    setSelectedId(null);
+    if (!name || name === 'model') setName(generatorId);
+    toast({ title: 'MakerLab inserted', description: `${generatorId} — ${s.nodes.length} part${s.nodes.length === 1 ? '' : 's'}` });
+  };
+
   const pipelineColor =
     pipeline === 'ready' ? 'text-green-500' :
     pipeline === 'error' ? 'text-destructive' :
