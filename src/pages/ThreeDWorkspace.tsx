@@ -443,6 +443,7 @@ export default function ThreeDWorkspace() {
                     </Button>
                   ))}
                 </div>
+                <MakerLabPanel onApply={applyMakerlabScene} />
                 <p className="text-[10px] text-muted-foreground">
                   Edit shapes via the left panel. The SCAD code below is auto-generated from the scene.
                 </p>
