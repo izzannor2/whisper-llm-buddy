@@ -269,14 +269,8 @@ if "!SNAP_OK!"=="1"  (echo  [OK]   /debug/snapshot) else (echo  [WARN] /debug/sn
 if "!DEV_OK!"=="1"   (echo  [OK]   /dev-server/status) else (echo  [INFO] /dev-server/status not responding)
 if "!THREED_OK!"=="1" (echo  [OK]   /3d/status) else (echo  [WARN] /3d/status not responding)
 
-:: --- 10b. Optional first-run model pull ---
-if "!OLLAMA_UP!"=="1" if /I "%AUTO_PULL%"=="1" (
-    curl -s http://127.0.0.1:11434/api/tags 2>nul | findstr /C:"\"name\"" >nul 2>&1
-    if errorlevel 1 (
-        echo  [..]  AUTO_PULL=1 - pulling qwen2.5:3b in background
-        start "OLLAMA-PULL" /B cmd /c """!OLLAMA_BIN!"" pull qwen2.5:3b >> logs\ollama-pull.log 2>&1"
-    )
-)
+:: --- 10b. Model pulling intentionally removed from RUN-ALL ---
+:: To pull a default model, run scripts\advanced\PULL-DEFAULT-MODEL.bat manually.
 
 if "!WEB_OK!"=="1" start "" "http://localhost:8080"
 
