@@ -76,9 +76,8 @@ for %%I in (node.exe ollama.exe llama-server.exe) do (
 :: Portable Ollama (optional)
 :: ----------------------------------------------------
 set "OLLAMA_RUNNING=0"
-:: Prefer .ollama (per spec), fall back to legacy models\ollama for back-compat
+:: Canonical Ollama models dir is .ollama (matches RUN-ALL.bat and config\settings.json)
 set "OLLAMA_DIR=%ROOT%\.ollama"
-if not exist "%ROOT%\.ollama\models" if exist "%ROOT%\models\ollama\models" set "OLLAMA_DIR=%ROOT%\models\ollama"
 if exist "bin\ollama\ollama.exe" (
     set "OLLAMA_MODELS=!OLLAMA_DIR!"
     set "OLLAMA_HOST=127.0.0.1:11434"

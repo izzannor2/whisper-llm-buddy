@@ -69,33 +69,15 @@ if (-not $ollamaCmd) {
 
 if ($ollamaCmd) {
     Write-Host "      [OK] Ollama found" -ForegroundColor Green
-    # Check if running
-    try {
-        $response = Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -TimeoutSec 3 -ErrorAction SilentlyContinue
-    } catch {
-        Write-Host "      [*] Starting Ollama..."
-        Start-Process ollama -ArgumentList "serve" -WindowStyle Hidden
-        Start-Sleep -Seconds 3
-    }
-    # Pull default model if none exist
-    try {
-        $tags = Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -TimeoutSec 5
-        if ($tags.models.Count -eq 0) {
-            Write-Host "      [*] Pulling llama3.2 (this may take a while)..."
-            ollama pull llama3.2
-        } else {
-            Write-Host "      [OK] $($tags.models.Count) model(s) available" -ForegroundColor Green
-        }
-    } catch {
-        Write-Host "      [!] Could not connect to Ollama" -ForegroundColor Yellow
-    }
+    Write-Host "      [INFO] Setup does NOT auto-pull models. After RUN-ALL.bat starts Ollama," -ForegroundColor Yellow
+    Write-Host "             run scripts\advanced\PULL-DEFAULT-MODEL.bat to fetch qwen2.5:3b." -ForegroundColor Yellow
 } else {
     Write-Host "      [*] Ollama not available - using Cloud backend" -ForegroundColor Yellow
 }
 
-# Step 4: Directories
+# Step 4: Directories (canonical paths matching RUN-ALL.bat)
 Write-Host "[4/6] Setting up directories..."
-@("models\gguf", "models\ollama", "bin\llama", "bin\ollama") | ForEach-Object {
+@(".ollama", "models\gguf", "bin\llama", "bin\ollama", "bin\node", "config", "logs", "public\updates", "projects\3d") | ForEach-Object {
     if (-not (Test-Path $_)) { New-Item -ItemType Directory -Path $_ -Force | Out-Null }
 }
 Write-Host "      [OK] Directories ready" -ForegroundColor Green

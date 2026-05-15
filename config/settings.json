@@ -2,10 +2,12 @@
   "ollama_path": "./bin/ollama",
   "llama_path": "./bin/llama",
   "model_path": "./.ollama",
+  "gguf_path": "./models/gguf",
   "log_path": "./logs",
+  "default_model": "qwen2.5:3b",
   "auto_start_ollama": true,
   "ollama_port": 11434,
   "llama_port": 8081,
-  "app_port": 8080
+  "app_port": 8080,
+  "agent_port": 3847
 }
-

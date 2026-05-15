@@ -117,14 +117,15 @@ if exist "dist\index.html" (
 )
 
 :: ============================================================
-:: Step 5: Pull default model into models\ollama
+:: Step 5: Pull default model qwen2.5:3b into .ollama  (canonical)
 :: ============================================================
-echo [5/5] Pulling default model llama3.2 into models\ollama...
+echo [5/5] Pulling default model qwen2.5:3b into .ollama ...
 if not exist "bin\ollama\ollama.exe" (
     echo       [*] Skipping - Ollama not installed
     goto :done
 )
-set "OLLAMA_MODELS=%ROOT%\models\ollama"
+if not exist ".ollama" mkdir ".ollama" 2>nul
+set "OLLAMA_MODELS=%ROOT%\.ollama"
 set "OLLAMA_HOST=127.0.0.1:11434"
 
 :: Start Ollama if not running
@@ -141,12 +142,12 @@ if errorlevel 1 (
     goto :done
 )
 :ollama_up
-echo       [*] Pulling llama3.2 (this may take several minutes)...
-"bin\ollama\ollama.exe" pull llama3.2
+echo       [*] Pulling qwen2.5:3b (this may take several minutes)...
+"bin\ollama\ollama.exe" pull qwen2.5:3b
 if errorlevel 1 (
-    echo       [!] Model pull failed - you can pull manually later
+    echo       [!] Model pull failed - run scripts\advanced\PULL-DEFAULT-MODEL.bat later
 ) else (
-    echo       [OK] Model llama3.2 stored in models\ollama
+    echo       [OK] Model qwen2.5:3b stored in .ollama
 )
 
 :done
