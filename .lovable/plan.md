@@ -1,90 +1,104 @@
-# Release Candidate — Verification & Polish Pass
+## Goal
 
-This is a large multi-area pass. To stay safe and shippable, I'll do it in tightly scoped, verifiable slices. Each slice has a clear acceptance signal so we can stop and adjust between sections instead of producing a 30-file mega-diff that breaks the build.
+Audit every setup/launcher/test script so a fresh user can clone, double-click one script, and end up with a working app — with Ollama, llama.cpp, models, agent, frontend, and acceptance tests all linked to the same paths.
 
-## Scope (9 sections)
+## Problems found in the current scripts
 
-1. **Chat diagnostics + Chat Health card** (home screen)
-2. **App Builder Lovable-style repair loop** (generate → preview → auto-fix up to 3x)
-3. **App Builder preview controls** (Restart/Stop/Copy URL/Logs/Debug)
-4. **3D direct manipulation** (already partially done — verify + fill gaps: duplicate/delete/align)
-5. **3D reference image attachment** in AI requests + vision-model warning
-6. **Navigation simplification** — 7 top-level routes, rest under Advanced Tools
-7. **Release Check screen** in Diagnostics
-8. **Error quality mapping** — friendly remediation for known failure modes
-9. **Final proof** — `npm run build`, `acceptance.bat`, `acceptance.bat --build`, release-check output, changed file list
+1. **Path drift between scripts** — three different "Ollama models" directories are used:
+   - `RUN-ALL.bat` → `.ollama` (correct, matches memory rule)
+   - `scripts/setup.bat` → `models\ollama`
+   - `scripts/advanced/PULL-DEFAULT-MODEL.bat` → `.ollama` (correct)
+   - `start-offline.bat` → `.ollama` with fallback to `models\ollama`
+   - `config/settings.json` → `./.ollama` (correct)
+   Result: a model pulled by `setup.bat` is invisible to `RUN-ALL.bat`.
 
-## Execution order
+2. **Wrong default model** — `setup.bat` pulls `llama3.2`, but `PULL-DEFAULT-MODEL.bat` and the registry expect `qwen2.5:3b`. Two different "defaults" confuses users.
 
-I'll ship in this order, smallest blast radius first:
+3. **`setup.bat` violates the "no auto-download in launchers" rule** — it pulls a model during setup with no opt-out. Memory rule says model pulls must be a manual step.
 
-```text
-1. lib/chat-diagnostics.ts        (new — ring buffer of last N calls)
-2. lib/error-mapping.ts           (new — friendly remediation strings)
-3. components/ChatHealthCard.tsx  (new — home screen)
-4. lib/preview-pipeline.ts        (new — orchestrates auto-fix loop)
-5. components/ide/PreviewControls.tsx (extend existing PreviewHealthCard)
-6. components/threed/SceneViewer  (verify + add duplicate/delete/align ops)
-7. components/threed/AIAssistantPanel (attach reference image + scene context)
-8. components/ModesSidebar        (collapse experimental into Advanced Tools)
-9. components/settings/ReleaseCheckPanel.tsx (new)
-10. lib/error-mapping wired into chat-api + agent fetches
-11. scripts/acceptance.bat — extend with release-check + new regression guards
-12. Build + acceptance + release-check
+4. **No single entry-point test** — `scripts/acceptance.bat` exists but is never invoked by setup, and there is no script that says "run setup, then verify everything is wired".
+
+5. **`scripts/setup.sh` / `setup.ps1`** exist but were not audited against the current `.ollama` / `qwen2.5:3b` convention — likely drifted the same way.
+
+6. **`prepare-usb.bat`** downloads Node + Ollama into `bin\` but its model-pull step (read above) needs to match the same default and directory.
+
+7. **No "verify links" script** — nothing checks that `config/settings.json.model_path` matches the directory `RUN-ALL.bat` actually exports as `OLLAMA_MODELS`, or that `bin/ollama/ollama.exe` is the one being launched.
+
+8. **`README` / `USB-README` / `DEPLOYMENT.md`** don't agree on which script to run first.
+
+## Plan
+
+### A. Unify paths and defaults (single source of truth)
+
+- Treat `config/settings.json` as the source of truth. Keep:
+  - `model_path: "./.ollama"`
+  - `default_model: "qwen2.5:3b"` (new field)
+  - `ollama_port: 11434`, `llama_port: 8081`, `app_port: 8080`, `agent_port: 3847`
+- Every `.bat` reads those values (via a tiny `scripts/_load-config.bat` helper that parses the JSON with `powershell -Command`) instead of hardcoding paths.
+
+### B. Fix `scripts/setup.bat`
+
+- Remove the automatic `ollama pull llama3.2` step.
+- Replace step 5/6 with: "Ollama detected → run `scripts\advanced\PULL-DEFAULT-MODEL.bat` to fetch the default model (optional)."
+- Point `OLLAMA_MODELS` at `.ollama` (not `models\ollama`) so it matches RUN-ALL.
+- Mirror the same fix in `setup.ps1` and `setup.sh`.
+
+### C. Fix `prepare-usb.bat`
+
+- Use `.ollama` as the model dir.
+- Pull `qwen2.5:3b` (the registry default), not `llama3.2`.
+- Keep it as the only script that is allowed to download large assets (Node, Ollama, default model) — clearly labeled "one-time, needs internet".
+
+### D. Add `scripts/verify-links.bat`
+
+A new read-only diagnostic that prints PASS/FAIL for:
+- `bin/node/node.exe` exists OR system `node` on PATH
+- `bin/ollama/ollama.exe` exists OR system `ollama` on PATH
+- `bin/llama/llama-server.exe` present (optional)
+- `.ollama/` exists and is writable
+- `models/gguf/` exists
+- `config/settings.json` parses and matches the launcher's hardcoded ports
+- `server/index.cjs`, `server/static.cjs`, `dist/` (for offline) present
+- Ports 8080/3847/11434/8081 free OR already owned by our own processes
+
+### E. Add `scripts/test-all.bat`
+
+A single "does everything actually work" script that:
+1. Calls `scripts/verify-links.bat` (static checks)
+2. Starts `RUN-ALL.bat` in background if services aren't up
+3. Waits for `:3847/status`, `:8080`, and `:11434/api/tags`
+4. Runs `scripts/acceptance.bat --build`
+5. Runs `scripts/route-smoke-test.bat`
+6. Prints a single PASS/FAIL summary and exit code
+
+### F. Documentation pass
+
+Rewrite the top of `README.md` and `USB-README.md` to show one canonical flow:
+
+```
+First time (with internet):     scripts\prepare-usb.bat
+Every time:                     RUN-ALL.bat   (or double-click START-PORTABLE-AI.bat)
+Verify install:                 scripts\verify-links.bat
+Full test:                      scripts\test-all.bat
+Pull/upgrade default model:     scripts\advanced\PULL-DEFAULT-MODEL.bat
+Stop everything:                STOP-PORTABLE-AI.bat
 ```
 
-## Technical details
+Remove any older references to `start.bat` flows that mention different model paths.
 
-**chat-diagnostics.ts**
-Ring buffer (last 50). Each entry: `{ id, role, provider, model, endpoint, fallbackReason, ms, error?, ts }`. Exposed via `recordCall(...)` and `getRecent()`. `chat-api.ts` calls `recordCall` after every request (success + failure).
+### G. Sanity-check the wrappers
 
-**ChatHealthCard.tsx** (mounted on `/` Index page)
-Reads `resolveModelSync('assistant')`, agent status, registry snapshot, last diagnostic entry. Compact 6-row grid: Assistant model, Provider, Agent, Ollama, GGUF, Voice, Last error.
+- `start.bat`, `START-PORTABLE-AI.bat` already just `call RUN-ALL.bat` — keep as-is.
+- `start-offline.bat` — drop the `models\ollama` fallback, use `.ollama` only, so behavior matches RUN-ALL.
 
-**preview-pipeline.ts**
-State machine: `idle → planning → generating → writing → starting → fixing(n) → ready | error`. `runBuild(prompt, opts)` orchestrates; on Vite/runtime error captured from agent response, calls app-builder model with error + file context, max 3 fixes. Keeps `lastGoodPreviewUrl` so UI doesn't blank out on fail.
+## Out of scope
 
-**PreviewControls** — extend existing `PreviewHealthCard.tsx` with:
-- `Stop Preview` button → POST `/preview/stop`
-- `Copy Preview Logs` → fetch `/preview/logs?session=...` then clipboard
-- (Restart, Copy URL, Copy Debug already exist)
+- No changes to app source (`src/`, `server/`). This pass is purely scripts + config + docs.
+- No new model downloads in any launcher. Only `prepare-usb.bat` and the explicit `PULL-DEFAULT-MODEL.bat` may fetch models.
+- No changes to acceptance/route-smoke logic — they already work; we just make sure setup leaves the environment in a state where they pass.
 
-**3D SceneViewer**
-Already has TransformControls + snap (per earlier context). Add:
-- `Duplicate` (Ctrl+D) — clone selected, offset +5 on X
-- `Delete` (Del) — remove from scene
-- Align toolbar buttons: Align X / Y / Z (snap to first selected position component)
-- Union/Subtract (already implemented previously — verify)
+## Deliverables
 
-Each op calls `regenerateScad()` and `onSceneChange()`.
-
-**AIAssistantPanel (3D)**
-Build payload `{ prompt, sceneJson, scad, selectedId, dimensions, constraints, referenceImage }`. If no vision model resolved (`resolveModelSync('vision').detected === null`) and image present → toast warning + omit image from payload but keep prompt.
-
-**ModesSidebar**
-Top-level keep: Chat, App Builder, IDE, 3D Printing, IoT, Models, Settings.
-Move under collapsible `Advanced Tools`: Memory, OpenClaw, Task Graph, Sandbox, Plugins, System Helper, Learning Mode, Autonomous Mode.
-
-**ReleaseCheckPanel**
-Async checklist runner. Each check returns `{ name, ok, detail }`. Renders as colored list with Copy Report button.
-
-**error-mapping.ts**
-```ts
-export function explainError(e: unknown, ctx: 'agent'|'ollama'|'gguf'|'preview'|'openscad'|'model'|'chat'): string
-```
-Returns the friendly remediation strings from section 8.
-
-## Out of scope / intentionally skipped
-
-- Renaming the npm package
-- Brand new IoT workspace work
-- Replacing the Auto-Build Panel (it already does steps 1–6 of the pipeline; the new `preview-pipeline.ts` is for App Builder preview specifically and reuses Auto-Build's parser).
-- I will not run `npm run build` manually — the harness runs it automatically. I'll report what the harness shows.
-
-## Acceptance signals
-
-After each slice I'll either run a targeted check (rg / view / curl-equivalent) or fall back to a build-pass. Final pass:
-- `acceptance.bat` and `acceptance.bat --build` lines added/updated to assert: no `gemini-flash` default, no `llama-3.2-1b` default, ChatHealthCard present, ReleaseCheckPanel present, preview-pipeline present.
-- I'll list every file changed at the end.
-
-If any slice gets stuck I'll stop and report rather than cascade more changes.
+- Edited: `scripts/setup.bat`, `scripts/setup.ps1`, `scripts/setup.sh`, `scripts/prepare-usb.bat`, `start-offline.bat`, `config/settings.json`, `README.md`, `USB-README.md`
+- New: `scripts/_load-config.bat`, `scripts/verify-links.bat`, `scripts/test-all.bat`
+- Final proof: output of `scripts\verify-links.bat`, `scripts\test-all.bat`, and `npm run build`.

@@ -1,24 +1,28 @@
-# LocalDev AI — Portable AI Companion Hub
+# AI Companion Hub — Portable
 
-A fully portable, production-ready AI assistant that runs entirely from a USB drive with **zero external dependencies**.
+Fully portable, production-ready AI assistant. Runs entirely from a folder (or USB drive) with **zero external dependencies**.
 
-## ⚡ Quick Start
+## ⚡ Canonical workflow (Windows)
 
-### Windows
-Double-click **`start.bat`** — that's it.
+| When | Run |
+|------|-----|
+| First time (needs internet) | `scripts\prepare-usb.bat`  — downloads Node + Ollama + builds dist + pulls `qwen2.5:3b` |
+| First time (have Node already) | `scripts\setup.bat`  — installs deps only, no model download |
+| Every time | `RUN-ALL.bat` (or double-click `START-PORTABLE-AI.bat`) |
+| Verify install is wired | `scripts\verify-links.bat` |
+| Full end-to-end test | `scripts\test-all.bat` |
+| Pull / upgrade default model | `scripts\advanced\PULL-DEFAULT-MODEL.bat` |
+| Stop everything | `STOP-PORTABLE-AI.bat` |
 
 ### macOS / Linux
 ```bash
-chmod +x start.sh
-./start.sh
+bash scripts/setup.sh
+npm run dev:all
+# optional:
+ollama serve & ollama pull qwen2.5:3b
 ```
 
-The app will:
-1. Check for Node.js (or use portable version from `bin/node/`)
-2. Install npm dependencies if needed
-3. Auto-detect and start Ollama or Llama.cpp servers
-4. Launch the app at **http://localhost:8080**
-5. Open your browser automatically
+`RUN-ALL.bat` will use portable Node from `bin\node\` (or system Node), `npm install` if needed, start Ollama with models stored in `.ollama\`, start llama-server if a `.gguf` exists in `models\gguf\`, start the local agent on `:3847`, then start Vite on `:8080`. It never downloads models.
 
 ## 📁 Folder Structure
 
