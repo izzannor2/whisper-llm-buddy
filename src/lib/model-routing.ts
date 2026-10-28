@@ -105,7 +105,7 @@ export function resolveModelSync(role: ModelRole, snap: ModelRegistrySnapshot | 
 
   if (entry.model && safeSnap) {
     const found = findInSnapshot(safeSnap, entry.provider, entry.model);
-    if (found) return { role, provider: entry.provider, model: entry.model, detected: found, fallbackReason: 'ok' };
+    if (found) return { role, provider: found.provider, model: found.name, detected: found, fallbackReason: 'ok' };
   }
 
   // Fallback 1: assistant default if different role
@@ -113,12 +113,12 @@ export function resolveModelSync(role: ModelRole, snap: ModelRegistrySnapshot | 
     const a = routing.assistant;
     if (a.model) {
       const found = findInSnapshot(safeSnap, a.provider, a.model);
-      if (found) return { role, provider: a.provider, model: a.model, detected: found, fallbackReason: entry.model ? 'missing' : 'unset' };
+      if (found) return { role, provider: found.provider, model: found.name, detected: found, fallbackReason: entry.model ? 'missing' : 'unset' };
     }
   }
 
   // Fallback 2: first detected local model
-  if (safeSnap) {
+  if (safeSnap && loadToggles().useFirstAvailableFallback) {
     const first = safeSnap.ollama[0] || safeSnap.gguf[0];
     if (first) {
       return {

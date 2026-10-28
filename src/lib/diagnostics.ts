@@ -12,6 +12,7 @@ import { getCurrentVersion, getUpdateHistory } from './update-system';
 import { getBuffer } from './error-bus';
 import { probeVoiceCapabilities } from '../components/threed/VoiceControls';
 import { getIDESettings } from './ide-store';
+import { getModelCallLog } from './chat-api';
 
 export interface BundleEntry<T = unknown> {
   status: 'ok' | 'missing' | 'error' | 'offline';
@@ -57,6 +58,8 @@ export interface DiagnosticBundle {
   modelRegistry: BundleEntry;
   threeD: BundleEntry;
   threeDStatus: BundleEntry;
+  openScadStatus: BundleEntry;
+  modelCalls: ReturnType<typeof getModelCallLog>;
   routing: { roles: ReturnType<typeof loadRouting>; toggles: ReturnType<typeof loadToggles> };
   updateHistory: ReturnType<typeof getUpdateHistory>;
   recentLogs: Record<'agent' | 'web' | 'llama' | 'ollama' | 'server', BundleEntry>;
@@ -73,6 +76,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     updatesApplied,
     threeD,
     threeDStatus,
+    openScadStatus,
     agentLog, webLog, llamaLog, ollamaLog, serverLog,
   ] = await Promise.all([
     get('/status'),
@@ -83,6 +87,7 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     get('/updates/applied'),
     get('/3d/diagnostics'),
     get('/3d/status'),
+    get('/openscad/status'),
     get('/logs?name=agent&lines=200'),
     get('/logs?name=web&lines=200'),
     get('/logs?name=llama&lines=200'),
@@ -122,6 +127,8 @@ export async function buildBundle(): Promise<DiagnosticBundle> {
     modelRegistry: registry,
     threeD,
     threeDStatus,
+    openScadStatus,
+    modelCalls: getModelCallLog(),
     routing: { roles: loadRouting(), toggles: loadToggles() },
     updateHistory: getUpdateHistory(),
     recentLogs: { agent: agentLog, web: webLog, llama: llamaLog, ollama: ollamaLog, server: serverLog },
