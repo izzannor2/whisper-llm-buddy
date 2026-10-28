@@ -98,7 +98,7 @@ echo  [OK]   NPM :   !NPM_CMD!
 :: --- 3. Ensure dependencies installed ---
 if exist "node_modules" goto :deps_ok
 echo  [..]  Installing dependencies (first run, may take a few minutes)...
-call !NPM_CMD! install
+call "!NPM_CMD!" ci
 if errorlevel 1 (
     echo  [FATAL] npm install failed. Check your network or run REPAIR-APP.bat.
     pause
@@ -115,7 +115,7 @@ if /I "%KILL_NODE%"=="1" (
 
 :: --- 5. Start Ollama (optional, flat) ---
 set "OLLAMA_UP=0"
-curl -s --max-time 2 http://127.0.0.1:11434/api/tags >nul 2>&1
+curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags >nul 2>&1
 if not errorlevel 1 (
     echo  [WARN] Ollama already running ^(external instance^)
     set "OLLAMA_UP=1"
@@ -134,7 +134,7 @@ echo  [..]  Starting Ollama  ^(models: !OLLAMA_MODELS!^)
 start "OLLAMA" /B cmd /c "set ""OLLAMA_MODELS=!OLLAMA_MODELS!"" & set ""OLLAMA_HOST=!OLLAMA_HOST!"" & ""!OLLAMA_BIN!"" serve >> logs\ollama.log 2>&1"
 for /l %%i in (1,1,8) do (
     timeout /t 1 /nobreak >nul
-    curl -s --max-time 1 http://127.0.0.1:11434/api/tags >nul 2>&1
+    curl -fsS --max-time 1 http://127.0.0.1:11434/api/tags >nul 2>&1
     if not errorlevel 1 set "OLLAMA_UP=1"
 )
 if "!OLLAMA_UP!"=="1" (echo  [OK]   Ollama on :11434) else (echo  [INFO] Ollama did not respond - continuing)
@@ -153,7 +153,7 @@ set "GGUF_FILE="
 for /r "models\gguf" %%f in (*.gguf) do if not defined GGUF_FILE set "GGUF_FILE=%%~ff"
 if not defined LLAMA_BIN goto :llama_skip
 if not defined GGUF_FILE goto :llama_skip
-curl -s --max-time 1 http://127.0.0.1:8081/health >nul 2>&1
+curl -fsS --max-time 1 http://127.0.0.1:8081/health >nul 2>&1
 if not errorlevel 1 (
     echo  [OK]   llama-server already on :8081
     set "LLAMA_UP=1"
@@ -163,7 +163,7 @@ echo  [..]  Starting llama-server with !GGUF_FILE!
 start "LLAMA" /B cmd /c """!LLAMA_BIN!"" -m ""!GGUF_FILE!"" --port 8081 --host 127.0.0.1 -ngl 99 >> logs\llama.log 2>&1"
 for /l %%i in (1,1,8) do (
     timeout /t 1 /nobreak >nul
-    curl -s --max-time 1 http://127.0.0.1:8081/health >nul 2>&1
+    curl -fsS --max-time 1 http://127.0.0.1:8081/health >nul 2>&1
     if not errorlevel 1 set "LLAMA_UP=1"
 )
 if "!LLAMA_UP!"=="1" (echo  [OK]   llama-server on :8081) else (echo  [WARN] llama-server did not respond - see logs\llama.log)
@@ -176,7 +176,7 @@ echo  [INFO] GGUF disabled - continuing
 
 :: --- 7. Start backend agent (visible window) ---
 set "AGENT_OK=0"
-curl -s --max-time 1 http://127.0.0.1:3847/status >nul 2>&1
+curl -fsS --max-time 1 http://127.0.0.1:3847/status >nul 2>&1
 if not errorlevel 1 (
     echo  [OK]   Agent already running on :3847
     set "AGENT_OK=1"
@@ -187,7 +187,7 @@ start "AI Agent" cmd /k call "!NODE_BIN!" server\index.cjs
 echo  Waiting for agent on :3847 ...
 for /l %%i in (1,1,15) do (
     timeout /t 1 /nobreak >nul
-    curl -s --max-time 1 http://127.0.0.1:3847/status >nul 2>&1
+    curl -fsS --max-time 1 http://127.0.0.1:3847/status >nul 2>&1
     if not errorlevel 1 set "AGENT_OK=1"
 )
 :agent_done
@@ -221,7 +221,7 @@ echo  [OK]   Agent responding on :3847
 :: Check if frontend port 8080 is occupied by something else
 netstat -ano | findstr ":8080 " | findstr "LISTENING" >nul 2>&1
 if not errorlevel 1 (
-    curl -s --max-time 1 http://127.0.0.1:8080 >nul 2>&1
+    curl -fsS --max-time 1 http://127.0.0.1:8080 >nul 2>&1
     if errorlevel 1 (
         echo  [WARN] Port 8080 in use by another process:
         for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8080 " ^| findstr "LISTENING"') do (
@@ -232,13 +232,13 @@ if not errorlevel 1 (
 )
 
 :: --- 8. Start frontend ---
-curl -s --max-time 1 http://127.0.0.1:8080 >nul 2>&1
+curl -fsS --max-time 1 http://127.0.0.1:8080 >nul 2>&1
 if not errorlevel 1 (
     echo  [OK]   Web already on :8080
     goto :web_started
 )
 echo  Starting frontend...
-start "WEB" cmd /k "call !NPM_CMD! run dev -- --host 0.0.0.0 --port 8080"
+start "WEB" cmd /k "call ""!NPM_CMD!"" run dev -- --host 0.0.0.0 --port 8080 --strictPort"
 :web_started
 
 :: --- 9. Wait for web ---
@@ -246,7 +246,7 @@ set "WEB_OK=0"
 echo  [..]  Waiting for web server...
 for /l %%i in (1,1,30) do (
     timeout /t 1 /nobreak >nul
-    curl -s --max-time 1 http://127.0.0.1:8080 >nul 2>&1
+    curl -fsS --max-time 1 http://127.0.0.1:8080 >nul 2>&1
     if not errorlevel 1 set "WEB_OK=1"
     if "!WEB_OK!"=="1" goto :web_ready
 )
@@ -261,9 +261,9 @@ echo  [..]  Verifying services...
 set "SNAP_OK=0"
 set "DEV_OK=0"
 set "THREED_OK=0"
-curl -s --max-time 2 http://127.0.0.1:3847/debug/snapshot >nul 2>&1 && set "SNAP_OK=1"
-curl -s --max-time 2 http://127.0.0.1:3847/dev-server/status >nul 2>&1 && set "DEV_OK=1"
-curl -s --max-time 2 http://127.0.0.1:3847/3d/status >nul 2>&1 && set "THREED_OK=1"
+curl -fsS --max-time 2 http://127.0.0.1:3847/debug/snapshot >nul 2>&1 && set "SNAP_OK=1"
+curl -fsS --max-time 2 http://127.0.0.1:3847/dev-server/status >nul 2>&1 && set "DEV_OK=1"
+curl -fsS --max-time 2 http://127.0.0.1:3847/3d/status >nul 2>&1 && set "THREED_OK=1"
 echo  [OK]   /status
 if "!SNAP_OK!"=="1"  (echo  [OK]   /debug/snapshot) else (echo  [WARN] /debug/snapshot not responding)
 if "!DEV_OK!"=="1"   (echo  [OK]   /dev-server/status) else (echo  [INFO] /dev-server/status not responding)
@@ -292,6 +292,6 @@ echo  ============================================================
 echo.
 echo  Closing this window does NOT stop services.
 pause >nul
-endlocal
-if "!WEB_OK!"=="1" if "!AGENT_OK!"=="1" exit /b 0
-exit /b 1
+set "RUNALL_EXIT=1"
+if "!WEB_OK!"=="1" if "!AGENT_OK!"=="1" set "RUNALL_EXIT=0"
+endlocal & exit /b %RUNALL_EXIT%

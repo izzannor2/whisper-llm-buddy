@@ -2,6 +2,10 @@
 # Run: powershell -ExecutionPolicy Bypass -File setup.ps1
 
 $ErrorActionPreference = "Stop"
+Set-Location (Join-Path $PSScriptRoot "..")
+if (Test-Path "bin\node\node.exe") {
+    $env:PATH = "$(Join-Path (Get-Location) 'bin\node');$env:PATH"
+}
 
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -40,11 +44,15 @@ Write-Host "      [OK] Node.js $(node --version)" -ForegroundColor Green
 # Step 2: Dependencies
 Write-Host "[2/6] Installing dependencies..."
 if (-not (Test-Path "node_modules")) {
-    npm install
+    if (Test-Path "package-lock.json") { npm ci } else { npm install }
     if ($LASTEXITCODE -ne 0) {
         Write-Host "      [!] Retrying..." -ForegroundColor Yellow
         Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
-        npm install
+        if (Test-Path "package-lock.json") { npm ci } else { npm install }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "      [ERROR] Dependency installation failed. Run REPAIR-APP.bat." -ForegroundColor Red
+            exit 1
+        }
     }
 }
 Write-Host "      [OK] Dependencies ready" -ForegroundColor Green
@@ -72,7 +80,7 @@ if ($ollamaCmd) {
     Write-Host "      [INFO] Setup does NOT auto-pull models. After RUN-ALL.bat starts Ollama," -ForegroundColor Yellow
     Write-Host "             run scripts\advanced\PULL-DEFAULT-MODEL.bat to fetch qwen2.5:3b." -ForegroundColor Yellow
 } else {
-    Write-Host "      [*] Ollama not available - using Cloud backend" -ForegroundColor Yellow
+    Write-Host "      [*] Ollama not available - install Ollama or configure a GGUF model." -ForegroundColor Yellow
 }
 
 # Step 4: Directories (canonical paths matching RUN-ALL.bat)
@@ -87,10 +95,6 @@ Write-Host "[5/6] Checking local models..."
 $ggufModel = Get-ChildItem -Path "models\gguf" -Filter "*.gguf" -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($ggufModel) {
     Write-Host "      [OK] Found: $($ggufModel.Name)" -ForegroundColor Green
-    if (Test-Path "bin\llama\llama-server.exe") {
-        Write-Host "      [*] Starting llama-server..."
-        Start-Process "bin\llama\llama-server.exe" -ArgumentList "-m `"$($ggufModel.FullName)`" --port 8081 --host 0.0.0.0 -ngl 99" -WindowStyle Hidden
-    }
 } else {
     Write-Host "      [*] No GGUF models found (optional)" -ForegroundColor Yellow
 }
@@ -104,5 +108,5 @@ Write-Host " Press Ctrl+C to stop"
 Write-Host "══════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
-Start-Process "http://localhost:8080"
-npm run dev
+& "$env:COMSPEC" /c 'call RUN-ALL.bat'
+exit $LASTEXITCODE

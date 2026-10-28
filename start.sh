@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Set portable model storage
-export OLLAMA_MODELS="$SCRIPT_DIR/models/ollama"
+export OLLAMA_MODELS="$SCRIPT_DIR/.ollama"
 
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════╗${NC}"
@@ -22,7 +22,7 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 
 # Self-healing: create directories
-mkdir -p config logs models/gguf models/ollama bin/llama bin/ollama
+mkdir -p config logs .ollama models/gguf bin/llama bin/ollama projects/3d
 
 # Create default config if missing
 if [ ! -f "config/settings.json" ]; then
@@ -30,13 +30,15 @@ if [ ! -f "config/settings.json" ]; then
 {
   "ollama_path": "./bin/ollama",
   "llama_path": "./bin/llama",
-  "model_path": "./models",
+  "model_path": "./.ollama",
+  "gguf_path": "./models/gguf",
   "log_path": "./logs",
   "auto_start_ollama": true,
-  "default_model": "llama3.2",
+  "default_model": "",
   "ollama_port": 11434,
   "llama_port": 8081,
-  "app_port": 8080
+  "app_port": 8080,
+  "agent_port": 3847
 }
 EOF
 fi
@@ -88,12 +90,7 @@ echo -e "      ${GREEN}[OK] Node.js $(node --version)${NC}"
 
 # Step 2: Package manager
 PKG_CMD="npm"
-if command -v bun &> /dev/null; then
-    PKG_CMD="bun"
-    echo -e "[2/6] ${GREEN}[OK] Using Bun${NC}"
-else
-    echo "[2/6] [OK] Using npm"
-fi
+echo "[2/6] [OK] Using npm"
 
 # Step 3: Dependencies (self-healing)
 echo "[3/6] Checking dependencies..."
@@ -106,7 +103,9 @@ fi
 if [ ! -d "node_modules" ]; then
     for attempt in 1 2 3; do
         echo "      [*] Attempt $attempt/3: $PKG_CMD install..."
-        if $PKG_CMD install; then
+        INSTALL_CMD="install"
+        [ -f package-lock.json ] && INSTALL_CMD="ci"
+        if "$PKG_CMD" "$INSTALL_CMD"; then
             echo -e "      ${GREEN}[OK] Dependencies installed${NC}"
             break
         fi
@@ -123,14 +122,16 @@ fi
 
 # Step 4: Start Agent Server
 echo "[4/6] Starting agent server..."
-if [ -f "server/index.js" ]; then
-    node server/index.js &
+if curl -fsS --max-time 2 http://localhost:3847/status &> /dev/null; then
+    echo "      [OK] Agent already running"
+elif [ -f "server/index.cjs" ]; then
+    node server/index.cjs >> logs/server.log 2>&1 &
     AGENT_PID=$!
     echo "[$(date)] Started agent server (PID $AGENT_PID)" >> logs/app.log
     
     # Wait for agent server to be ready
     for i in $(seq 1 10); do
-        if curl -s http://localhost:3847/status &> /dev/null; then
+        if curl -fsS --max-time 2 http://localhost:3847/status &> /dev/null; then
             echo -e "      ${GREEN}[OK] Agent server ready on port 3847${NC}"
             break
         fi
@@ -173,19 +174,19 @@ fi
 if [ -n "$GGUF_MODEL" ]; then
     echo "      [*] Found model: $(basename "$GGUF_MODEL")"
     if [ -n "$LLAMA_SERVER_CMD" ]; then
-        if ! curl -s http://localhost:8081/health &> /dev/null; then
+        if ! curl -fsS --max-time 2 http://localhost:8081/health &> /dev/null; then
             echo "      [*] Starting llama-server..."
-            $LLAMA_SERVER_CMD -m "$GGUF_MODEL" --port 8081 --host 0.0.0.0 -ngl 99 &> /dev/null &
+            "$LLAMA_SERVER_CMD" -m "$GGUF_MODEL" --port 8081 --host 127.0.0.1 -ngl 99 >> logs/llama.log 2>&1 &
             echo "[$(date)] Started llama-server with $GGUF_MODEL" >> logs/app.log
             for i in $(seq 1 10); do
-                if curl -s http://localhost:8081/health &> /dev/null; then
+                if curl -fsS --max-time 2 http://localhost:8081/health &> /dev/null; then
                     echo -e "      ${GREEN}[OK] llama-server ready on port 8081${NC}"
                     LLAMA_SERVER_RUNNING=1
                     break
                 fi
                 sleep 1
             done
-            [ $LLAMA_SERVER_RUNNING -eq 0 ] && echo "      [!] llama-server may still be loading..." && LLAMA_SERVER_RUNNING=1
+            [ $LLAMA_SERVER_RUNNING -eq 0 ] && echo "      [WARN] llama-server not ready. Check logs/llama.log."
         else
             echo -e "      ${GREEN}[OK] llama-server already running${NC}"
             LLAMA_SERVER_RUNNING=1
@@ -193,14 +194,14 @@ if [ -n "$GGUF_MODEL" ]; then
     fi
 fi
 
-# Start Ollama if no llama-server
-if [ $LLAMA_SERVER_RUNNING -eq 0 ] && [ -n "$OLLAMA_CMD" ]; then
-    if ! curl -s http://localhost:11434/api/tags &> /dev/null; then
+# Start Ollama independently of llama-server
+if [ -n "$OLLAMA_CMD" ]; then
+    if ! curl -fsS --max-time 2 http://localhost:11434/api/tags &> /dev/null; then
         echo "      [*] Starting Ollama..."
-        OLLAMA_HOST=127.0.0.1:11434 OLLAMA_MODELS="$SCRIPT_DIR/models/ollama" $OLLAMA_CMD serve &> /dev/null &
+        OLLAMA_HOST=127.0.0.1:11434 "$OLLAMA_CMD" serve >> logs/ollama.log 2>&1 &
         echo "[$(date)] Started Ollama" >> logs/app.log
         for i in $(seq 1 10); do
-            if curl -s http://localhost:11434/api/tags &> /dev/null; then
+            if curl -fsS --max-time 2 http://localhost:11434/api/tags &> /dev/null; then
                 echo -e "      ${GREEN}[OK] Ollama ready${NC}"
                 break
             fi
@@ -209,14 +210,8 @@ if [ $LLAMA_SERVER_RUNNING -eq 0 ] && [ -n "$OLLAMA_CMD" ]; then
     else
         echo -e "      ${GREEN}[OK] Ollama running${NC}"
     fi
-    # Auto-pull a default model if none exist
-    MODELS=$(curl -s http://localhost:11434/api/tags 2>/dev/null | grep -o '"name"' | wc -l)
-    if [ "$MODELS" -eq 0 ] 2>/dev/null; then
-        echo -e "      ${YELLOW}[*] Pulling llama3.2 (first time setup)...${NC}"
-        $OLLAMA_CMD pull llama3.2 2>/dev/null &
-    fi
 elif [ $LLAMA_SERVER_RUNNING -eq 0 ]; then
-    echo "      [*] No local AI engine found - using Cloud backend"
+    echo "      [WARN] No local AI engine found. Install Ollama or llama.cpp and choose a model."
 fi
 
 # Step 6: Start dev server
@@ -238,4 +233,4 @@ echo "[$(date)] App server starting on port 8080" >> logs/app.log
 # Open browser
 (sleep 3 && (xdg-open http://localhost:8080 2>/dev/null || open http://localhost:8080 2>/dev/null || true)) &
 
-$PKG_CMD run dev
+"$PKG_CMD" run dev -- --host 0.0.0.0 --port 8080 --strictPort
