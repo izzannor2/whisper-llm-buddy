@@ -20,34 +20,30 @@ if errorlevel 1 (
 echo.
 echo  [2/4] Ensuring services are running...
 set "NEED_START=0"
-curl -s --max-time 2 http://127.0.0.1:3847/status >nul 2>&1
+curl -fsS --max-time 2 http://127.0.0.1:3847/status >nul 2>&1
 if errorlevel 1 set "NEED_START=1"
-curl -s --max-time 2 http://127.0.0.1:8080 >nul 2>&1
+curl -fsS --max-time 2 http://127.0.0.1:8080 >nul 2>&1
 if errorlevel 1 set "NEED_START=1"
-if "!NEED_START!"=="1" (
-    echo       [*] Launching RUN-ALL.bat in a new window...
-    start "RUN-ALL (test-all)" cmd /c "call RUN-ALL.bat"
-    echo       [*] Waiting up to 90s for :3847 and :8080 ...
-    set "READY=0"
-    for /l %%i in (1,1,90) do (
-        timeout /t 1 /nobreak >nul
-        curl -s --max-time 1 http://127.0.0.1:3847/status >nul 2>&1
-        if not errorlevel 1 (
-            curl -s --max-time 1 http://127.0.0.1:8080 >nul 2>&1
-            if not errorlevel 1 set "READY=1"
-        )
-        if "!READY!"=="1" goto :ready
+if "!NEED_START!"=="0" goto :ready
+echo       [*] Launching RUN-ALL.bat in a new window...
+start "RUN-ALL (test-all)" cmd /c "call RUN-ALL.bat"
+echo       [*] Waiting up to 90s for :3847 and :8080 ...
+set "READY=0"
+for /l %%i in (1,1,90) do (
+    timeout /t 1 /nobreak >nul
+    curl -fsS --max-time 1 http://127.0.0.1:3847/status >nul 2>&1
+    if not errorlevel 1 (
+        curl -fsS --max-time 1 http://127.0.0.1:8080 >nul 2>&1
+        if not errorlevel 1 set "READY=1"
     )
-    :ready
-    if not "!READY!"=="1" (
-        echo  [FAIL] services did not come up within 90s
-        set /a FAIL+=1
-    ) else (
-        echo  [OK]  services responding
-    )
-) else (
-    echo       [OK] services already running
+    if "!READY!"=="1" goto :ready
 )
+echo  [FAIL] services did not come up within 90s
+echo  [BLOCKED] Service checks skipped. See logs\run-all.log and logs\server.log.
+exit /b 1
+
+:ready
+echo       [OK] services responding
 
 echo.
 echo  [3/4] Acceptance suite ^(--build^)

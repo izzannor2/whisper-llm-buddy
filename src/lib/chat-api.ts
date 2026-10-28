@@ -246,7 +246,7 @@ function pushModelCall(rec: ModelCallRecord) {
 function backendModelLabel(s: ChatSettings): string {
   switch (s.backend) {
     case 'ollama': return s.ollamaModel || '(no model)';
-    case 'local': return 'llama.cpp';
+    case 'local': return s.model || 'llama.cpp (server loaded model)';
     case 'huggingface': return s.huggingfaceModel || '(no model)';
     default: return s.model || '(no model)';
   }
@@ -258,6 +258,19 @@ export async function sendChatMessage(
   onChunk?: (chunk: string) => void,
   meta?: ChatCallMeta,
 ): Promise<string> {
+  // Resolve the assistant at the point of dispatch, not just in its health card.
+  // Explicit cloud/API settings remain opt-in and are never selected as fallback.
+  let routingReason: string | undefined;
+  if (meta?.role === 'assistant' && ['ollama', 'local'].includes(settings.backend)) {
+    const { resolveModel } = await import('./model-routing');
+    const resolved = await resolveModel('assistant');
+    routingReason = resolved.fallbackReason;
+    if (resolved.detected?.provider === 'ollama') {
+      settings = { ...settings, backend: 'ollama', ollamaModel: resolved.detected.name };
+    } else if (resolved.detected?.provider === 'gguf') {
+      settings = { ...settings, backend: 'local', model: resolved.detected.name };
+    }
+  }
   // If offline mode is enabled, only allow local backends
   if (settings.offlineMode && !['local', 'ollama'].includes(settings.backend)) {
     throw new Error('Offline mode is enabled. Only local (Llama.cpp) and Ollama backends are available.');
@@ -279,7 +292,7 @@ export async function sendChatMessage(
     const response = await dispatchToBackend(allMessages, settings, onChunk);
     pushModelCall({
       timestamp: startedAt, role, backend: usedBackend, model: usedModel, endpoint,
-      responseMs: Date.now() - startedAt, ok: true, fallback: false, overrideApplied,
+      responseMs: Date.now() - startedAt, ok: true, fallback: routingReason === 'missing' || routingReason === 'unset', fallbackReason: routingReason, overrideApplied,
     });
     return response;
   } catch (err) {
@@ -292,7 +305,7 @@ export async function sendChatMessage(
     const friendly = explainAndFormat(err, ctx as any);
     pushModelCall({
       timestamp: startedAt, role, backend: usedBackend, model: usedModel, endpoint,
-      responseMs: Date.now() - startedAt, ok: false, fallback: false, overrideApplied,
+      responseMs: Date.now() - startedAt, ok: false, fallback: routingReason === 'missing' || routingReason === 'unset', fallbackReason: routingReason, overrideApplied,
       error: friendly,
     });
     throw new Error(friendly);
