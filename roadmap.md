@@ -1,6 +1,6 @@
-# Reliability verification
+# Setup reliability cleanup
 
-- [ ] Audit startup scripts and local service paths; fix confirmed defects.
-- [ ] Audit chat, App Builder, 3D, and diagnostics connections; fix confirmed defects.
-- [ ] Run available automated checks and exercise main pages in the browser.
-- [ ] Record verification results and any checks blocked by unavailable local services or Windows.
+- [ ] Consolidate Windows setup/start/stop/repair into one shared implementation; retain old filenames as compatibility shortcuts.
+- [ ] Remove automatic model pulls and conflicting storage paths from portable preparation.
+- [ ] Align Unix setup/start and user instructions with the real entry points.
+- [ ] Run script parsing, regression checks, and safe local endpoint checks; document Windows-only limitations.

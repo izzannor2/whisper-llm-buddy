@@ -3,6 +3,7 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0\.."
 title Test All - full end-to-end verification
 set "FAIL=0"
+set "HUB_NO_PAUSE=1"
 
 echo ============================================================
 echo  TEST ALL - end-to-end verification
@@ -26,7 +27,7 @@ curl -fsS --max-time 2 http://127.0.0.1:8080 >nul 2>&1
 if errorlevel 1 set "NEED_START=1"
 if "!NEED_START!"=="0" goto :ready
 echo       [*] Launching RUN-ALL.bat in a new window...
-start "RUN-ALL (test-all)" cmd /c "call RUN-ALL.bat"
+start "RUN-ALL (test-all)" cmd /c "call RUN-ALL.bat -NoBrowser"
 echo       [*] Waiting up to 90s for :3847 and :8080 ...
 set "READY=0"
 for /l %%i in (1,1,90) do (

@@ -1,71 +1,11 @@
-# AI Companion Hub — Portable USB Runtime
+# Portable USB use
 
-Run the entire app **offline from a USB stick** on any Windows PC. Zero installs on the host.
+1. On a connected Windows PC, run `scripts\prepare-usb.bat`. It downloads portable Node 20 and Ollama, installs dependencies, and builds `dist/`. It does not download models.
+2. Start `RUN-ALL.bat`, then manually run `scripts\advanced\PULL-DEFAULT-MODEL.bat` if you want its suggested model. Alternatively add your own GGUF in `models/gguf/` with llama-server in `bin/llama/`.
+3. Confirm the model is detected and answers a chat request before disconnecting.
+4. Copy the entire folder, including `.ollama/`, `models/gguf/`, `bin/`, `node_modules/`, and `dist/`.
+5. On the destination PC, run `start-offline.bat`. It uses the same launcher in offline mode and never installs dependencies. Missing portable files are reported.
 
-## One-time prep (on a PC with internet)
+Run `STOP-PORTABLE-AI.bat` to stop this project's service listeners. External services are left untouched. Use `REPAIR-APP.bat` for safe caches/dependency repair on a connected PC.
 
-1. Double-click `scripts\prepare-usb.bat`
-2. Wait while it downloads / installs:
-   - Portable **Node.js 20 LTS** → `bin\node\`
-   - Portable **Ollama** → `bin\ollama\`
-   - `node_modules\`
-   - Production build → `dist\`
-   - Default model `qwen2.5:3b` → `.ollama\`
-3. Copy this **entire folder** to your USB drive.
-
-## Verify (recommended)
-
-Before unplugging, run:
-
-```
-scripts\verify-links.bat
-scripts\test-all.bat
-```
-
-Both should report `RESULT: PASS`.
-
-## Daily use (on any Windows PC)
-
-1. Plug in the USB.
-2. Double-click `start-offline.bat` (serves prebuilt `dist\`) **or** `RUN-ALL.bat` (dev server).
-3. Browser opens to http://localhost:8080.
-
-Services started:
-- **Web app** on `:8080`
-- **Local agent** on `:3847`
-- **Ollama** on `:11434` (if `bin\ollama\ollama.exe` present) — models from `.ollama\`
-- **llama-server** on `:8081` (if a `.gguf` is in `models\gguf\` and `bin\llama\llama-server.exe` exists)
-
-To stop everything cleanly: double-click `stop-offline.bat` or `STOP-PORTABLE-AI.bat`.
-
-## What's where
-
-| Path | Purpose |
-|------|---------|
-| `bin\node\` | Portable Node.js runtime |
-| `bin\ollama\` | Portable Ollama binary |
-| `bin\llama\` | (optional) llama.cpp `llama-server.exe` |
-| `.ollama\` | Ollama model storage (USB-local, canonical) |
-| `models\gguf\` | Drop your own `.gguf` models here |
-| `dist\` | Prebuilt web app |
-| `logs\` | Runtime logs + PID tracker |
-| `config\settings.json` | Single source of truth for ports & paths |
-| `config\settings.json` | App settings (relative paths) |
-
-## Troubleshooting
-
-**SmartScreen warning** — Click "More info" → "Run anyway". The binaries are unsigned portable releases.
-
-**Antivirus quarantines `ollama.exe`** — Add `bin\ollama\` to your AV exclusions, or skip Ollama and use Cloud mode.
-
-**Port already in use (8080 / 11434 / 3847 / 8081)** — Run `stop-offline.bat`, then retry. Or change ports in `config\settings.json` and `server\static.cjs` (`PORT` env).
-
-**"dist\ not built"** — You skipped `prepare-usb.bat`. Run it on a connected PC first.
-
-**Model not loading** — Confirm `models\ollama\` contains a `manifests\` and `blobs\` subfolder. If empty, run `bin\ollama\ollama.exe pull llama3.2` (with `OLLAMA_MODELS=%CD%\models\ollama` set).
-
-**Different drive letter** — All scripts are drive-letter independent (`%~dp0`). Just plug in and run.
-
-## Online dev mode (not USB)
-
-If you're developing locally with internet, use `start.bat` instead — it runs `npm run dev` with hot reload.
+See [README](README.md) for the canonical setup, logs, ports and testing instructions. No alternative setup implementation is maintained here. Native runtimes and GPU support must match the destination PC; fully offline AI requires an installed local model. Some browser features such as instant App Builder preview may require externally loaded libraries; the prebuilt app alone does not guarantee those features work disconnected.
