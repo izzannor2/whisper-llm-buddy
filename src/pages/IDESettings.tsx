@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Save, Wifi, WifiOff, RefreshCw, AlertTriangle, Cpu, Plug, FlaskConical, Brain, BookOpen, Shield, Server, HardDrive, Globe, Copy, QrCode, Smartphone, Box, Code2 } from 'lucide-react';
+import { ArrowLeft, Save, Wifi, WifiOff, RefreshCw, AlertTriangle, Cpu, Plug, FlaskConical, Brain, BookOpen, Shield, Server, HardDrive, Globe, Copy, QrCode, Smartphone, Box, Code2, Settings2, Bot, Volume2, Download, Activity, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,6 +28,7 @@ import { UpdatesPanel } from '@/components/settings/UpdatesPanel';
 import { DiagnosticsPanel } from '@/components/settings/DiagnosticsPanel';
 import { loadSettings as loadChatSettings, saveSettings as saveChatSettings, type ChatSettings } from '@/lib/chat-api';
 import { SystemStatusBar } from '@/components/SystemStatusBar';
+import { AssistantsPanel } from '@/components/settings/AssistantsPanel';
 
 async function detectLocalIP(): Promise<string> {
   return new Promise((resolve) => {
@@ -45,8 +46,18 @@ async function detectLocalIP(): Promise<string> {
   });
 }
 
-const TOP_TABS = ['general', 'models', 'routing', 'voice', 'updates', 'diagnostics', 'advanced'] as const;
+const TOP_TABS = ['general', 'models', 'routing', 'assistants', 'voice', 'updates', 'diagnostics', 'advanced'] as const;
 type TopTab = typeof TOP_TABS[number];
+const SETTINGS_SECTIONS = [
+  { value: 'general', label: 'General', icon: Settings2, detail: 'Workspace & connections' },
+  { value: 'models', label: 'Models', icon: HardDrive, detail: 'Installed local models' },
+  { value: 'routing', label: 'Model Routing', icon: SlidersHorizontal, detail: 'Models for each task' },
+  { value: 'assistants', label: 'Assistants & GitHub', icon: Bot, detail: 'Coding tools & projects' },
+  { value: 'voice', label: 'Voice', icon: Volume2, detail: 'Microphone & speech' },
+  { value: 'updates', label: 'Updates', icon: Download, detail: 'Versions & packages' },
+  { value: 'diagnostics', label: 'Diagnostics', icon: Activity, detail: 'Health & support reports' },
+  { value: 'advanced', label: 'Advanced', icon: Shield, detail: 'Additional configuration' },
+] as const;
 
 export default function IDESettingsPage() {
   const navigate = useNavigate();
@@ -110,37 +121,38 @@ export default function IDESettingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="h-14 flex items-center justify-between px-6 border-b border-border bg-card">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/ide')}><ArrowLeft className="h-5 w-5" /></Button>
+      <header className="h-16 flex items-center justify-between gap-2 px-3 sm:px-6 border-b border-border bg-card">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <Button variant="ghost" size="icon" aria-label="Back to workspace" onClick={() => navigate('/ide')}><ArrowLeft className="h-5 w-5" /></Button>
           <h1 className="text-xl font-bold">Settings</h1>
         </div>
         <div className="flex items-center gap-2">
-          <SystemStatusBar compact />
-          <VoiceCalibrationWizard />
-          <LauncherToolsDialog />
+          <div className="hidden lg:block"><SystemStatusBar compact /></div>
+          <div className="hidden sm:flex items-center gap-2"><VoiceCalibrationWizard /><LauncherToolsDialog /></div>
           <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Save</Button>
         </div>
       </header>
 
-      <ScrollArea className="h-[calc(100vh-56px)]">
-        <div className="max-w-5xl mx-auto p-6">
-          <Tabs defaultValue={initialTop} className="space-y-6">
-            <TabsList className="flex flex-wrap h-auto">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="models">Models</TabsTrigger>
-              <TabsTrigger value="routing">Model Routing</TabsTrigger>
-              <TabsTrigger value="voice">Voice</TabsTrigger>
-              <TabsTrigger value="updates">Updates</TabsTrigger>
-              <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
-              <TabsTrigger value="advanced">Advanced</TabsTrigger>
-            </TabsList>
+      <ScrollArea className="h-[calc(100dvh-64px)]">
+        <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+          <Tabs defaultValue={initialTop} className="grid min-w-0 gap-6 lg:gap-10 md:grid-cols-[220px_minmax(0,1fr)]">
+            <aside className="min-w-0">
+              <p className="hidden md:block text-xs font-mono uppercase text-muted-foreground mb-4">Preferences</p>
+              <TabsList aria-label="Settings sections" className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-1 h-auto w-full gap-1 bg-transparent p-0">
+                {SETTINGS_SECTIONS.map(({ value, label, icon: Icon, detail }) => <TabsTrigger key={value} value={value}
+                  className="w-full min-w-0 justify-start gap-2 px-3 py-3 rounded-md whitespace-normal text-left data-[state=active]:bg-secondary data-[state=active]:text-accent data-[state=active]:shadow-none">
+                  <Icon className="h-4 w-4 shrink-0" /><span className="min-w-0"><span className="block text-xs sm:text-sm">{label}</span><span className="hidden md:block text-[11px] font-normal text-muted-foreground mt-1">{detail}</span></span>
+                </TabsTrigger>)}
+              </TabsList>
+              <p className="hidden md:block mt-6 pt-4 border-t border-border text-xs text-muted-foreground">AI Companion Hub<br /><span className="text-accent">Local-first workstation</span></p>
+            </aside>
+            <div className="min-w-0 [&>div]:mt-0">
 
             {/* GENERAL — mode, backend choice, editor, remote access */}
             <TabsContent value="general" className="space-y-6">
               <section>
                 <h2 className="text-lg font-semibold mb-4">Mode</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                   {modeCards.map(({ mode, icon }) => (
                     <Card key={mode} className={cn('cursor-pointer transition-all hover:border-primary/50', settings.mode === mode && 'border-primary bg-primary/5')} onClick={() => updateSetting('mode', mode)}>
                       <CardHeader className="p-4">
@@ -171,7 +183,7 @@ export default function IDESettingsPage() {
                   </Card>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                   {(['offline', 'online-research', 'updating'] as ConnectionMode[]).map((m) => (
                     <Card key={m} className={cn('cursor-pointer transition-all', settings.connectionMode === m && 'border-primary bg-primary/5')} onClick={() => updateSetting('connectionMode', m)}>
                       <CardHeader className="p-4 text-center">
@@ -369,6 +381,8 @@ export default function IDESettingsPage() {
               <ModelRoutingPanel />
             </TabsContent>
 
+            <TabsContent value="assistants"><AssistantsPanel /></TabsContent>
+
             {/* VOICE — embed SettingsDialog opened on the voice tab so users get TTS + voice models */}
             <TabsContent value="voice">
               <SettingsDialog inline settings={chatSettings} onSave={handleChatSettingsSave} initialTab="voice" hideTabs={['backend','models','apikeys','prompt','debug','plugins','updates','account','hardware','model']} />
@@ -386,16 +400,12 @@ export default function IDESettingsPage() {
 
             {/* ADVANCED — full SettingsDialog (API keys, prompt, plugins, account, hardware, debug) */}
             <TabsContent value="advanced">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Advanced</CardTitle>
-                  <CardDescription>API keys, prompts, plugins, hardware, account, debug.</CardDescription>
-                </CardHeader>
-                <CardContent>
+              <section>
+                <h2 className="text-lg font-semibold mb-4">Advanced</h2>
                   <SettingsDialog inline settings={chatSettings} onSave={handleChatSettingsSave} initialTab={initialChatTab || 'apikeys'} hideTabs={['models','voicemodels','voice','updates','backend']} />
-                </CardContent>
-              </Card>
+              </section>
             </TabsContent>
+            </div>
           </Tabs>
         </div>
       </ScrollArea>
